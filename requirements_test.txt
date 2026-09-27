@@ -1,0 +1,10 @@
+# Matches Home Assistant 2026.9.4, the release the integration is tested against.
+pytest-homeassistant-custom-component==0.13.367
+
+# Requirements of the conversation integration this one depends on; the test
+# harness does not install integration requirements.
+gazetteer-matcher==1.1.0
+hassil==3.12.1
+home-assistant-intents==2026.8.28
+
+# aiothalovant is replaced by tests/fake_aiothalovant.py unless AIOTHALOVANT=real.

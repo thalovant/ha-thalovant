@@ -1,0 +1,99 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Relier votre hub",
+        "description": "Home Assistant se connecte à votre compte Thalovant avec un code à usage unique, puis au hub de votre choix. La liaison est une connexion sortante : aucun port à ouvrir, et aucun jeton Home Assistant ne quitte votre domicile.\n\nCliquez sur **Valider** pour obtenir un code."
+      },
+      "reauth_confirm": {
+        "title": "Se reconnecter",
+        "description": "La liaison avec {name} ne fonctionne plus. Cliquez sur **Valider** pour la renouveler. Si Thalovant vous demande de vous connecter, utilisez le même compte qu'avant."
+      },
+      "hub": {
+        "title": "Choisir un hub",
+        "description": "Connecté en tant que {account}. Les appareils du hub choisi pourront commander ce que vous avez exposé à Assist.",
+        "data": {
+          "hub_id": "Hub"
+        },
+        "data_description": {
+          "hub_id": "Les demandes des appareils de ce hub arriveront sur ce Home Assistant. Vous pourrez relier d'autres hubs plus tard."
+        }
+      }
+    },
+    "progress": {
+      "wait_for_admission": "Votre hub {hub} est en train d'accepter Home Assistant. Cela prend en général une minute et demie.",
+      "wait_for_login": "Ouvrez {url} et approuvez la connexion. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
+    },
+    "error": {
+      "admission_failed": "Le hub n'a pas accepté Home Assistant. Réessayez dans quelques minutes.",
+      "admission_timeout": "Le hub a mis trop de temps à accepter Home Assistant, ou Thalovant ne répond plus. Réessayez dans quelques minutes.",
+      "already_linked": "Un autre Home Assistant est déjà relié à ce hub sur votre compte. Supprimez cette liaison dans le tableau de bord Thalovant, puis réessayez.",
+      "cannot_connect": "Impossible de joindre Thalovant. Vérifiez la connexion Internet, puis réessayez.",
+      "connection_refused": "Thalovant a refusé de créer la connexion. Réessayez plus tard.",
+      "hub_cannot_link": "Ce hub ne peut pas encore être relié à Home Assistant.",
+      "invalid_auth": "Thalovant n'a pas accepté la connexion. Cliquez sur **Valider** pour vous reconnecter.",
+      "login_denied": "La connexion a été refusée. Cliquez sur **Valider** pour réessayer.",
+      "login_expired": "Le code a expiré avant d'être approuvé. Cliquez sur **Valider** pour en obtenir un nouveau.",
+      "plan_limit": "Votre forfait Thalovant utilise déjà toutes ses connexions. Supprimez-en une dans le tableau de bord Thalovant, puis réessayez.",
+      "public_hubs_only": "Votre forfait Thalovant ne permet de relier Home Assistant qu'à des hubs publics. Choisissez un hub public, ou changez de forfait pour utiliser le vôtre.",
+      "unknown": "Erreur inattendue"
+    },
+    "abort": {
+      "all_hubs_linked": "Tous les hubs de ce compte Thalovant sont déjà reliés à ce Home Assistant.",
+      "already_configured": "Ce hub est déjà relié à Home Assistant.",
+      "already_in_progress": "Une liaison avec ce hub est déjà en cours de configuration.",
+      "hub_not_found": "Ce hub n'est plus disponible pour votre compte Thalovant.",
+      "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
+      "reauth_successful": "La réauthentification a réussi",
+      "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Agent de conversation",
+        "data": {
+          "agent_id": "Agent de conversation"
+        },
+        "data_description": {
+          "agent_id": "L'agent qui répond aux demandes du hub. L'agent de Home Assistant n'agit que sur les entités exposées à Assist."
+        }
+      }
+    },
+    "error": {
+      "agent_not_found": "Cet agent de conversation n'est pas disponible."
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "hub_connection": {
+        "name": "Connexion au hub"
+      }
+    }
+  },
+  "exceptions": {
+    "auth_failed": {
+      "message": "Le hub {hub} a refusé les identifiants de cette connexion"
+    },
+    "cannot_connect": {
+      "message": "Impossible de joindre le hub {hub}"
+    },
+    "credentials_invalid": {
+      "message": "Les identifiants enregistrés pour {hub} sont illisibles"
+    }
+  },
+  "issues": {
+    "agent_unavailable": {
+      "title": "L'agent de conversation de {hub} a disparu",
+      "description": "Les demandes de {hub} sont confiées à l'agent de conversation `{agent}`, que Home Assistant ne trouve plus. Tant que vous n'aurez pas choisi un autre agent dans les options de l'intégration Thalovant, le hub recevra une erreur pour chacune de ses demandes."
+    }
+  },
+  "common": {
+    "reply_agent_unavailable": "Désolé, l'agent de conversation de Home Assistant n'est pas disponible pour le moment.",
+    "reply_failed_to_handle": "Désolé, Home Assistant n'a pas pu le faire.",
+    "reply_no_intent_match": "Désolé, Home Assistant n'a pas compris.",
+    "reply_no_valid_targets": "Désolé, Home Assistant n'a pas trouvé cet appareil.",
+    "reply_timeout": "Désolé, Home Assistant a mis trop de temps à répondre.",
+    "reply_unknown": "Désolé, un problème est survenu dans Home Assistant."
+  }
+}

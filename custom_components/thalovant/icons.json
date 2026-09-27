@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "hub_connection": {
+        "default": "mdi:cloud-off-outline",
+        "state": {
+          "on": "mdi:cloud-check-variant-outline"
+        }
+      }
+    }
+  }
+}

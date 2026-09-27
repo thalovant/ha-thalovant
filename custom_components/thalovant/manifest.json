@@ -1,0 +1,14 @@
+{
+  "domain": "thalovant",
+  "name": "Thalovant",
+  "codeowners": ["@goldyfruit"],
+  "config_flow": true,
+  "dependencies": ["conversation"],
+  "documentation": "https://github.com/thalovant/ha-thalovant",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/thalovant/ha-thalovant/issues",
+  "loggers": ["aiothalovant"],
+  "requirements": ["aiothalovant==0.1.0"],
+  "version": "0.1.0"
+}

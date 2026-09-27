@@ -1,0 +1,34 @@
+# serializer version: 1
+# name: test_diagnostics
+  dict({
+    'connection': dict({
+      'connected': True,
+      'endpoint': 'wss://maison.hubs.thalovant.com/ws',
+      'has_secret': True,
+      'token_scopes': list([
+        'hubs:read',
+        'clients:write',
+      ]),
+    }),
+    'entry': dict({
+      'data': dict({
+        'account_id': '**REDACTED**',
+        'credentials': '**REDACTED**',
+        'hub_id': 'hub-maison',
+        'hub_name': '**REDACTED**',
+        'tokens': '**REDACTED**',
+      }),
+      'options': dict({
+      }),
+      'title': '**REDACTED**',
+      'unique_id': '**REDACTED**',
+    }),
+    'requests': dict({
+      'handled': 1,
+      'last_outcome': 'no_valid_targets',
+      'outcomes': dict({
+        'no_valid_targets': 1,
+      }),
+    }),
+  })
+# ---
