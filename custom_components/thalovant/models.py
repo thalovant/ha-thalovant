@@ -4,9 +4,9 @@ from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from aiothalovant import HubConnection
-
 from homeassistant.config_entries import ConfigEntry
+
+from .api import HubConnection
 
 
 @dataclass(slots=True)

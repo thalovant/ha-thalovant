@@ -13,9 +13,9 @@ rules:
   dependency-transparency:
     status: todo
     comment: >
-      aiothalovant is MIT-licensed, but its repository is private and 0.1.0 is not on
-      PyPI yet. It needs a public repository, a tagged release, and a PyPI upload from
-      public CI.
+      The thalovant SDK is MIT-licensed, public, and released to PyPI from CI, but
+      the async-native release this integration pins (thalovant==0.9.0) is not
+      published yet.
   docs-actions:
     status: exempt
     comment: The integration registers no service actions.

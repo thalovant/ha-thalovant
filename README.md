@@ -200,7 +200,7 @@ exposed to Assist, or its name differs from what you said.
 logger:
   logs:
     custom_components.thalovant: debug
-    aiothalovant: debug
+    thalovant: debug
 ```
 
 ## Removing the integration
@@ -221,10 +221,11 @@ python3.14 -m venv .venv
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy
 ```
 
-The tests run against `tests/fake_aiothalovant.py`, which follows the shared
-contract with the `aiothalovant` library, so they pass whatever state the
-library is in. To run them against an installed library instead, set
-`AIOTHALOVANT=real`.
+The integration talks to Thalovant through the async API of the `thalovant`
+Python SDK, and only through `custom_components/thalovant/api.py`. The tests
+patch that adapter's classes, so they do not need the SDK installed;
+`tests/test_api.py` drives the adapter itself with a fake SDK built from the
+shared contract.
 
 ## License
 

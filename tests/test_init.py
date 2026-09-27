@@ -4,11 +4,15 @@ import asyncio
 import logging
 from unittest.mock import MagicMock
 
-from aiothalovant import ThalovantAuthError, ThalovantConnectionError, ThalovantError
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.thalovant.api import (
+    ThalovantAuthError,
+    ThalovantConnectionError,
+    ThalovantError,
+)
 from custom_components.thalovant.const import (
     CONF_CREDENTIALS,
     CONF_LINKED_AT,

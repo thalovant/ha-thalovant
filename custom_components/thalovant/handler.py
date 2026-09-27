@@ -7,8 +7,6 @@ import re
 import time
 from typing import Any
 
-from aiothalovant import HubConnection, HubMessage
-
 from homeassistant.components import conversation
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import Context, HomeAssistant, callback
@@ -16,6 +14,7 @@ from homeassistant.generated.languages import LANGUAGES
 from homeassistant.helpers import intent, issue_registry as ir, translation
 from homeassistant.util import dt as dt_util, language as language_util
 
+from .api import HubConnection, HubMessage
 from .const import (
     CONF_AGENT_ID,
     CONVERSE_TIMEOUT,

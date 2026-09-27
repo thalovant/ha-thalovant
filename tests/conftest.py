@@ -4,20 +4,13 @@ import asyncio
 from collections.abc import Awaitable, Callable, Generator, Mapping
 from datetime import UTC, datetime
 import inspect
-import os
-import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-# The suite runs against the contract, not against whatever state the library
-# is in. AIOTHALOVANT=real runs it against an installed aiothalovant instead.
-if os.environ.get("AIOTHALOVANT") != "real":
-    from . import fake_aiothalovant
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-    sys.modules["aiothalovant"] = fake_aiothalovant
-
-import aiothalovant
-from aiothalovant import (
+from custom_components.thalovant.api import (
     Account,
     ConnectionCredentials,
     DeviceLogin,
@@ -25,9 +18,6 @@ from aiothalovant import (
     HubMessage,
     Tokens,
 )
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.thalovant.const import (
     CONF_ACCOUNT_ID,
     CONF_CREDENTIALS,
@@ -114,7 +104,7 @@ def credentials() -> ConnectionCredentials:
         connection_id=CONNECTION_ID,
         name="Home Assistant (Maison)",
         endpoint="wss://maison.hubs.thalovant.com/ws",
-        # Opaque to the integration; shaped the way aiothalovant stores it.
+        # Opaque to the integration; shaped the way the SDK stores it.
         secret={
             "access_key": "hub-access-key-do-not-leak",
             "password": CONNECTION_SECRET,
@@ -275,6 +265,3 @@ def mock_setup_entry() -> Generator[AsyncMock]:
         "custom_components.thalovant.async_setup_entry", return_value=True
     ) as setup_entry:
         yield setup_entry
-
-
-__all__ = ["aiothalovant"]

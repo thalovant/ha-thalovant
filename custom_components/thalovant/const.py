@@ -32,7 +32,7 @@ ADMISSION_TIMEOUT: Final = 180
 
 # For this long after a connection is made, the hub refusing it means "not
 # admitted yet" rather than bad credentials: setup retries instead of asking
-# the user to reauthenticate. aiothalovant's run() waits the same 600 s.
+# the user to reauthenticate. The SDK's run() waits the same 600 s.
 ADMISSION_GRACE_PERIOD: Final = timedelta(seconds=600)
 
 REQUEST_MESSAGE_TYPE: Final = "thalovant.home.request"
