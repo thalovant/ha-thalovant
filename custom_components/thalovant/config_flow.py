@@ -4,25 +4,6 @@ import asyncio
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Final, override
 
-from aiothalovant import (
-    Account,
-    ConnectionCredentials,
-    DeviceLogin,
-    DeviceLoginDenied,
-    DeviceLoginExpired,
-    DeviceLoginPending,
-    Hub,
-    ThalovantAlreadyLinkedError,
-    ThalovantApi,
-    ThalovantApiError,
-    ThalovantAuth,
-    ThalovantAuthError,
-    ThalovantConnectionError,
-    ThalovantError,
-    ThalovantPlanError,
-    ThalovantUnsupportedError,
-    Tokens,
-)
 import probatio
 
 from homeassistant.components import conversation
@@ -45,6 +26,25 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util import dt as dt_util
 
+from .api import (
+    Account,
+    ConnectionCredentials,
+    DeviceLogin,
+    DeviceLoginDenied,
+    DeviceLoginExpired,
+    DeviceLoginPending,
+    Hub,
+    ThalovantAlreadyLinkedError,
+    ThalovantApi,
+    ThalovantApiError,
+    ThalovantAuth,
+    ThalovantAuthError,
+    ThalovantConnectionError,
+    ThalovantError,
+    ThalovantPlanError,
+    ThalovantUnsupportedError,
+    Tokens,
+)
 from .const import (
     ADMISSION_TIMEOUT,
     CONF_ACCOUNT_ID,

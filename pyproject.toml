@@ -34,7 +34,7 @@ warn_unreachable = true
 enable_error_code = ["deprecated", "explicit-override", "ignore-without-code", "redundant-self", "truthy-iterable"]
 disable_error_code = ["import-untyped"]
 explicit_package_bases = true
-mypy_path = ".:tests/stubs"
+mypy_path = "."
 packages = ["custom_components.thalovant"]
 
 [tool.ruff]
@@ -86,6 +86,5 @@ mark-parentheses = false
 [tool.ruff.lint.isort]
 force-sort-within-sections = true
 known-first-party = ["homeassistant"]
-known-third-party = ["aiothalovant"]
 combine-as-imports = true
 split-on-trailing-comma = false

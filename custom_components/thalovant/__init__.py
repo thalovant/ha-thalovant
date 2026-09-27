@@ -3,15 +3,6 @@
 import asyncio
 from datetime import datetime
 
-from aiothalovant import (
-    ConnectionCredentials,
-    HubConnection,
-    ThalovantApi,
-    ThalovantAuthError,
-    ThalovantConnectionError,
-    Tokens,
-)
-
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
@@ -19,6 +10,14 @@ from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.util import dt as dt_util
 
+from .api import (
+    ConnectionCredentials,
+    HubConnection,
+    ThalovantApi,
+    ThalovantAuthError,
+    ThalovantConnectionError,
+    Tokens,
+)
 from .const import (
     ADMISSION_GRACE_PERIOD,
     CONF_CREDENTIALS,
@@ -39,6 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     """Connect to the hub and answer its requests."""
     try:
         credentials = ConnectionCredentials.from_dict(entry.data[CONF_CREDENTIALS])
+        connection = HubConnection(async_get_clientsession(hass), credentials)
     except (KeyError, TypeError, ValueError) as err:
         # Unreadable keys are replaced the same way rejected ones are.
         raise ConfigEntryAuthFailed(
@@ -46,7 +46,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
             translation_key="credentials_invalid",
             translation_placeholders={"hub": entry.title},
         ) from err
-    connection = HubConnection(async_get_clientsession(hass), credentials)
     entry.runtime_data = ThalovantRuntimeData(connection=connection)
 
     # Everything below is undone by the unload callbacks, which also run when

@@ -7,4 +7,5 @@ gazetteer-matcher==1.1.0
 hassil==3.12.1
 home-assistant-intents==2026.8.28
 
-# aiothalovant is replaced by tests/fake_aiothalovant.py unless AIOTHALOVANT=real.
+# The thalovant SDK is not installed: the tests patch the adapter in
+# custom_components/thalovant/api.py, and test_api.py drives it with a fake SDK.

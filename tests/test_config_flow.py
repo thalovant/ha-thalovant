@@ -5,7 +5,11 @@ from dataclasses import replace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from aiothalovant import (
+from freezegun.api import FrozenDateTimeFactory
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.thalovant.api import (
     Account,
     ConnectionCredentials,
     DeviceLogin,
@@ -22,10 +26,6 @@ from aiothalovant import (
     ThalovantUnsupportedError,
     Tokens,
 )
-from freezegun.api import FrozenDateTimeFactory
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry
-
 from custom_components.thalovant.const import (
     ADMISSION_TIMEOUT,
     CONF_ACCOUNT_ID,
