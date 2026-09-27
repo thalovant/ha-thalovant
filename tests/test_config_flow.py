@@ -22,6 +22,7 @@ from aiothalovant import (
     ThalovantUnsupportedError,
     Tokens,
 )
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -32,6 +33,7 @@ from custom_components.thalovant.const import (
     CONF_CREDENTIALS,
     CONF_HUB_ID,
     CONF_HUB_NAME,
+    CONF_LINKED_AT,
     CONF_TOKENS,
     CONNECTION_KIND,
     DOMAIN,
@@ -98,8 +100,10 @@ async def test_full_flow(
     mock_setup_entry: AsyncMock,
     tokens: Tokens,
     credentials: ConnectionCredentials,
+    freezer: FrozenDateTimeFactory,
 ) -> None:
     """Sign in, pick a hub, wait for it to admit us, and store the connection."""
+    freezer.move_to("2026-09-27T12:00:00+00:00")
     hass.config.location_name = "Home"
     result = await _start(hass)
 
@@ -140,6 +144,7 @@ async def test_full_flow(
         CONF_HUB_NAME: "Maison",
         CONF_TOKENS: tokens.to_dict(),
         CONF_CREDENTIALS: credentials.to_dict(),
+        CONF_LINKED_AT: "2026-09-27T12:00:00+00:00",
     }
     mock_api.wait_for_admission.assert_awaited_once_with(
         credentials, timeout=ADMISSION_TIMEOUT

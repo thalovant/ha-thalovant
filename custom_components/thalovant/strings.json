@@ -80,6 +80,9 @@
     },
     "credentials_invalid": {
       "message": "The stored credentials for {hub} cannot be read"
+    },
+    "not_admitted_yet": {
+      "message": "The hub {hub} has not admitted this connection yet"
     }
   },
   "issues": {

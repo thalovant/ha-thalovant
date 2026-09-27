@@ -180,6 +180,11 @@ link in the Thalovant dashboard.
 being set up is deleted, so trying again starts clean. Wait a few minutes
 first.
 
+**"Retrying setup" right after linking.** The hub can take a few minutes to
+accept a new connection. Home Assistant keeps trying on its own; for the first
+ten minutes a refusal is treated as "not admitted yet", not as bad
+credentials.
+
 **Home Assistant asks you to reauthenticate.** The hub rejected the
 connection's keys, for example because the connection was deleted from the
 dashboard. Follow the notification: the integration makes a new connection,

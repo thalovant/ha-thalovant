@@ -43,6 +43,7 @@ from homeassistant.helpers.selector import (
     SelectSelectorConfig,
     SelectSelectorMode,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     ADMISSION_TIMEOUT,
@@ -51,6 +52,7 @@ from .const import (
     CONF_CREDENTIALS,
     CONF_HUB_ID,
     CONF_HUB_NAME,
+    CONF_LINKED_AT,
     CONF_TOKENS,
     CONNECTION_KIND,
     DOMAIN,
@@ -295,6 +297,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_HUB_NAME: self._hub.name,
             CONF_TOKENS: self._tokens.to_dict(),
             CONF_CREDENTIALS: self._credentials.to_dict(),
+            CONF_LINKED_AT: dt_util.utcnow().isoformat(),
         }
         # From here the entry owns the connection.
         self._credentials = None
