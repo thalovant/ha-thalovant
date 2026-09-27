@@ -26,6 +26,11 @@ jobs:
       - uses: home-assistant/actions/hassfest@06749dd8c0b54f350bc69c8752456cee498808a3 # master
 
   hacs:
+    # HACS reads hacs.json and the manifest from raw.githubusercontent.com
+    # without a token, so on a private repository those two checks can only
+    # fail. HACS itself only installs from public repositories; this job
+    # starts running the day the repository is made public.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
