@@ -1,5 +1,6 @@
 """Constants for the Thalovant integration."""
 
+from datetime import timedelta
 import logging
 from typing import Final
 
@@ -12,6 +13,7 @@ CONF_HUB_ID: Final = "hub_id"
 CONF_HUB_NAME: Final = "hub_name"
 CONF_TOKENS: Final = "tokens"
 CONF_CREDENTIALS: Final = "credentials"
+CONF_LINKED_AT: Final = "linked_at"
 
 # Keys in ConfigEntry.options.
 CONF_AGENT_ID: Final = "agent_id"
@@ -27,6 +29,11 @@ CONNECTION_KIND: Final = "home_assistant"
 
 # The hub admits a new connection in about 90 seconds.
 ADMISSION_TIMEOUT: Final = 180
+
+# For this long after a connection is made, the hub refusing it means "not
+# admitted yet" rather than bad credentials: setup retries instead of asking
+# the user to reauthenticate. aiothalovant's run() waits the same 600 s.
+ADMISSION_GRACE_PERIOD: Final = timedelta(seconds=600)
 
 REQUEST_MESSAGE_TYPE: Final = "thalovant.home.request"
 RESPONSE_MESSAGE_TYPE: Final = "thalovant.home.response"

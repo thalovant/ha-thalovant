@@ -5,11 +5,13 @@ import logging
 from unittest.mock import MagicMock
 
 from aiothalovant import ThalovantAuthError, ThalovantConnectionError, ThalovantError
+from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.thalovant.const import (
     CONF_CREDENTIALS,
+    CONF_LINKED_AT,
     DOMAIN,
     REQUEST_MESSAGE_TYPE,
 )
@@ -213,5 +215,52 @@ async def test_unreadable_credentials_start_reauth(
 
     assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
     mock_hub_connection.factory.assert_not_called()
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_refusal_right_after_linking_retries(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A new connection the hub refuses is not admitted yet: retry, no reauth."""
+    freezer.move_to("2026-09-27T12:05:00+00:00")
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, CONF_LINKED_AT: "2026-09-27T12:00:00+00:00"},
+    )
+    mock_hub_connection.connect.side_effect = ThalovantAuthError("unknown key")
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_RETRY
+    assert (
+        mock_config_entry.reason
+        == "The hub Maison has not admitted this connection yet"
+    )
+    assert hass.config_entries.flow.async_progress_by_handler(DOMAIN) == []
+
+
+async def test_refusal_after_grace_starts_reauth(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Past the grace period, a refusal means the credentials are bad."""
+    freezer.move_to("2026-09-27T12:11:00+00:00")
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        data={**mock_config_entry.data, CONF_LINKED_AT: "2026-09-27T12:00:00+00:00"},
+    )
+    mock_hub_connection.connect.side_effect = ThalovantAuthError("bad key")
+    await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]

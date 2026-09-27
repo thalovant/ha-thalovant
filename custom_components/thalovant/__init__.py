@@ -1,6 +1,7 @@
 """The Thalovant integration: answer a Thalovant hub's home requests with Assist."""
 
 import asyncio
+from datetime import datetime
 
 from aiothalovant import (
     ConnectionCredentials,
@@ -16,9 +17,12 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.util import dt as dt_util
 
 from .const import (
+    ADMISSION_GRACE_PERIOD,
     CONF_CREDENTIALS,
+    CONF_LINKED_AT,
     CONF_TOKENS,
     DOMAIN,
     LOGGER,
@@ -59,6 +63,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     try:
         await connection.connect()
     except ThalovantAuthError as err:
+        if _recently_linked(entry):
+            raise ConfigEntryNotReady(
+                translation_domain=DOMAIN,
+                translation_key="not_admitted_yet",
+                translation_placeholders={"hub": entry.title},
+            ) from err
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="auth_failed",
@@ -116,6 +126,15 @@ async def _async_keep_connected(
         entry.async_start_reauth(hass)
     except Exception:
         LOGGER.exception("The connection to %s stopped", entry.title)
+
+
+def _recently_linked(entry: ThalovantConfigEntry) -> bool:
+    """Whether the connection is young enough that the hub may not know it yet."""
+    try:
+        linked_at = datetime.fromisoformat(entry.data[CONF_LINKED_AT])
+    except KeyError, TypeError, ValueError:
+        return False
+    return dt_util.utcnow() - linked_at < ADMISSION_GRACE_PERIOD
 
 
 class _StateLogger:

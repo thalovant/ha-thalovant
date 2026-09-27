@@ -80,6 +80,9 @@
     },
     "credentials_invalid": {
       "message": "Les identifiants enregistrés pour {hub} sont illisibles"
+    },
+    "not_admitted_yet": {
+      "message": "Le hub {hub} n'a pas encore accepté cette connexion"
     }
   },
   "issues": {
