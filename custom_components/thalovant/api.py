@@ -32,6 +32,7 @@ SDK_NAMES: Final = (
     "hub_display_name",
     "ThalovantError",
     "ThalovantAPIError",
+    "ThalovantAPIUnreachableError",
     "ThalovantAuthError",
     "ThalovantPlanError",
     "ThalovantAlreadyLinkedError",
@@ -334,6 +335,9 @@ def _translate(err: Exception) -> ThalovantError | None:
         return ThalovantAdmissionFailedError(
             message, code=getattr(err, "error_code", None)
         )
+    if _is(err, "ThalovantAPIUnreachableError"):
+        # DNS, TCP, TLS or a timeout: the API never answered.
+        return ThalovantConnectionError(message)
     if _is(err, "ThalovantAuthError"):
         return ThalovantAuthError(message, **facts)
     if _is(err, "ThalovantPlanError"):
@@ -348,8 +352,8 @@ def _translate(err: Exception) -> ThalovantError | None:
         return ThalovantConnectionError(message)
     if _is(err, "ThalovantAPIError"):
         status = facts["status"]
-        # No status: the API was never reached. 429 and 5xx pass with time.
-        if status is None or status == 429 or status >= 500:
+        # The API answered, but 429 and 5xx pass with time.
+        if status is not None and (status == 429 or status >= 500):
             return ThalovantConnectionError(message, **facts)
         return ThalovantApiError(message, **facts)
     if _is(err, "ThalovantError"):

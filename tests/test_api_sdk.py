@@ -3,10 +3,10 @@
 Skipped unless the SDK is installed. CI installs it from the SDK branch in a
 step of its own; locally:
 
-    uv pip install --no-deps "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@feat/async-core"
+    uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
+        "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e"
 
---no-deps because Home Assistant 2026.9 pins cryptography 48.0.1 and thalovant
-0.9.0 asks for 50 or later; the SDK runs on 48 for what this exercises.
+Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
 
 from collections.abc import AsyncIterator
@@ -491,12 +491,14 @@ async def test_nothing_to_admit(
 
 
 async def test_unreachable_api() -> None:
-    """A control plane nobody answers on is a connection error."""
+    """A control plane nobody answers on is a connection error, from the SDK's own class."""
     async with ClientSession() as session:
-        with pytest.raises(ThalovantConnectionError):
+        with pytest.raises(ThalovantConnectionError) as caught:
             await ThalovantApi(
                 session, _tokens(), api_url="http://127.0.0.1:9"
             ).get_account()
+    assert type(caught.value) is ThalovantConnectionError
+    assert isinstance(caught.value.__cause__, thalovant.ThalovantAPIUnreachableError)
 
 
 async def test_rejected_token(
@@ -533,6 +535,12 @@ def test_unusable_identity() -> None:
         ),
         (thalovant.ThalovantTimeoutError("slow hub"), ThalovantConnectionError),
         (thalovant.ThalovantConnectionError("dns"), ThalovantConnectionError),
+        (thalovant.ThalovantAPIUnreachableError("dns"), ThalovantConnectionError),
+        (thalovant.ThalovantAPIError("Missing token"), ThalovantApiError),
+        (
+            thalovant.ThalovantAPIError("down", status_code=502),
+            ThalovantConnectionError,
+        ),
         (
             thalovant.ThalovantDeviceLoginPending("wait", interval=7.5),
             DeviceLoginPending,

@@ -232,12 +232,14 @@ patch that adapter's classes, so they do not need the SDK installed;
 plane. That file is skipped unless the SDK is installed:
 
 ```sh
-uv pip install --no-deps "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@feat/async-core"
+constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
+uv pip install -p .venv/bin/python -c "$constraints" \
+    "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e"
 .venv/bin/pytest tests/test_api_sdk.py
 ```
 
-`--no-deps` because Home Assistant 2026.9 pins `cryptography==48.0.1` and
-`thalovant` 0.9.0 asks for 50 or later.
+The SDK goes in under Home Assistant's own package constraints, the way Home
+Assistant installs an integration's requirements.
 
 ## License
 

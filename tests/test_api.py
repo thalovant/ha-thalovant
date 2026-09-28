@@ -77,6 +77,10 @@ class SdkAPIError(SdkError):
     pass
 
 
+class SdkAPIUnreachableError(SdkAPIError, SdkConnectionError):
+    pass
+
+
 class SdkAuthError(SdkAPIError):
     pass
 
@@ -126,6 +130,7 @@ def sdk() -> Generator[SimpleNamespace]:
         hub_display_name=lambda hub: f"display:{hub['name']}",
         ThalovantError=SdkError,
         ThalovantAPIError=SdkAPIError,
+        ThalovantAPIUnreachableError=SdkAPIUnreachableError,
         ThalovantAuthError=SdkAuthError,
         ThalovantPlanError=SdkPlanError,
         ThalovantAlreadyLinkedError=SdkAlreadyLinkedError,
@@ -464,7 +469,13 @@ async def test_list_hubs_stops_paging(sdk: SimpleNamespace) -> None:
             {"status": 422},
         ),
         (SdkAPIError("400", status_code=400), ThalovantApiError, {"status": 400}),
-        (SdkAPIError("unreachable"), ThalovantConnectionError, {"status": None}),
+        (
+            SdkAPIUnreachableError("unreachable"),
+            ThalovantConnectionError,
+            {"status": None},
+        ),
+        # A local refusal (no token, odd answer) is not a network failure.
+        (SdkAPIError("Missing token"), ThalovantApiError, {"status": None}),
         (
             SdkAPIError("busy", status_code=429),
             ThalovantConnectionError,
