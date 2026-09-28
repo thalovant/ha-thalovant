@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.storage import STORAGE_DIR
 from homeassistant.util import dt as dt_util
 
 from .api import (
@@ -38,7 +39,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     """Connect to the hub and answer its requests."""
     try:
         credentials = ConnectionCredentials.from_dict(entry.data[CONF_CREDENTIALS])
-        connection = HubConnection(async_get_clientsession(hass), credentials)
+        connection = HubConnection(
+            async_get_clientsession(hass),
+            credentials,
+            state_dir=hass.config.path(STORAGE_DIR, DOMAIN),
+        )
     except (KeyError, TypeError, ValueError) as err:
         # Unreadable keys are replaced the same way rejected ones are.
         raise ConfigEntryAuthFailed(
@@ -97,17 +102,36 @@ async def async_unload_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -> None:
-    """Delete this installation's connection on the hub, best effort."""
+    """Delete the connection on the hub, then revoke the API token, best effort."""
     ir.async_delete_issue(hass, DOMAIN, agent_issue_id(entry.entry_id))
     try:
         tokens = Tokens.from_dict(entry.data[CONF_TOKENS])
+    except KeyError, TypeError, ValueError:
+        LOGGER.warning(
+            "The stored Thalovant token for %s cannot be read; remove its "
+            "connection and API token from the Thalovant dashboard",
+            entry.title,
+        )
+        return
+    api = ThalovantApi(async_get_clientsession(hass), tokens)
+    try:
         connection_id: str = entry.data[CONF_CREDENTIALS]["connection_id"]
-        api = ThalovantApi(async_get_clientsession(hass), tokens)
         async with asyncio.timeout(REMOVE_TIMEOUT):
             await api.delete_connection(connection_id)
     except Exception as err:  # noqa: BLE001 - removal must never fail on this
         LOGGER.warning(
             "Could not delete the Home Assistant connection on %s (%s); "
+            "remove it from the Thalovant dashboard",
+            entry.title,
+            type(err).__name__,
+        )
+    # Deleting the connection needs the token, so the token goes last.
+    try:
+        async with asyncio.timeout(REMOVE_TIMEOUT):
+            await api.revoke_token()
+    except Exception as err:  # noqa: BLE001 - removal must never fail on this
+        LOGGER.warning(
+            "Could not revoke the Thalovant API token of %s (%s); "
             "remove it from the Thalovant dashboard",
             entry.title,
             type(err).__name__,

@@ -7,6 +7,7 @@
       'has_secret': True,
       'token_scopes': list([
         'hubs:read',
+        'clients:read',
         'clients:write',
       ]),
     }),

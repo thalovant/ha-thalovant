@@ -34,6 +34,7 @@ from .api import (
     DeviceLoginExpired,
     DeviceLoginPending,
     Hub,
+    ThalovantAdmissionTimeoutError,
     ThalovantAlreadyLinkedError,
     ThalovantApi,
     ThalovantApiError,
@@ -86,6 +87,9 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         self._credentials: ConnectionCredentials | None = None
         self._admission_task: asyncio.Task[None] | None = None
         self._reusing_tokens = False
+        # A token this flow minted and no entry holds yet: revoked if the flow
+        # ends without storing it, since a Free plan allows one API token.
+        self._minted: Tokens | None = None
         self._errors: dict[str, str] = {}
 
     @staticmethod
@@ -152,7 +156,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
 
         task, self._login_task = self._login_task, None
         try:
-            self._tokens = task.result()
+            self._tokens = self._minted = task.result()
         except DeviceLoginExpired:
             self._errors = {"base": "login_expired"}
         except DeviceLoginDenied:
@@ -178,7 +182,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             self._account = await api.get_account()
             hubs = await api.list_hubs()
         except ThalovantAuthError:
-            self._tokens = None
+            self._tokens = self._minted = None
             if self._reusing_tokens:
                 # The stored token is gone too: sign in for a new one.
                 self._reusing_tokens = False
@@ -258,9 +262,10 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             task.result()
         except ThalovantAuthError:
             errors["base"] = "invalid_auth"
-        except ThalovantConnectionError, TimeoutError:
-            # The library ends a wait that ran out of time this way too.
+        except ThalovantAdmissionTimeoutError, TimeoutError:
             errors["base"] = "admission_timeout"
+        except ThalovantConnectionError:
+            errors["base"] = "cannot_connect"
         except ThalovantApiError as err:
             LOGGER.warning("The hub did not admit the connection: %s", err)
             errors["base"] = "admission_failed"
@@ -275,7 +280,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         credentials, self._credentials = self._credentials, None
         await self._async_discard_connection(credentials)
         if errors["base"] == "invalid_auth":
-            self._tokens = None
+            self._tokens = self._minted = None
         self._errors = errors
         if self._tokens is None or self.source == SOURCE_REAUTH:
             return self.async_show_progress_done(next_step_id=self._start_step_id)
@@ -299,8 +304,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             CONF_CREDENTIALS: self._credentials.to_dict(),
             CONF_LINKED_AT: dt_util.utcnow().isoformat(),
         }
-        # From here the entry owns the connection.
-        self._credentials = None
+        # From here the entry owns the connection and the token.
+        self._credentials = self._minted = None
         if self.source == SOURCE_REAUTH:
             return self.async_update_reload_and_abort(
                 self._get_reauth_entry(), data=data
@@ -310,12 +315,32 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     @callback
     @override
     def async_remove(self) -> None:
-        """Delete a connection the flow created but never stored."""
+        """Clean up what the flow made and never stored: connection, then token."""
         credentials, self._credentials = self._credentials, None
-        if credentials is not None:
+        minted, self._minted = self._minted, None
+        if credentials is not None or minted is not None:
             self.hass.async_create_background_task(
-                self._async_discard_connection(credentials),
-                name=f"{DOMAIN} discard unused connection",
+                self._async_clean_up(credentials, minted),
+                name=f"{DOMAIN} clean up unused sign-in",
+            )
+
+    async def _async_clean_up(
+        self, credentials: ConnectionCredentials | None, minted: Tokens | None
+    ) -> None:
+        """Delete an unused connection, then revoke an unused token."""
+        if credentials is not None:
+            await self._async_discard_connection(credentials)
+        if minted is None:
+            return
+        try:
+            await ThalovantApi(
+                async_get_clientsession(self.hass), minted
+            ).revoke_token()
+        except Exception as err:  # noqa: BLE001 - best effort, and said so
+            LOGGER.warning(
+                "Could not revoke the unused Thalovant API token (%s); remove it "
+                "from the Thalovant dashboard",
+                type(err).__name__,
             )
 
     @property
@@ -401,10 +426,9 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             try:
                 return await auth.poll_device_login(login)
             except DeviceLoginPending as pending:
-                # slow_down: the library raises Pending with the longer interval.
-                asked = getattr(pending, "interval", None)
-                if isinstance(asked, int) and asked > 0:
-                    interval = max(asked, MIN_POLL_INTERVAL)
+                # slow_down: the SDK raises Pending with the longer interval.
+                if pending.interval > 0:
+                    interval = max(pending.interval, MIN_POLL_INTERVAL)
             if self.hass.loop.time() + interval > deadline:
                 raise DeviceLoginExpired
 
@@ -434,7 +458,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
                 hub.id, name=f"Home Assistant ({hub.name})", kind=CONNECTION_KIND
             )
         except ThalovantAuthError:
-            self._tokens = None
+            self._tokens = self._minted = None
             self._errors = {"base": "invalid_auth"}
             return self._async_show_start_form()
         except ThalovantConnectionError:

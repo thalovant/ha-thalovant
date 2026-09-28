@@ -64,3 +64,15 @@ jobs:
           mypy
       - name: Test
         run: pytest --cov --cov-report=term-missing
+      # The adapter against the real SDK, in the same job so it costs no
+      # second Home Assistant install. --no-deps: Home Assistant 2026.9 pins
+      # cryptography 48.0.1 and thalovant 0.9.0 asks for 50 or later.
+      # Point THALOVANT_SDK at the release once it is on PyPI.
+      - name: Test against the thalovant SDK
+        env:
+          THALOVANT_SDK: "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@feat/async-core"
+        run: |
+          uv pip install --system --no-deps "$THALOVANT_SDK"
+          # Fail here, not as a skipped test, if the SDK does not import.
+          python -c "import thalovant; print('thalovant', thalovant.__version__)"
+          pytest tests/test_api_sdk.py

@@ -34,9 +34,9 @@ HUB_ID = "hub-maison"
 OTHER_HUB_ID = "hub-daily-desk"
 CONNECTION_ID = "conn-91c2"
 ACCESS_TOKEN = "tvt_access_do_not_leak"
-REFRESH_TOKEN = "tvt_refresh_do_not_leak"
+TOKEN_ID = "tok-5b1e"
 CONNECTION_SECRET = "hub-password-do-not-leak"
-NOISE_KEY = "5eed" * 16
+ACCESS_KEY = "hub-access-key-do-not-leak"
 
 
 @pytest.fixture(autouse=True)
@@ -75,9 +75,9 @@ def tokens() -> Tokens:
     """Tokens from an approved login."""
     return Tokens(
         access_token=ACCESS_TOKEN,
-        refresh_token=REFRESH_TOKEN,
         expires_at=datetime(2027, 9, 27, tzinfo=UTC),
-        scopes=("hubs:read", "clients:write"),
+        scopes=("hubs:read", "clients:read", "clients:write"),
+        token_id=TOKEN_ID,
     )
 
 
@@ -91,8 +91,8 @@ def account() -> Account:
 def hubs() -> list[Hub]:
     """The account's hubs."""
     return [
-        Hub(id=HUB_ID, name="Maison", public=False, languages=("fr-FR", "en-US")),
-        Hub(id=OTHER_HUB_ID, name="Daily Desk", public=True, languages=("en-US",)),
+        Hub(id=HUB_ID, name="Maison"),
+        Hub(id=OTHER_HUB_ID, name="Daily Desk"),
     ]
 
 
@@ -104,12 +104,14 @@ def credentials() -> ConnectionCredentials:
         connection_id=CONNECTION_ID,
         name="Home Assistant (Maison)",
         endpoint="wss://maison.hubs.thalovant.com/ws",
-        # Opaque to the integration; shaped the way the SDK stores it.
+        # Opaque to the integration: the SDK identity, secrets included.
         secret={
-            "access_key": "hub-access-key-do-not-leak",
+            "access_key": ACCESS_KEY,
             "password": CONNECTION_SECRET,
             "site_id": "home-assistant-maison",
-            "noise_key": NOISE_KEY,
+            "default_master": "maison.hubs.thalovant.com",
+            "default_port": 443,
+            "default_path": "",
         },
         operation_url="https://api.thalovant.com/v1/operations/op-1",
     )
@@ -138,6 +140,7 @@ def mock_api(
     api.create_connection = AsyncMock(return_value=credentials)
     api.wait_for_admission = AsyncMock(return_value=None)
     api.delete_connection = AsyncMock(return_value=None)
+    api.revoke_token = AsyncMock(return_value=None)
     with (
         patch("custom_components.thalovant.config_flow.ThalovantApi", return_value=api),
         patch("custom_components.thalovant.ThalovantApi", return_value=api),
