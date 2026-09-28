@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Awaitable, Callable, Generator, Mapping
 from datetime import UTC, datetime
 import inspect
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -42,6 +43,12 @@ ACCESS_KEY = "hub-access-key-do-not-leak"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
     """Load custom_components/ in every test."""
+
+
+@pytest.fixture
+def hass_config_dir(hass_tmp_config_dir: str) -> str:
+    """Give every test its own config directory: the integration writes to .storage."""
+    return hass_tmp_config_dir
 
 
 @pytest.fixture(autouse=True)
@@ -197,10 +204,18 @@ class FakeHubConnection:
         msg_type: str,
         data: Mapping[str, Any],
         context: Mapping[str, Any] | None = None,
+        *,
+        age: float = 0.0,
     ) -> HubMessage:
-        """Deliver a message from the hub the way the library would."""
+        """Deliver a message from the hub the way the library would.
+
+        age is how long ago it arrived, in seconds.
+        """
         message = HubMessage(
-            type=msg_type, data=data, context=context or {"session": "s1"}
+            type=msg_type,
+            data=data,
+            context=context or {"session": "s1"},
+            received_at=time.monotonic() - age,
         )
         for callback in list(self.message_callbacks.get(msg_type, [])):
             result = callback(message)

@@ -82,8 +82,8 @@ Open the integration and select **Configure**.
   hub can reach this Home Assistant, and off while the link is down.
 - **Diagnostics** you can download from the integration page. They hold
   counts and timings, never a token, a key, or anything that was said.
-- **A repair notice** when the conversation agent chosen in the options no
-  longer exists.
+- **Repair notices** when the conversation agent chosen in the options no
+  longer exists, and when the hub answers with a different security key.
 
 Updates are pushed: the link stays open and the sensor changes the moment the
 connection does. Nothing is polled.
@@ -136,8 +136,9 @@ automation:
   never sends a sentence to the hub; it only answers.
 - One link per hub for each Thalovant account. A second Home Assistant on the
   same hub and account is refused until you remove the first link.
-- The hub waits 10 seconds for an answer. A slow agent (a large language
-  model, for example) gets 8 of them and is then cut off.
+- The hub waits 10 seconds for an answer, counted from when it asked. A slow
+  agent (a large language model, for example) gets 8.5 of them and is then cut
+  off; an answer that would arrive after the hub gave up is not sent at all.
 - The language comes from the request. An agent that does not speak it
   answers with an error.
 - Moving a link to another hub means removing the entry and adding a new one.
@@ -147,8 +148,8 @@ automation:
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
   year) and the connection's keys, in Home Assistant's config entry storage,
   like any other integration's credentials. The key the hub recognises this
-  Home Assistant by lives in `.storage/thalovant/`, so it survives updates and
-  is part of your backups.
+  Home Assistant by, and the hub's own key, live in `.storage/thalovant/`, one
+  folder per link, so they survive updates and are part of your backups.
 - **What leaves your home.** Only Assist's answers, sent to your hub. No
   Home Assistant token, and no entity list.
 - **Logs.** This integration never logs what was said or what Assist answered,
@@ -192,6 +193,12 @@ connection's keys, for example because the connection was deleted from the
 dashboard. Follow the notification: the integration makes a new connection,
 and only asks you to sign in again if the stored token no longer works.
 
+**"answered with a different security key" in Repairs.** The hub presented a
+different key than the one it had when you linked it. Home Assistant stops
+talking to it and asks you to re-authenticate. Do that only if you know the
+hub was replaced or reset: re-linking makes a new connection and trusts the
+key the hub presents now.
+
 **The hub says Home Assistant didn't understand.** Try the same sentence in
 Assist in Home Assistant. If it fails there too, the entity is probably not
 exposed to Assist, or its name differs from what you said.
@@ -220,26 +227,20 @@ logger:
 ```sh
 python3.14 -m venv .venv
 .venv/bin/pip install -r requirements_test.txt -r requirements_lint.txt
+# The SDK, under Home Assistant's own package constraints, the way Home
+# Assistant installs an integration's requirements.
+constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
+.venv/bin/pip install -c "$constraints" \
+    "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@8fb35b1"
 .venv/bin/pytest --cov
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy
 ```
 
 The integration talks to Thalovant through the async API of the `thalovant`
-Python SDK, and only through `custom_components/thalovant/api.py`. The tests
-patch that adapter's classes, so they do not need the SDK installed;
-`tests/test_api.py` drives the adapter with a fake SDK, and
+Python SDK, and only through `custom_components/thalovant/api.py`.
+`tests/test_api.py` drives that adapter with a fake SDK, and
 `tests/test_api_sdk.py` drives it with the real one against a local control
-plane. That file is skipped unless the SDK is installed:
-
-```sh
-constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
-uv pip install -p .venv/bin/python -c "$constraints" \
-    "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e"
-.venv/bin/pytest tests/test_api_sdk.py
-```
-
-The SDK goes in under Home Assistant's own package constraints, the way Home
-Assistant installs an integration's requirements.
+plane.
 
 ## License
 

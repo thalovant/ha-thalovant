@@ -81,6 +81,9 @@
     "credentials_invalid": {
       "message": "The stored credentials for {hub} cannot be read"
     },
+    "hub_key_changed": {
+      "message": "The hub {hub} answered with a different security key than the one it was linked with"
+    },
     "not_admitted_yet": {
       "message": "The hub {hub} has not admitted this connection yet"
     }
@@ -89,6 +92,10 @@
     "agent_unavailable": {
       "title": "The conversation agent for {hub} is gone",
       "description": "Requests from {hub} go to the conversation agent `{agent}`, which Home Assistant cannot find any more. Until you choose another agent in the Thalovant integration's options, the hub gets an error for everything it asks."
+    },
+    "hub_key_changed": {
+      "title": "{hub} answered with a different security key",
+      "description": "Home Assistant stopped talking to the hub {hub}: it answered with a different security key than the one it had when you linked it. That happens when a hub is replaced or reset, and also when something sits between Home Assistant and the hub.\n\nIf you know the hub was replaced or reset, re-link it: open the Thalovant integration and follow its request to re-authenticate. Re-linking trusts the key the hub presents now. If you did not expect this, check the hub in the Thalovant dashboard before you re-link."
     }
   },
   "common": {

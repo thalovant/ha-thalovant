@@ -2,16 +2,19 @@
 
 import asyncio
 import logging
+from pathlib import Path
 from unittest.mock import MagicMock
 
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.thalovant import _noise_dir_name, key_changed_issue_id
 from custom_components.thalovant.api import (
     ThalovantAuthError,
     ThalovantConnectionError,
     ThalovantError,
+    ThalovantHubKeyChangedError,
 )
 from custom_components.thalovant.const import (
     CONF_CREDENTIALS,
@@ -46,9 +49,10 @@ async def test_setup_and_unload(
     assert mock_config_entry.runtime_data.connection is mock_hub_connection
     credentials = mock_hub_connection.factory.call_args.args[1]
     assert credentials.connection_id == CONNECTION_ID
-    # The Noise key the hub pins lives with Home Assistant's own storage.
+    # The Noise keys live with Home Assistant's own storage, one folder per
+    # connection, so re-linking starts with a new key and no pin.
     assert mock_hub_connection.factory.call_args.kwargs == {
-        "state_dir": hass.config.path(".storage", "thalovant")
+        "state_dir": hass.config.path(".storage", "thalovant", CONNECTION_ID)
     }
     mock_hub_connection.connect.assert_awaited_once()
     mock_hub_connection.run.assert_awaited_once()
@@ -301,3 +305,137 @@ async def test_remove_with_unreadable_token(
     assert hass.config_entries.async_entries(DOMAIN) == []
     mock_api.delete_connection.assert_not_awaited()
     assert "The stored Thalovant token for Maison cannot be read" in caplog.text
+
+
+async def test_hub_key_changed_at_setup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """A changed hub key is no blip: it raises a repair issue and asks to re-link."""
+    mock_hub_connection.connect.side_effect = ThalovantHubKeyChangedError("changed")
+    await _setup(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    issue = issue_registry.async_get_issue(
+        DOMAIN, key_changed_issue_id(mock_config_entry.entry_id)
+    )
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert issue.translation_key == "hub_key_changed"
+    assert issue.translation_placeholders == {"hub": "Maison"}
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_hub_key_changed_while_running(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """A key that changes after setup stops the link and asks to re-link."""
+    changed = asyncio.Event()
+
+    async def run() -> None:
+        await changed.wait()
+        raise ThalovantHubKeyChangedError("changed")
+
+    mock_hub_connection.run.side_effect = run
+    await _setup(hass, mock_config_entry)
+    issue_id = key_changed_issue_id(mock_config_entry.entry_id)
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+    changed.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_relinked_hub_clears_the_issue(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    issue_registry: ir.IssueRegistry,
+) -> None:
+    """Once the link connects again, the key-changed issue goes away."""
+    issue_id = key_changed_issue_id(mock_config_entry.entry_id)
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key="hub_key_changed",
+    )
+    await _setup(hass, mock_config_entry)
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_noise_folders_follow_the_connections(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    mock_api: MagicMock,
+) -> None:
+    """Folders of connections no entry uses are pruned; removal deletes the entry's."""
+    root = Path(hass.config.path(".storage", "thalovant"))
+    await hass.async_add_executor_job(_make_noise_state, root)
+    await _setup(hass, mock_config_entry)
+    # The re-linked-away connection and the old shared store are gone.
+    assert sorted(await hass.async_add_executor_job(_names, root)) == [CONNECTION_ID]
+
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    assert await hass.async_add_executor_job(_names, root) == []
+
+
+async def test_prune_without_a_store(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+) -> None:
+    """With nothing stored yet there is nothing to prune."""
+    await _setup(hass, mock_config_entry)
+    assert mock_config_entry.state is ConfigEntryState.LOADED
+
+
+def test_noise_dir_names() -> None:
+    """A connection id never escapes the store's folder."""
+    assert _noise_dir_name("conn-91c2_x") == "conn-91c2_x"
+    assert _noise_dir_name("../../etc") == "______etc"
+    assert _noise_dir_name("") == "_"
+
+
+def _make_noise_state(root: Path) -> None:
+    (root / CONNECTION_ID).mkdir(parents=True)
+    (root / CONNECTION_ID / "_identity.json").write_text("{}")
+    (root / "conn-old").mkdir()
+    (root / "_identity.json").write_text("{}")
+
+
+def _names(root: Path) -> list[str]:
+    return [child.name for child in root.iterdir()] if root.is_dir() else []
+
+
+async def test_remove_with_unreadable_credentials(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An entry whose credentials cannot be read is still removed, token revoked."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, data={**mock_config_entry.data, CONF_CREDENTIALS: None}
+    )
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.config_entries.async_entries(DOMAIN) == []
+    mock_api.delete_connection.assert_not_awaited()
+    mock_api.revoke_token.assert_awaited_once_with()
+    assert "Could not delete the Home Assistant connection on Maison" in caplog.text

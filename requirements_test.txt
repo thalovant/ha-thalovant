@@ -7,5 +7,5 @@ gazetteer-matcher==1.1.0
 hassil==3.12.1
 home-assistant-intents==2026.8.28
 
-# The thalovant SDK is not installed: the tests patch the adapter in
-# custom_components/thalovant/api.py, and test_api.py drives it with a fake SDK.
+# The thalovant SDK is installed on its own, under Home Assistant's package
+# constraints: see the README's Development section and the CI workflow.

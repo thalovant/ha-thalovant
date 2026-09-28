@@ -20,7 +20,8 @@ from custom_components.thalovant.handler import (
     agent_issue_id,
     async_resolve_language,
     canonical_language,
-    plain_speech,
+    result_to_response,
+    speech_text,
 )
 from homeassistant.components import conversation
 from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
@@ -131,6 +132,13 @@ async def _ask(
     assert replied_to is message
     assert msg_type == RESPONSE_MESSAGE_TYPE
     return response
+
+
+async def _until(condition: Callable[[], bool], timeout: float = 5) -> None:
+    """Wait for something a background task does."""
+    async with asyncio.timeout(timeout):
+        while not condition():
+            await asyncio.sleep(0.01)
 
 
 def _request(**overrides: Any) -> dict[str, Any]:
@@ -303,7 +311,8 @@ async def test_unknown_assist_code_falls_back(
 
     use_agent(FakeAgent(answer))
     response = await _ask(hass, mock_hub_connection, _request())
-    assert response["error_code"] == "brand_new_code"
+    # A code the hub does not know is sent as unknown.
+    assert response["error_code"] == "unknown"
     assert response["speech"] == "Sorry, something went wrong in Home Assistant."
 
 
@@ -333,24 +342,12 @@ async def test_fallback_failure_still_answers(
     assert response["speech"] == ""
 
 
-async def test_error_without_code(
-    hass: HomeAssistant,
-    mock_hub_connection: FakeHubConnection,
-    use_agent: Callable[[FakeAgent], FakeAgent],
-) -> None:
+def test_error_without_code() -> None:
     """An error response without a code is reported as unknown."""
-
-    async def answer(
-        _: conversation.ConversationInput,
-    ) -> conversation.ConversationResult:
-        result = _result(intent.IntentResponseType.ACTION_DONE, "Hmm.")
-        result.response.response_type = intent.IntentResponseType.ERROR
-        return result
-
-    use_agent(FakeAgent(answer))
-    response = await _ask(hass, mock_hub_connection, _request())
-    assert response["response_type"] == "error"
-    assert response["error_code"] == "unknown"
+    response = intent.IntentResponse(language="en")
+    response.response_type = intent.IntentResponseType.ERROR
+    result = conversation.ConversationResult(response=response)
+    assert result_to_response("req-1", result)["error_code"] == "unknown"
 
 
 async def test_timeout(
@@ -383,13 +380,15 @@ async def test_timeout(
 
 
 @pytest.mark.parametrize(
-    ("exception", "speech"),
+    ("exception", "error_code", "speech"),
     [
         (
             RuntimeError("secret utterance echo"),
-            "Sorry, something went wrong in Home Assistant.",
+            "failed_to_handle",
+            "Sorry, Home Assistant couldn't do that.",
         ),
-        (HomeAssistantError("It broke"), "It broke"),
+        # Home Assistant turns its own errors into an answer with their message.
+        (HomeAssistantError("It broke"), "unknown", "It broke"),
     ],
 )
 async def test_agent_exceptions(
@@ -398,6 +397,7 @@ async def test_agent_exceptions(
     use_agent: Callable[[FakeAgent], FakeAgent],
     caplog: pytest.LogCaptureFixture,
     exception: Exception,
+    error_code: str,
     speech: str,
 ) -> None:
     """An agent that raises still gets an answer out, and never its message in logs."""
@@ -410,7 +410,7 @@ async def test_agent_exceptions(
     use_agent(FakeAgent(answer))
     response = await _ask(hass, mock_hub_connection, _request())
     assert response["response_type"] == "error"
-    assert response["error_code"] == "unknown"
+    assert response["error_code"] == error_code
     assert response["speech"] == speech
     assert "secret utterance echo" not in caplog.text
 
@@ -476,7 +476,8 @@ async def test_payload_not_a_mapping(
 ) -> None:
     """Even a payload that is not an object gets an error answer."""
     response = await _ask(hass, mock_hub_connection, ["not", "a", "dict"])  # type: ignore[arg-type]
-    assert response["request_id"] is None
+    # No request id is answered with an empty one.
+    assert response["request_id"] == ""
     assert response["error_code"] == "unknown"
 
 
@@ -678,15 +679,145 @@ async def test_resolve_language_unknown_agent(hass: HomeAssistant) -> None:
     assert async_resolve_language(hass, "fr-fr", "conversation.gone") == "fr-FR"
 
 
-def test_plain_speech_from_ssml() -> None:
-    """SSML-only speech is reduced to text."""
+@pytest.mark.parametrize(
+    ("kind", "speech", "expected"),
+    [
+        (
+            "ssml",
+            "<speak>It is <emphasis>21</emphasis> degrees &amp; sunny.</speak>",
+            "It is 21 degrees & sunny.",
+        ),
+        # Only real tags go: a comparison is text.
+        ("plain", "5 < 6 and 7 > 3", "5 < 6 and 7 > 3"),
+        # Only numeric references, the XML five and &nbsp; are decoded.
+        ("plain", "Caf&eacute; &#233;t&#xE9; &lt;b&gt;", "Caf&eacute; été <b>"),
+        ("plain", "  Turned\u2003off\n the light.  ", "Turned off the light."),
+    ],
+)
+def test_speech_rules(kind: str, speech: str, expected: str) -> None:
+    """Speech follows the SDK's rules, shared by every Thalovant device."""
     response = intent.IntentResponse(language="en")
-    response.async_set_speech(
-        "<speak>It is <emphasis>21</emphasis> degrees &amp; sunny.</speak>", "ssml"
-    )
-    assert plain_speech(response) == "It is 21 degrees & sunny."
+    response.async_set_speech(speech, kind)
+    assert speech_text(response) == expected
 
 
 def test_plain_speech_empty() -> None:
     """No speech at all is an empty string."""
-    assert plain_speech(intent.IntentResponse(language="en")) == ""
+    assert speech_text(intent.IntentResponse(language="en")) == ""
+
+
+async def test_no_time_left(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A request the hub has already given up on is not answered, and nothing raises."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        raise AssertionError("the agent is not asked when there is no time")
+
+    agent = use_agent(FakeAgent(answer))
+    caplog.set_level(logging.DEBUG, logger="custom_components.thalovant")
+    await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=11)
+    await _until(lambda: loaded_entry.runtime_data.stats.handled == 1)
+    await asyncio.sleep(0)
+
+    assert agent.inputs == []
+    mock_hub_connection.reply.assert_not_awaited()
+    assert "no time left to answer" in caplog.text
+    assert loaded_entry.runtime_data.stats.last_outcome == "timeout"
+
+
+async def test_late_request_gets_what_is_left(
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """Counted from arrival: an old request gives the agent less than its share."""
+    never = asyncio.Event()
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        await never.wait()
+        raise AssertionError("unreachable")
+
+    agent = use_agent(FakeAgent(answer))
+    loop = asyncio.get_running_loop()
+    # Arrived 9.6 s ago: 0.4 s left, of which the reply keeps its reserve.
+    with patch("custom_components.thalovant.handler.REPLY_RESERVE", 0.1):
+        started = loop.time()
+        await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=9.6)
+        response = await mock_hub_connection.next_reply()
+    assert loop.time() - started < 0.4
+    assert len(agent.inputs) == 1
+    assert response["error_code"] == "timeout"
+
+
+@pytest.mark.parametrize("late", ["returns", "raises"])
+async def test_agent_ignoring_cancellation(
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+    late: str,
+) -> None:
+    """An agent that swallows cancellation does not hold the answer back."""
+    release = asyncio.Event()
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        while True:
+            try:
+                await release.wait()
+                break
+            except asyncio.CancelledError:
+                continue
+        if late == "raises":
+            raise RuntimeError("too late")
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done, too late.")
+
+    use_agent(FakeAgent(answer))
+    with patch("custom_components.thalovant.handler.CONVERSE_TIMEOUT", 0.05):
+        response = await _ask(hass, mock_hub_connection, _request())
+    assert response["error_code"] == "timeout"
+
+    # What the agent does afterwards is dropped quietly.
+    converse = [
+        task for task in asyncio.all_tasks() if task.get_name() == "thalovant converse"
+    ]
+    assert len(converse) == 1
+    release.set()
+    await _until(converse[0].done)
+    await asyncio.sleep(0)
+    mock_hub_connection.reply.assert_awaited_once()
+
+
+async def test_reply_withdrawn_at_deadline(
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A reply that cannot go out before the hub gives up is withdrawn, quietly."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    use_agent(FakeAgent(answer))
+    stuck = asyncio.Event()
+
+    async def slow_reply(*_: Any) -> None:
+        await stuck.wait()
+
+    mock_hub_connection.reply.side_effect = slow_reply
+    caplog.set_level(logging.DEBUG, logger="custom_components.thalovant")
+    await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=9.9)
+    await _until(lambda: "could not be sent before the hub gave up" in caplog.text)
+    mock_hub_connection.reply.assert_awaited_once()

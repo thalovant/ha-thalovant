@@ -1,10 +1,9 @@
 """The adapter against the real thalovant SDK and a local control plane.
 
-Skipped unless the SDK is installed. CI installs it from the SDK branch in a
-step of its own; locally:
+Skipped unless the SDK is installed; CI always installs it. Locally:
 
     uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
-        "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e"
+        "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@8fb35b1"
 
 Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
@@ -30,9 +29,11 @@ from custom_components.thalovant.api import (
     ThalovantAuth,
     ThalovantAuthError,
     ThalovantConnectionError,
+    ThalovantHubKeyChangedError,
     ThalovantPlanError,
     ThalovantUnsupportedError,
     Tokens,
+    plain_speech,
 )
 from custom_components.thalovant.const import (
     CONNECTION_KIND,
@@ -244,6 +245,22 @@ class ControlPlane:
 
     async def operation(self, request: web.Request) -> web.Response:
         self._authorized(request)
+        refusals = {
+            "401": (401, "Not authenticated"),
+            "403": (403, "Insufficient scopes"),
+            "403-denied": (403, "Access denied"),
+        }
+        if self.operation_status in refusals:
+            status, detail = refusals[self.operation_status]
+            return web.json_response({"detail": detail}, status=status)
+        if self.operation_status == "400":
+            return web.json_response(
+                {
+                    "detail": "That operation is not yours to follow.",
+                    "code": "bad_operation",
+                },
+                status=400,
+            )
         return web.json_response(
             {
                 "id": request.match_info["operation"],
@@ -455,10 +472,36 @@ async def test_kind_not_echoed(
 
 
 @pytest.mark.parametrize(
-    ("status", "timeout", "expected"),
+    ("status", "timeout", "expected", "facts"),
     [
-        ("failed", 5, ThalovantAdmissionFailedError),
-        ("applied", 0.01, ThalovantAdmissionTimeoutError),
+        (
+            "failed",
+            5,
+            ThalovantAdmissionFailedError,
+            {"status": None, "code": "sync_failed"},
+        ),
+        ("applied", 0.01, ThalovantAdmissionTimeoutError, {}),
+        # The API refusing the token mid-wait means signing in again.
+        ("401", 5, ThalovantAuthError, {"status": 401}),
+        ("403", 5, ThalovantAuthError, {"status": 403}),
+        # A plain 403 is the API's own refusal, passed through, not a failed admission.
+        (
+            "403-denied",
+            5,
+            ThalovantApiError,
+            {"status": 403, "detail": "Access denied"},
+        ),
+        # Any other refusal of the wait keeps what the API said.
+        (
+            "400",
+            5,
+            ThalovantAdmissionFailedError,
+            {
+                "status": 400,
+                "code": "bad_operation",
+                "detail": "That operation is not yours to follow.",
+            },
+        ),
     ],
 )
 async def test_admission_outcomes(
@@ -466,17 +509,21 @@ async def test_admission_outcomes(
     status: str,
     timeout: float,
     expected: type[Exception],
+    facts: dict[str, Any],
 ) -> None:
-    """A failed admission and one that runs out of time are told apart."""
+    """Each way an admission can end reaches the flow as its own error."""
     plane, url, session = control_plane
     plane.operation_status = status
     credentials = ConnectionCredentials(
         HUB, CLIENT, "n", "wss://maison.hubs.example", {"x": "y"}, "/v1/operations/op-1"
     )
-    with pytest.raises(expected):
+    with pytest.raises(expected) as caught:
         await ThalovantApi(session, _tokens(), api_url=url).wait_for_admission(
             credentials, timeout=timeout
         )
+    assert type(caught.value) is expected
+    for key, value in facts.items():
+        assert getattr(caught.value, key) == value
 
 
 async def test_nothing_to_admit(
@@ -525,6 +572,7 @@ def test_unusable_identity() -> None:
     ("error", "expected"),
     [
         (thalovant.ThalovantHubRefusedError("refused"), ThalovantAuthError),
+        (thalovant.ThalovantHubKeyChangedError("changed"), ThalovantHubKeyChangedError),
         (
             thalovant.ThalovantAdmissionTimeoutError("slow"),
             ThalovantAdmissionTimeoutError,
@@ -576,3 +624,18 @@ async def test_unreachable_hub(tmp_path: Path) -> None:
             await link.connect()
         assert link.connected is False
         await link.close()
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("<speak>It is <emphasis>21</emphasis> degrees.</speak>", "It is 21 degrees."),
+        ("5 < 6 and 7 > 3", "5 < 6 and 7 > 3"),
+        ("&eacute;t&#233; &amp; &nbsp;hiver", "&eacute;té & hiver"),
+        ("<b", "<b"),
+        (None, ""),
+    ],
+)
+def test_speech_is_the_sdks(text: str | None, expected: str) -> None:
+    """Speech goes through the SDK's own rules, the ones every device shares."""
+    assert plain_speech(text) == expected

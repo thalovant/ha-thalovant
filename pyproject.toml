@@ -53,6 +53,7 @@ select = [
 logger-objects = ["custom_components.thalovant.const.LOGGER"]
 ignore = [
   "ASYNC109",
+  "ASYNC110",
   "D202", "D203", "D213", "D406", "D407", "D417", "E501",
   "PLC1901", "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004",
   "PT011", "PT018", "RUF001", "RUF012",
