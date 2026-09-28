@@ -17,17 +17,21 @@ answer on the device that asked.
 - **Your agent.** Home Assistant's built-in agent answers by default. You can
   pick any other conversation agent you have installed.
 
+The [Link Home Assistant guide][guide] on docs.thalovant.com covers the same
+steps with what each device sentence means when something goes wrong.
+
 > [!IMPORTANT]
 > The hub side is still being built. Until your hub runs the Thalovant home
 > skill and can create Home Assistant connections, pairing stops with "This hub
-> cannot link Home Assistant yet".
+> can't link Home Assistant yet".
 
 ## Requirements
 
 - Home Assistant 2026.9 or later.
 - [HACS](https://hacs.xyz).
 - A Thalovant account with at least one hub. On the Free plan, Home Assistant
-  can only be linked to a public hub.
+  can only be linked to a public hub such as Daily Desk. The link doesn't count
+  toward the plan's connections, so your phone or speaker keeps its place.
 
 ## Installation
 
@@ -40,6 +44,9 @@ answer on the device that asked.
 4. Search for **Thalovant**, open it, and select **Download**.
 5. Restart Home Assistant.
 
+If your Home Assistant is set up for My Home Assistant links,
+[this link][my-hacs] opens the repository in HACS and does steps 1 to 3.
+
 ### By hand
 
 Copy `custom_components/thalovant` from this repository into the
@@ -51,11 +58,16 @@ Home Assistant.
 1. Go to **Settings** > **Devices & services**, select **Add integration**, and
    choose **Thalovant**.
 2. Select **Submit**. Home Assistant shows a link and a code.
-3. Open the link, sign in to Thalovant, and approve. The dialog in Home
+3. Open the link, sign in to Thalovant, check the code matches, and approve.
+   The page names the request **Home Assistant**. The dialog in Home
    Assistant moves on by itself.
-4. Pick the hub whose devices should reach this Home Assistant.
+4. Pick the hub whose devices should reach this Home Assistant. Hubs that can
+   link come first. A hub that can't yet is marked "can't link Home Assistant
+   yet", and picking it says so without creating anything.
 5. Wait while the hub admits Home Assistant. It usually takes about a minute
-   and a half. The integration is added once the hub is ready.
+   and a half. The integration is added once the hub is ready, and the link
+   shows under **Connections** in the Thalovant dashboard with the type
+   **Home Assistant**.
 
 ### What the setup asks for
 
@@ -164,20 +176,21 @@ automation:
 **The sign-in code expired or was declined.** Select **Submit** again for a
 new code.
 
-**"This hub cannot link Home Assistant yet".** The hub or the Thalovant API
-does not support Home Assistant connections yet. Nothing to fix on your side.
+**"This hub can't link Home Assistant yet".** The hub or the Thalovant API
+does not support Home Assistant connections yet. Pick another hub; there is
+nothing to fix on your side.
 
 **"Your Thalovant plan links Home Assistant to public hubs only".** On the
 Free plan, pick a public hub such as Daily Desk, or upgrade.
 
-**"Your Thalovant plan already uses all of its connections".** Remove one in
-the [Thalovant dashboard][dashboard], then try again.
+**"Your Thalovant plan has no room for another link".** Remove one in the
+[Thalovant dashboard][dashboard], then try again.
 
 **"Thalovant refused to create the connection".** Something else went wrong
 on the Thalovant side. Try again later; the log has the API's reason.
 
 **"Another Home Assistant is already linked to this hub".** Remove the old
-link in the Thalovant dashboard.
+link under **Connections** in the Thalovant dashboard.
 
 **The hub took too long to admit Home Assistant.** The connection that was
 being set up is deleted, so trying again starts clean. Wait a few minutes
@@ -202,6 +215,11 @@ key the hub presents now.
 **The hub says Home Assistant didn't understand.** Try the same sentence in
 Assist in Home Assistant. If it fails there too, the entity is probably not
 exposed to Assist, or its name differs from what you said.
+
+**A device says "I'm not connected to your home yet".** The hub has no Home
+Assistant link for the account that device is signed in to. Link it here with
+the same Thalovant account. The [guide][guide] lists every sentence a device
+can say and what to do about it.
 
 **Debug logs.** Add this to `configuration.yaml` and restart:
 
@@ -247,4 +265,6 @@ plane.
 [Apache License 2.0](LICENSE).
 
 [expose]: https://www.home-assistant.io/voice_control/voice_remote_expose_devices/
+[guide]: https://docs.thalovant.com/manage/home-assistant/
+[my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=thalovant&repository=ha-thalovant&category=integration
 [dashboard]: https://dash.thalovant.com

@@ -453,6 +453,46 @@ async def test_list_hubs(sdk: SimpleNamespace) -> None:
     plane.list_public_hubs.assert_awaited_once_with(cursor=None)
 
 
+async def test_list_hubs_reads_home_assistant_capability(
+    sdk: SimpleNamespace,
+) -> None:
+    """capabilities.home_assistant says whether a hub can link; anything else is unknown."""
+    plane = sdk.AsyncThalovantControlPlane.return_value
+    plane.get_profile = AsyncMock(return_value={"id": "a1"})
+    plane.list_hubs = AsyncMock(
+        return_value={
+            "data": [
+                {"id": "yes", "name": "yes", "capabilities": {"home_assistant": True}},
+                {"id": "no", "name": "no", "capabilities": {"home_assistant": False}},
+                {"id": "odd", "name": "odd", "capabilities": {"home_assistant": "1"}},
+                {"id": "flat", "name": "flat", "capabilities": ["home_assistant"]},
+            ],
+            "meta": {},
+        }
+    )
+    plane.list_public_hubs = AsyncMock(
+        return_value={
+            "data": [
+                {
+                    "id": "desk",
+                    "title": "Daily Desk",
+                    "capabilities": {"home_assistant": True},
+                }
+            ],
+            "meta": {},
+        }
+    )
+
+    hubs = await ThalovantApi(MagicMock(), _tokens()).list_hubs()
+    assert {hub.id: hub.can_link for hub in hubs} == {
+        "yes": True,
+        "no": False,
+        "odd": None,
+        "flat": None,
+        "desk": True,
+    }
+
+
 async def test_list_hubs_stops_paging(sdk: SimpleNamespace) -> None:
     """A listing that never ends is read up to MAX_PAGES pages."""
     plane = sdk.AsyncThalovantControlPlane.return_value

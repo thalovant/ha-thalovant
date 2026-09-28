@@ -193,6 +193,15 @@ def _optional_text(value: Any) -> str | None:
     return value.strip() or None if isinstance(value, str) else None
 
 
+def _can_link(item: Mapping[str, Any]) -> bool | None:
+    """Read capabilities.home_assistant from a hub; None when it is not a bool."""
+    capabilities = item.get("capabilities")
+    if not isinstance(capabilities, Mapping):
+        return None
+    value = capabilities.get("home_assistant")
+    return value if isinstance(value, bool) else None
+
+
 @dataclass(frozen=True, slots=True)
 class Tokens:
     """The API token from a device login. The form stored in the entry.
@@ -249,6 +258,9 @@ class Hub:
 
     id: str
     name: str
+    # Whether the hub can pass requests to Home Assistant, from the API's
+    # capabilities.home_assistant; None when the API does not say.
+    can_link: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -561,12 +573,17 @@ class ThalovantApi:
         for item in own:
             hub_id = _optional_text(item.get("id"))
             if hub_id and item.get("is_locked") is not True:
-                hubs.setdefault(hub_id, Hub(id=hub_id, name=display_name(item)))
+                hubs.setdefault(
+                    hub_id,
+                    Hub(id=hub_id, name=display_name(item), can_link=_can_link(item)),
+                )
         for item in public:
             hub_id = _optional_text(item.get("id"))
             if hub_id:
                 name = _optional_text(item.get("title")) or display_name(item)
-                hubs.setdefault(hub_id, Hub(id=hub_id, name=name))
+                hubs.setdefault(
+                    hub_id, Hub(id=hub_id, name=name, can_link=_can_link(item))
+                )
         return list(hubs.values())
 
     async def create_connection(

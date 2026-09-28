@@ -813,3 +813,83 @@ async def test_options_flow(
         CONF_AGENT_ID: conversation.HOME_ASSISTANT_AGENT
     }
     assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_first_step_links_the_guide(hass: HomeAssistant) -> None:
+    """The first step points at the step-by-step guide."""
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    assert result["description_placeholders"] == {
+        "guide_url": "https://docs.thalovant.com/manage/home-assistant/"
+    }
+
+
+@pytest.mark.parametrize(
+    ("language", "not_ready"),
+    [
+        ("en", "Maison (can't link Home Assistant yet)"),
+        ("fr", "Maison (ne peut pas encore être relié)"),
+    ],
+)
+async def test_hubs_that_can_link_come_first(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    language: str,
+    not_ready: str,
+) -> None:
+    """Linkable hubs first, unknown next, the ones that cannot last and marked."""
+    hass.config.language = language
+    mock_api.list_hubs.return_value = [
+        Hub(HUB_ID, "Maison", can_link=False),
+        Hub("unknown", "Atelier"),
+        Hub(OTHER_HUB_ID, "Daily Desk", can_link=True),
+    ]
+    result = await _finish_login(hass, await _start(hass))
+    options = result["data_schema"].schema[CONF_HUB_ID].config["options"]
+    assert [option["label"] for option in options] == [
+        "Daily Desk",
+        "Atelier",
+        not_ready,
+    ]
+
+
+async def test_hub_that_cannot_link_is_refused_before_anything_is_made(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+) -> None:
+    """Picking a hub the API says cannot link explains why and creates nothing."""
+    mock_api.list_hubs.return_value = [
+        Hub(HUB_ID, "Maison", can_link=False),
+        Hub(OTHER_HUB_ID, "Daily Desk", can_link=True),
+    ]
+    result = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "hub"
+    assert result["errors"] == {"base": "hub_cannot_link"}
+    mock_api.create_connection.assert_not_awaited()
+
+    # Another hub still works from the same form.
+    result = await _pick_hub(hass, result, OTHER_HUB_ID)
+    assert result["type"] is FlowResultType.SHOW_PROGRESS
+    mock_api.create_connection.assert_awaited_once()
+
+
+async def test_not_ready_label_without_translation(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+) -> None:
+    """A translation that lacks the label, or its placeholder, falls back to English."""
+    mock_api.list_hubs.return_value = [Hub(HUB_ID, "Maison", can_link=False)]
+    with patch(
+        "custom_components.thalovant.config_flow.translation.async_get_translations",
+        AsyncMock(return_value={"component.thalovant.common.hub_not_ready": "?"}),
+    ):
+        result = await _finish_login(hass, await _start(hass))
+    options = result["data_schema"].schema[CONF_HUB_ID].config["options"]
+    assert [option["label"] for option in options] == [
+        "Maison (can't link Home Assistant yet)"
+    ]

@@ -15,7 +15,7 @@ from homeassistant.config_entries import (
     OptionsFlow,
 )
 from homeassistant.core import callback
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import issue_registry as ir, translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     ConversationAgentSelector,
@@ -69,6 +69,12 @@ MIN_POLL_INTERVAL: Final = 1
 # before giving up on it.
 ADMISSION_GRACE: Final = 15
 
+# The step-by-step guide, linked from the first step.
+GUIDE_URL: Final = "https://docs.thalovant.com/manage/home-assistant/"
+
+# The picker's label for a hub that cannot link, when no translation has one.
+NOT_READY_LABEL: Final = "{hub} (can't link Home Assistant yet)"
+
 
 class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     """Link a Thalovant hub: device login, pick a hub, create its connection."""
@@ -91,6 +97,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         # ends without storing it, since a Free plan allows one API token.
         self._minted: Tokens | None = None
         self._errors: dict[str, str] = {}
+        # "{hub} (can't link yet)", in Home Assistant's language.
+        self._not_ready_label = NOT_READY_LABEL
 
     @staticmethod
     @callback
@@ -199,6 +207,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             assert self._account is not None
 
         self._hubs = {hub.id: hub for hub in hubs}
+        if any(hub.can_link is False for hub in hubs):
+            self._not_ready_label = await self._async_not_ready_label()
 
         if self.source == SOURCE_REAUTH:
             entry = self._get_reauth_entry()
@@ -231,6 +241,11 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             return self._async_show_hub_form()
 
         hub = self._hubs[user_input[CONF_HUB_ID]]
+        if hub.can_link is False:
+            # The API says it cannot route to Home Assistant: making a
+            # connection there would only leave one to clean up.
+            self._errors = {"base": "hub_cannot_link"}
+            return self._async_show_hub_form()
         await self.async_set_unique_id(f"{self._account.id}:{hub.id}")
         self._abort_if_unique_id_configured()
         return await self._async_link_hub(hub)
@@ -352,8 +367,14 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     def _async_show_start_form(self) -> ConfigFlowResult:
         """Show the step that starts a sign-in, with the last error if any."""
         errors, self._errors = self._errors, {}
+        step_id = self._start_step_id
         return self.async_show_form(
-            step_id=self._start_step_id, data_schema=_schema({}), errors=errors
+            step_id=step_id,
+            data_schema=_schema({}),
+            errors=errors,
+            description_placeholders=(
+                {"guide_url": GUIDE_URL} if step_id == "user" else None
+            ),
         )
 
     @callback
@@ -367,9 +388,17 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             entry.unique_id
             for entry in self._async_current_entries(include_ignore=False)
         }
+        # Hubs that can link first, then those the API says nothing about,
+        # then the ones that cannot, marked as such. A selector cannot grey an
+        # option out, so picking one of those explains itself instead.
         options = [
-            SelectOptionDict(value=hub.id, label=hub.name)
-            for hub in sorted(self._hubs.values(), key=lambda hub: hub.name.casefold())
+            SelectOptionDict(
+                value=hub.id,
+                label=self._not_ready_label.format(hub=hub.name)
+                if hub.can_link is False
+                else hub.name,
+            )
+            for hub in sorted(self._hubs.values(), key=_hub_order)
             if f"{self._account.id}:{hub.id}" not in linked
         ]
         return self.async_show_form(
@@ -492,6 +521,14 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
                 type(err).__name__,
             )
 
+    async def _async_not_ready_label(self) -> str:
+        """The label for a hub that cannot link, in Home Assistant's language."""
+        strings = await translation.async_get_translations(
+            self.hass, self.hass.config.language, "common", {DOMAIN}
+        )
+        label = strings.get(f"component.{DOMAIN}.common.hub_not_ready", "")
+        return label if "{hub}" in label else NOT_READY_LABEL
+
     @property
     def _api(self) -> ThalovantApi:
         """The control plane, as the signed-in account."""
@@ -503,6 +540,12 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     def _client_name(self) -> str:
         """How this installation is named on the sign-in page."""
         return f"Home Assistant ({self.hass.config.location_name})"
+
+
+def _hub_order(hub: Hub) -> tuple[int, str]:
+    """Sort linkable hubs first, unknown next, the ones that cannot last."""
+    rank = {True: 0, None: 1, False: 2}[hub.can_link]
+    return rank, hub.name.casefold()
 
 
 def _schema(fields: dict[Any, Any]) -> Any:
