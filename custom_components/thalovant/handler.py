@@ -2,7 +2,6 @@
 
 import asyncio
 from collections.abc import Mapping
-import html
 import re
 import time
 from typing import Any
@@ -14,13 +13,15 @@ from homeassistant.generated.languages import LANGUAGES
 from homeassistant.helpers import intent, issue_registry as ir, translation
 from homeassistant.util import dt as dt_util, language as language_util
 
-from .api import HubConnection, HubMessage
+from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
     CONVERSE_TIMEOUT,
     DOMAIN,
+    HUB_TIMEOUT,
     LOGGER,
     MAX_CONCURRENT_REQUESTS,
+    REPLY_RESERVE,
     RESPONSE_MESSAGE_TYPE,
 )
 from .models import ThalovantConfigEntry
@@ -28,10 +29,21 @@ from .models import ThalovantConfigEntry
 # Error codes this integration adds to the ones Assist reports.
 ERROR_TIMEOUT = "timeout"
 ERROR_AGENT_UNAVAILABLE = "agent_unavailable"
+ERROR_FAILED_TO_HANDLE = intent.IntentResponseErrorCode.FAILED_TO_HANDLE.value
 ERROR_UNKNOWN = intent.IntentResponseErrorCode.UNKNOWN.value
 
-_SSML_TAG = re.compile(r"<[^>]+>")
-_WHITESPACE = re.compile(r"\s+")
+# The codes the hub knows; anything else is sent as unknown.
+ERROR_CODES = frozenset(
+    {
+        intent.IntentResponseErrorCode.NO_INTENT_MATCH.value,
+        intent.IntentResponseErrorCode.NO_VALID_TARGETS.value,
+        ERROR_FAILED_TO_HANDLE,
+        ERROR_UNKNOWN,
+        ERROR_TIMEOUT,
+        ERROR_AGENT_UNAVAILABLE,
+    }
+)
+
 _SUBTAG_SEPARATOR = re.compile(r"[-_]")
 
 
@@ -83,16 +95,16 @@ def async_resolve_language(hass: HomeAssistant, lang: Any, agent_id: str) -> str
     return tag
 
 
-def plain_speech(response: intent.IntentResponse) -> str:
-    """Return the response's speech as plain text, never SSML."""
+def speech_text(response: intent.IntentResponse) -> str:
+    """Return the response's speech as plain text, never SSML.
+
+    The plain speech when there is one, else the SSML, both put through the
+    SDK's rules, so every Thalovant device receives the same kind of text.
+    """
     plain = response.speech.get("plain", {}).get("speech")
-    if isinstance(plain, str):
-        return plain.strip()
-    ssml = response.speech.get("ssml", {}).get("speech")
-    if isinstance(ssml, str):
-        text = html.unescape(_SSML_TAG.sub(" ", ssml))
-        return _WHITESPACE.sub(" ", text).strip()
-    return ""
+    if not isinstance(plain, str):
+        plain = response.speech.get("ssml", {}).get("speech")
+    return plain_speech(plain if isinstance(plain, str) else "")
 
 
 async def async_fallback_speech(hass: HomeAssistant, lang: Any, error_code: str) -> str:
@@ -139,16 +151,13 @@ def result_to_response(
     intent_response = result.response
     response: dict[str, Any] = {
         "request_id": request_id,
-        "speech": plain_speech(intent_response),
+        "speech": speech_text(intent_response),
         "continue_conversation": bool(result.continue_conversation),
     }
     if intent_response.response_type is intent.IntentResponseType.ERROR:
+        code = getattr(intent_response.error_code, "value", None)
         response["response_type"] = "error"
-        response["error_code"] = (
-            intent_response.error_code.value
-            if intent_response.error_code is not None
-            else ERROR_UNKNOWN
-        )
+        response["error_code"] = code if code in ERROR_CODES else ERROR_UNKNOWN
     elif intent_response.response_type is intent.IntentResponseType.QUERY_ANSWER:
         response["response_type"] = "query_answer"
     else:
@@ -186,12 +195,24 @@ class HomeRequestHandler:
         )
 
     async def async_answer(self, message: HubMessage) -> None:
-        """Answer one request. Never raises: every failure is an error answer."""
-        started = time.monotonic()
+        """Answer one request, within the hub's limit. Never raises.
+
+        The hub gives up HUB_TIMEOUT seconds after it sent the request, so
+        everything is counted from its arrival: Assist gets its share, the
+        reply what is left. An answer with no time left is not sent at all,
+        since the hub would take it for the next request's.
+        """
+        deadline = message.received_at + HUB_TIMEOUT
+
+        def left() -> float:
+            return deadline - time.monotonic()
+
         data: Mapping[str, Any] = (
             message.data if isinstance(message.data, Mapping) else {}
         )
         request_id = data.get("request_id")
+        if not isinstance(request_id, str):
+            request_id = ""
 
         if self._in_flight >= MAX_CONCURRENT_REQUESTS:
             LOGGER.debug("Request %s refused: too many in flight", request_id)
@@ -199,32 +220,50 @@ class HomeRequestHandler:
         else:
             self._in_flight += 1
             try:
-                response = await self._async_converse(request_id, data)
+                response = await self._async_converse(
+                    request_id, data, min(CONVERSE_TIMEOUT, left() - 2 * REPLY_RESERVE)
+                )
             finally:
                 self._in_flight -= 1
 
         if response["response_type"] == "error" and not response["speech"]:
+            # Keep REPLY_RESERVE for the reply; with nothing left, the hub
+            # speaks its own sentence for the code.
             try:
-                response["speech"] = await async_fallback_speech(
-                    self._hass, data.get("lang"), response["error_code"]
-                )
+                async with asyncio.timeout(max(0.0, left() - REPLY_RESERVE)):
+                    response["speech"] = await async_fallback_speech(
+                        self._hass, data.get("lang"), response["error_code"]
+                    )
             except Exception as err:  # noqa: BLE001 - the answer still goes out
                 LOGGER.debug("No fallback speech for request %s: %r", request_id, err)
 
         outcome = response.get("error_code") or response["response_type"]
-        duration_ms = round((time.monotonic() - started) * 1000)
+        duration_ms = round((time.monotonic() - message.received_at) * 1000)
         self._entry.runtime_data.stats.record(outcome, dt_util.utcnow(), duration_ms)
+
+        if (remaining := left()) <= 0:
+            LOGGER.debug(
+                "Request %s: no time left to answer (%s); the hub has given up on it",
+                request_id,
+                outcome,
+            )
+            return
         LOGGER.debug(
             "Request %s answered %s in %d ms", request_id, outcome, duration_ms
         )
-
         try:
-            await self._connection.reply(message, RESPONSE_MESSAGE_TYPE, response)
+            async with asyncio.timeout(remaining):
+                await self._connection.reply(message, RESPONSE_MESSAGE_TYPE, response)
+        except TimeoutError:
+            LOGGER.debug(
+                "Request %s: the answer could not be sent before the hub gave up",
+                request_id,
+            )
         except Exception as err:  # noqa: BLE001 - the hub times out on its own
             LOGGER.debug("Could not send the answer to request %s: %r", request_id, err)
 
     async def _async_converse(
-        self, request_id: Any, data: Mapping[str, Any]
+        self, request_id: str, data: Mapping[str, Any], budget: float
     ) -> dict[str, Any]:
         """Hand the utterance to the conversation agent and map what it says."""
         conversation_id = data.get("conversation_id")
@@ -253,26 +292,42 @@ class HomeRequestHandler:
             return error_response(request_id, ERROR_AGENT_UNAVAILABLE, conversation_id)
         ir.async_delete_issue(self._hass, DOMAIN, agent_issue_id(self._entry.entry_id))
 
-        language = async_resolve_language(self._hass, data.get("lang"), agent_id)
-        LOGGER.debug("Request %s: asking %s in %s", request_id, agent_id, language)
-        try:
-            async with asyncio.timeout(CONVERSE_TIMEOUT):
-                result = await conversation.async_converse(
-                    self._hass,
-                    text=utterance,
-                    conversation_id=conversation_id,
-                    context=Context(),
-                    language=language,
-                    agent_id=agent_id,
-                )
-        except TimeoutError:
+        if budget <= 0:
             LOGGER.debug(
-                "Request %s: %s did not answer within %s s",
-                request_id,
-                agent_id,
-                CONVERSE_TIMEOUT,
+                "Request %s arrived with no time left for %s", request_id, agent_id
             )
             return error_response(request_id, ERROR_TIMEOUT, conversation_id)
+
+        language = async_resolve_language(self._hass, data.get("lang"), agent_id)
+        LOGGER.debug("Request %s: asking %s in %s", request_id, agent_id, language)
+        # Its own task, waited for with asyncio.wait rather than a timeout
+        # around the await: an agent that ignores cancellation must not hold
+        # the answer past the hub's limit. It is cancelled and left to finish.
+        task = self._entry.async_create_background_task(
+            self._hass,
+            conversation.async_converse(
+                self._hass,
+                text=utterance,
+                conversation_id=conversation_id,
+                context=Context(),
+                language=language,
+                agent_id=agent_id,
+            ),
+            name=f"{DOMAIN} converse",
+        )
+        done, _ = await asyncio.wait({task}, timeout=budget)
+        if task not in done:
+            task.cancel()
+            task.add_done_callback(_ignore_late)
+            LOGGER.debug(
+                "Request %s: %s did not answer within %.1f s",
+                request_id,
+                agent_id,
+                budget,
+            )
+            return error_response(request_id, ERROR_TIMEOUT, conversation_id)
+        try:
+            return result_to_response(request_id, task.result())
         except Exception as err:  # noqa: BLE001 - an error answer, never a raise
             # The type only: an agent's message can quote what was said.
             LOGGER.warning(
@@ -281,6 +336,10 @@ class HomeRequestHandler:
                 agent_id,
                 type(err).__name__,
             )
-            return error_response(request_id, ERROR_UNKNOWN, conversation_id)
+            return error_response(request_id, ERROR_FAILED_TO_HANDLE, conversation_id)
 
-        return result_to_response(request_id, result)
+
+def _ignore_late(task: asyncio.Task[Any]) -> None:
+    """Retrieve what an agent that had timed out ended with, so nothing is logged as lost."""
+    if not task.cancelled() and task.exception() is not None:
+        LOGGER.debug("An agent that had timed out failed afterwards")

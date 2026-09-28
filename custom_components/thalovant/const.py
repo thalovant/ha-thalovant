@@ -38,9 +38,13 @@ ADMISSION_GRACE_PERIOD: Final = timedelta(seconds=600)
 REQUEST_MESSAGE_TYPE: Final = "thalovant.home.request"
 RESPONSE_MESSAGE_TYPE: Final = "thalovant.home.response"
 
-# The hub gives up on a request after 10 seconds and treats silence as a
-# timeout. Assist gets 8 of them so the reply still has time to travel back.
-CONVERSE_TIMEOUT: Final = 8.0
+# The hub gives up on a request 10 seconds after sending it and treats silence
+# as a timeout; an answer after that is never sent. Counted from the request's
+# arrival, Assist gets at most CONVERSE_TIMEOUT of them, a fallback sentence
+# for an error what is left short of REPLY_RESERVE, and the reply the rest.
+HUB_TIMEOUT: Final = 10.0
+CONVERSE_TIMEOUT: Final = 8.5
+REPLY_RESERVE: Final = 0.5
 
 # Requests handled at once. A hub has no reason to send more than a household
 # can speak, so anything past this answers "unknown" at once instead of queuing

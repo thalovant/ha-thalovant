@@ -16,6 +16,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 import importlib
+import time
 from types import MappingProxyType
 from typing import Any, Final, Self, cast
 
@@ -39,6 +40,7 @@ SDK_NAMES: Final = (
     "ThalovantUnsupportedConnectionTypeError",
     "ThalovantConnectionError",
     "ThalovantHubRefusedError",
+    "ThalovantHubKeyChangedError",
     "ThalovantTimeoutError",
     "ThalovantAdmissionTimeoutError",
     "ThalovantAdmissionFailedError",
@@ -47,6 +49,9 @@ SDK_NAMES: Final = (
     "ThalovantDeviceLoginExpired",
     "ThalovantDeviceLoginDenied",
 )
+
+# Taken from thalovant.home: the speech rules every Thalovant SDK follows.
+SDK_HOME_NAMES: Final = ("plain_speech",)
 
 # Pages read from a hub listing before giving up on the rest.
 MAX_PAGES: Final = 20
@@ -95,6 +100,15 @@ class ThalovantAuthError(ThalovantError):
 
 class ThalovantConnectionError(ThalovantError):
     """Network, DNS, TLS, a 5xx or 429 answer, or a hub out of reach."""
+
+
+class ThalovantHubKeyChangedError(ThalovantConnectionError):
+    """The hub presented a different Noise key than the one pinned for it.
+
+    The hub was replaced, or something sits between it and this installation;
+    retrying cannot tell which. Only re-linking, which the user decides on,
+    starts over with a new connection and a new pin.
+    """
 
 
 class ThalovantAdmissionTimeoutError(ThalovantConnectionError):
@@ -283,12 +297,17 @@ class ConnectionCredentials:
 
 @dataclass(frozen=True, slots=True)
 class HubMessage:
-    """A message from the hub. Reply to it with HubConnection.reply()."""
+    """A message from the hub. Reply to it with HubConnection.reply().
+
+    received_at is when it arrived, on the monotonic clock: the hub's time
+    limit for an answer counts from there.
+    """
 
     type: str
     data: Mapping[str, Any]
     context: Mapping[str, Any]
     sdk: Any = field(default=None, repr=False, compare=False)
+    received_at: float = field(default_factory=time.monotonic, compare=False)
 
 
 def _sdk(name: str) -> Any:
@@ -299,6 +318,19 @@ def _sdk(name: str) -> Any:
         return getattr(_sdk_module, name)
     except AttributeError as err:
         raise ThalovantError(f"The installed thalovant SDK has no {name}") from err
+
+
+def plain_speech(text: str | None) -> str:
+    """Speech a device can say as it is: markup removed, references decoded.
+
+    The SDK's rules, shared by every Thalovant SDK: only real tags go, only
+    numeric references, the five XML entities and &nbsp; are decoded, and
+    Unicode white space collapses to single spaces.
+    """
+    if _sdk_module is None:
+        raise ThalovantError("The thalovant SDK is not installed")
+    home = importlib.import_module(f"{SDK_MODULE}.home")
+    return str(home.plain_speech(text))
 
 
 def _is(err: BaseException, name: str) -> bool:
@@ -325,6 +357,8 @@ def _translate(err: Exception) -> ThalovantError | None:
         return DeviceLoginExpired(message, **facts)
     if _is(err, "ThalovantDeviceLoginDenied"):
         return DeviceLoginDenied(message, **facts)
+    if _is(err, "ThalovantHubKeyChangedError"):
+        return ThalovantHubKeyChangedError(message)
     if _is(err, "ThalovantHubRefusedError"):
         # A connection error in the SDK; for the integration it means the
         # credentials, so reauthentication (after the admission grace).
@@ -332,8 +366,13 @@ def _translate(err: Exception) -> ThalovantError | None:
     if _is(err, "ThalovantAdmissionTimeoutError"):
         return ThalovantAdmissionTimeoutError(message)
     if _is(err, "ThalovantAdmissionFailedError"):
+        # The platform's own failure has an error_code and no status; a refusal
+        # of the wait keeps what the API answered.
         return ThalovantAdmissionFailedError(
-            message, code=getattr(err, "error_code", None)
+            message,
+            status=facts["status"],
+            code=getattr(err, "error_code", None) or facts["code"],
+            detail=facts["detail"],
         )
     if _is(err, "ThalovantAPIUnreachableError"):
         # DNS, TCP, TLS or a timeout: the API never answered.

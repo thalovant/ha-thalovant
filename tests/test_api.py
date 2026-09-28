@@ -34,9 +34,11 @@ from custom_components.thalovant.api import (
     ThalovantAuthError,
     ThalovantConnectionError,
     ThalovantError,
+    ThalovantHubKeyChangedError,
     ThalovantPlanError,
     ThalovantUnsupportedError,
     Tokens,
+    plain_speech,
 )
 
 from .conftest import CONNECTION_ID, HUB_ID, OTHER_HUB_ID
@@ -62,6 +64,10 @@ class SdkTimeoutError(SdkError):
 
 
 class SdkHubRefusedError(SdkConnectionError):
+    pass
+
+
+class SdkHubKeyChangedError(SdkConnectionError):
     pass
 
 
@@ -137,6 +143,7 @@ def sdk() -> Generator[SimpleNamespace]:
         ThalovantUnsupportedConnectionTypeError=SdkUnsupportedError,
         ThalovantConnectionError=SdkConnectionError,
         ThalovantHubRefusedError=SdkHubRefusedError,
+        ThalovantHubKeyChangedError=SdkHubKeyChangedError,
         ThalovantTimeoutError=SdkTimeoutError,
         ThalovantAdmissionTimeoutError=SdkAdmissionTimeoutError,
         ThalovantAdmissionFailedError=SdkAdmissionFailedError,
@@ -189,6 +196,22 @@ async def test_sdk_not_installed() -> None:
         pytest.raises(ThalovantError, match="not installed"),
     ):
         await ThalovantAuth(MagicMock()).start_device_login(client_name="x", scopes=[])
+
+
+def test_plain_speech_needs_the_sdk() -> None:
+    """Speech goes through the SDK's rules; without the SDK that is an error."""
+    with (
+        patch.object(api, "_sdk_module", None),
+        pytest.raises(ThalovantError, match="not installed"),
+    ):
+        plain_speech("Hello")
+
+
+def test_hub_message_arrival() -> None:
+    """A message records when it arrived, on the monotonic clock."""
+    before = api.time.monotonic()
+    message = HubMessage("t", {}, {})
+    assert before <= message.received_at <= api.time.monotonic()
 
 
 async def test_sdk_missing_a_name(sdk: SimpleNamespace) -> None:
@@ -487,11 +510,20 @@ async def test_list_hubs_stops_paging(sdk: SimpleNamespace) -> None:
             {"status": 503},
         ),
         (SdkHubRefusedError("refused"), ThalovantAuthError, {"status": None}),
+        # A changed hub key is not a refusal and not a blip.
+        (SdkHubKeyChangedError("key changed"), ThalovantHubKeyChangedError, {}),
         (SdkAdmissionTimeoutError("slow"), ThalovantAdmissionTimeoutError, {}),
         (
             SdkAdmissionFailedError("failed", error_code="op_failed"),
             ThalovantAdmissionFailedError,
-            {"code": "op_failed"},
+            {"code": "op_failed", "status": None},
+        ),
+        (
+            SdkAdmissionFailedError(
+                "refused", status_code=400, code="bad_operation", detail="No."
+            ),
+            ThalovantAdmissionFailedError,
+            {"status": 400, "code": "bad_operation", "detail": "No."},
         ),
         (SdkConnectionError("dns"), ThalovantConnectionError, {}),
         (SdkTimeoutError("slow hub"), ThalovantConnectionError, {}),

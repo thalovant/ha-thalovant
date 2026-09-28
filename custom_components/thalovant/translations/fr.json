@@ -81,6 +81,9 @@
     "credentials_invalid": {
       "message": "Les identifiants enregistrés pour {hub} sont illisibles"
     },
+    "hub_key_changed": {
+      "message": "Le hub {hub} a répondu avec une clé de sécurité différente de celle qu'il avait lors de la liaison"
+    },
     "not_admitted_yet": {
       "message": "Le hub {hub} n'a pas encore accepté cette connexion"
     }
@@ -89,6 +92,10 @@
     "agent_unavailable": {
       "title": "L'agent de conversation de {hub} a disparu",
       "description": "Les demandes de {hub} sont confiées à l'agent de conversation `{agent}`, que Home Assistant ne trouve plus. Tant que vous n'aurez pas choisi un autre agent dans les options de l'intégration Thalovant, le hub recevra une erreur pour chacune de ses demandes."
+    },
+    "hub_key_changed": {
+      "title": "{hub} a répondu avec une autre clé de sécurité",
+      "description": "Home Assistant a cessé de communiquer avec le hub {hub} : il a répondu avec une clé de sécurité différente de celle qu'il avait quand vous l'avez relié. Cela arrive quand un hub est remplacé ou réinitialisé, mais aussi quand quelque chose s'interpose entre Home Assistant et le hub.\n\nSi vous savez que le hub a été remplacé ou réinitialisé, reliez-le à nouveau : ouvrez l'intégration Thalovant et suivez sa demande de réauthentification. La nouvelle liaison fait confiance à la clé que le hub présente maintenant. Si vous ne vous y attendiez pas, vérifiez le hub dans le tableau de bord Thalovant avant de le relier à nouveau."
     }
   },
   "common": {

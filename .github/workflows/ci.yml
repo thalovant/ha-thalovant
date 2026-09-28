@@ -57,6 +57,16 @@ jobs:
         run: |
           python -m pip install uv==0.12.19
           uv pip install --system -r requirements_test.txt -r requirements_lint.txt
+      # The SDK goes in under Home Assistant's own package constraints, as Home
+      # Assistant installs an integration's requirements, so a pin it cannot
+      # satisfy fails here. Point THALOVANT_SDK at the release once it is on PyPI.
+      - name: Install the thalovant SDK
+        env:
+          THALOVANT_SDK: "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@8fb35b1c457e55883f1d37eae9f1182a49ad7a45"
+        run: |
+          constraints="$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
+          uv pip install --system -c "$constraints" "$THALOVANT_SDK"
+          python -c "import thalovant; print('thalovant', thalovant.__version__)"
       - name: Lint
         run: |
           ruff check .
@@ -64,17 +74,3 @@ jobs:
           mypy
       - name: Test
         run: pytest --cov --cov-report=term-missing
-      # The adapter against the real SDK, in the same job so it costs no
-      # second Home Assistant install. The SDK is installed under Home
-      # Assistant's own package constraints, as Home Assistant installs an
-      # integration's requirements, so a pin it cannot satisfy fails here.
-      # Point THALOVANT_SDK at the release once it is on PyPI.
-      - name: Test against the thalovant SDK
-        env:
-          THALOVANT_SDK: "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e96ce7300415cb9dbb94e519f25caf342e"
-        run: |
-          constraints="$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
-          uv pip install --system -c "$constraints" "$THALOVANT_SDK"
-          # Fail here, not as a skipped test, if the SDK does not import.
-          python -c "import thalovant; print('thalovant', thalovant.__version__)"
-          pytest tests/test_api_sdk.py
