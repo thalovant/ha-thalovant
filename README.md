@@ -146,7 +146,9 @@ automation:
 
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
   year) and the connection's keys, in Home Assistant's config entry storage,
-  like any other integration's credentials.
+  like any other integration's credentials. The key the hub recognises this
+  Home Assistant by lives in `.storage/thalovant/`, so it survives updates and
+  is part of your backups.
 - **What leaves your home.** Only Assist's answers, sent to your hub. No
   Home Assistant token, and no entity list.
 - **Logs.** This integration never logs what was said or what Assist answered,
@@ -207,8 +209,9 @@ logger:
 
 1. Go to **Settings** > **Devices & services**, open **Thalovant**, and
    delete each entry. Deleting an entry also deletes its connection on the
-   hub. If Thalovant cannot be reached at that moment, the log says so;
-   remove the connection from the [Thalovant dashboard][dashboard] instead.
+   hub and revokes the API token it signed in with. If Thalovant cannot be
+   reached at that moment, the log says so; remove them from the
+   [Thalovant dashboard][dashboard] instead.
 2. To remove the code too, open **HACS**, find **Thalovant**, and select
    **Remove**, then restart Home Assistant.
 
@@ -224,8 +227,19 @@ python3.14 -m venv .venv
 The integration talks to Thalovant through the async API of the `thalovant`
 Python SDK, and only through `custom_components/thalovant/api.py`. The tests
 patch that adapter's classes, so they do not need the SDK installed;
-`tests/test_api.py` drives the adapter itself with a fake SDK built from the
-shared contract.
+`tests/test_api.py` drives the adapter with a fake SDK, and
+`tests/test_api_sdk.py` drives it with the real one against a local control
+plane. That file is skipped unless the SDK is installed:
+
+```sh
+constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
+uv pip install -p .venv/bin/python -c "$constraints" \
+    "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@9b8f34e"
+.venv/bin/pytest tests/test_api_sdk.py
+```
+
+The SDK goes in under Home Assistant's own package constraints, the way Home
+Assistant installs an integration's requirements.
 
 ## License
 

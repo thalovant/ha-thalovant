@@ -17,6 +17,8 @@ from custom_components.thalovant.api import (
     DeviceLoginExpired,
     DeviceLoginPending,
     Hub,
+    ThalovantAdmissionFailedError,
+    ThalovantAdmissionTimeoutError,
     ThalovantAlreadyLinkedError,
     ThalovantApiError,
     ThalovantAuthError,
@@ -151,6 +153,9 @@ async def test_full_flow(
     )
     mock_api.delete_connection.assert_not_awaited()
     assert len(mock_setup_entry.mock_calls) == 1
+    # The entry holds the token now: it is not revoked.
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_not_awaited()
 
 
 async def test_verification_uri_without_code(
@@ -340,6 +345,24 @@ async def test_no_hubs(
     result = await _finish_login(hass, await _start(hass))
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_hubs"
+    # The token minted for nothing is revoked: a Free plan allows one.
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_awaited_once_with()
+
+
+async def test_unused_token_revoke_fails(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A token that cannot be revoked is named in the log."""
+    mock_api.list_hubs.return_value = []
+    mock_api.revoke_token.side_effect = ThalovantConnectionError("down")
+    result = await _finish_login(hass, await _start(hass))
+    assert result["reason"] == "no_hubs"
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert "Could not revoke the unused Thalovant API token" in caplog.text
 
 
 async def test_linked_hubs_are_not_offered(
@@ -435,6 +458,18 @@ async def test_create_connection_errors(
     assert result["title"] == "Daily Desk"
 
 
+async def test_rejected_token_is_not_revoked(
+    hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
+) -> None:
+    """A token the API rejected is dropped, not revoked, when the flow closes."""
+    mock_api.create_connection.side_effect = ThalovantAuthError("401")
+    result = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    assert result["errors"] == {"base": "invalid_auth"}
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_not_awaited()
+
+
 async def test_create_connection_auth_error(
     hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
 ) -> None:
@@ -449,8 +484,10 @@ async def test_create_connection_auth_error(
 @pytest.mark.parametrize(
     ("side_effect", "error", "step_id"),
     [
-        (ThalovantConnectionError("timed out"), "admission_timeout", "hub"),
+        (ThalovantAdmissionTimeoutError("not yet"), "admission_timeout", "hub"),
         (TimeoutError(), "admission_timeout", "hub"),
+        (ThalovantConnectionError("reset"), "cannot_connect", "hub"),
+        (ThalovantAdmissionFailedError("operation failed"), "admission_failed", "hub"),
         (ThalovantApiError("operation failed"), "admission_failed", "hub"),
         (RuntimeError("boom"), "unknown", "hub"),
         (ThalovantAuthError("401"), "invalid_auth", "user"),
@@ -526,6 +563,12 @@ async def test_flow_closed_during_admission(
     hass.config_entries.flow.async_abort(result["flow_id"])
     await hass.async_block_till_done(wait_background_tasks=True)
     mock_api.delete_connection.assert_awaited_once_with(CONNECTION_ID)
+    mock_api.revoke_token.assert_awaited_once_with()
+    # The connection needs the token to be deleted, so the token goes last.
+    assert [name for name, *_ in mock_api.method_calls[-2:]] == [
+        "delete_connection",
+        "revoke_token",
+    ]
 
 
 async def _start_reauth(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str, Any]:
@@ -535,6 +578,29 @@ async def _start_reauth(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str
     assert result["step_id"] == "reauth_confirm"
     assert result["description_placeholders"] == {"name": "Maison"}
     return await hass.config_entries.flow.async_configure(result["flow_id"], {})
+
+
+async def test_reauth_closed_during_admission(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """Closing reauth mid-admission deletes the new connection, keeps the entry's token."""
+    never = asyncio.Event()
+
+    async def hang(*_: Any, **__: Any) -> None:
+        await never.wait()
+
+    mock_api.wait_for_admission.side_effect = hang
+    result = await _start_reauth(hass, mock_config_entry)
+    assert result["step_id"] == "admission"
+    mock_api.delete_connection.reset_mock()
+
+    hass.config_entries.flow.async_abort(result["flow_id"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.delete_connection.assert_awaited_once_with(CONNECTION_ID)
+    mock_api.revoke_token.assert_not_awaited()
 
 
 async def test_reauth_with_stored_token(
@@ -621,6 +687,27 @@ async def test_reauth_wrong_account(
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "wrong_account"
     mock_api.create_connection.assert_not_awaited()
+    # The stored token was the entry's, not minted here: it stays.
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_not_awaited()
+
+
+async def test_reauth_new_sign_in_wrong_account(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    account: Account,
+) -> None:
+    """A token minted for the wrong account is revoked when reauth aborts."""
+    mock_api.get_account.side_effect = [
+        ThalovantAuthError("revoked"),
+        Account(id="someone-else", display_name=None, email=None),
+    ]
+    result = await _finish_login(hass, await _start_reauth(hass, mock_config_entry))
+    assert result["reason"] == "wrong_account"
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_awaited_once_with()
 
 
 async def test_reauth_hub_gone(

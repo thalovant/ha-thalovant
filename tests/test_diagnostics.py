@@ -15,11 +15,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.setup import async_setup_component
 
 from .conftest import (
+    ACCESS_KEY,
     ACCESS_TOKEN,
     ACCOUNT_ID,
     CONNECTION_SECRET,
-    NOISE_KEY,
-    REFRESH_TOKEN,
     FakeHubConnection,
 )
 
@@ -49,10 +48,8 @@ async def test_diagnostics(
     dumped = json.dumps(diagnostics)
     for secret in (
         ACCESS_TOKEN,
-        REFRESH_TOKEN,
         CONNECTION_SECRET,
-        NOISE_KEY,
-        "hub-access-key-do-not-leak",
+        ACCESS_KEY,
         ACCOUNT_ID,
         "front door",
         "Maison",

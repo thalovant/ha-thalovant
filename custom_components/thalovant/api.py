@@ -1,15 +1,14 @@
 """The integration's only door to the Thalovant SDK.
 
-Nothing else in the integration imports the SDK. Everything here has the shape
-the shared contract (CONTRACT.md, v1) gives the library interface, and it
-belongs to the integration: config entries store the to_dict() forms of Tokens
-and ConnectionCredentials, and tests patch ThalovantAuth, ThalovantApi and
-HubConnection.
+Nothing else in the integration imports the SDK. The types here are the
+integration's own, in the shapes of the shared contract: config entries store
+the to_dict() forms of Tokens and ConnectionCredentials, and the integration's
+tests patch ThalovantAuth, ThalovantApi and HubConnection.
 
-Underneath, each call goes to the async API of the ``thalovant`` SDK under the
-contract's names (see SDK_NAMES). SDK objects are turned into the types below
-on the way out, and SDK errors into the errors below. When the SDK's async
-names settle, this file is the only one that changes.
+Underneath, each call goes to the async API of the ``thalovant`` SDK (0.9.0):
+AsyncThalovantControlPlane for the control plane and AsyncHubSession for the
+link to a hub. SDK objects are turned into the types below on the way out, and
+SDK errors into the errors below. SDK_NAMES lists everything taken from it.
 """
 
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
@@ -24,12 +23,40 @@ import aiohttp
 
 SDK_MODULE: Final = "thalovant"
 
+# Everything this file takes from the SDK, by name.
+SDK_NAMES: Final = (
+    "AsyncThalovantControlPlane",
+    "AsyncHubSession",
+    "ThalovantIdentity",
+    "DeviceAuthorization",
+    "hub_display_name",
+    "ThalovantError",
+    "ThalovantAPIError",
+    "ThalovantAPIUnreachableError",
+    "ThalovantAuthError",
+    "ThalovantPlanError",
+    "ThalovantAlreadyLinkedError",
+    "ThalovantUnsupportedConnectionTypeError",
+    "ThalovantConnectionError",
+    "ThalovantHubRefusedError",
+    "ThalovantTimeoutError",
+    "ThalovantAdmissionTimeoutError",
+    "ThalovantAdmissionFailedError",
+    "ThalovantIdentityError",
+    "ThalovantDeviceLoginPending",
+    "ThalovantDeviceLoginExpired",
+    "ThalovantDeviceLoginDenied",
+)
+
+# Pages read from a hub listing before giving up on the rest.
+MAX_PAGES: Final = 20
+
 
 def _load_sdk() -> Any:
     """Import the SDK once, when Home Assistant imports this integration.
 
     Home Assistant installs it from the manifest's requirements first; the
-    tests run without it and patch the classes below.
+    integration's tests run without it and patch the classes below.
     """
     try:
         return importlib.import_module(SDK_MODULE)
@@ -38,26 +65,6 @@ def _load_sdk() -> Any:
 
 
 _sdk_module: Any = _load_sdk()
-
-# Everything this file takes from the SDK, by name.
-SDK_NAMES: Final = (
-    "ThalovantAuth",
-    "ThalovantApi",
-    "HubConnection",
-    "DeviceLogin",
-    "Tokens",
-    "ConnectionCredentials",
-    "ThalovantError",
-    "ThalovantAuthError",
-    "ThalovantConnectionError",
-    "ThalovantApiError",
-    "ThalovantPlanError",
-    "ThalovantAlreadyLinkedError",
-    "ThalovantUnsupportedError",
-    "DeviceLoginPending",
-    "DeviceLoginExpired",
-    "DeviceLoginDenied",
-)
 
 
 class ThalovantError(Exception):
@@ -83,15 +90,23 @@ class ThalovantError(Exception):
 
 
 class ThalovantAuthError(ThalovantError):
-    """The API token or the connection's credentials were rejected."""
+    """The API token, or the connection's credentials at the hub, were rejected."""
 
 
 class ThalovantConnectionError(ThalovantError):
     """Network, DNS, TLS, a 5xx or 429 answer, or a hub out of reach."""
 
 
+class ThalovantAdmissionTimeoutError(ThalovantConnectionError):
+    """The hub had not admitted a new connection when the wait ran out."""
+
+
 class ThalovantApiError(ThalovantError):
     """The API refused for a reason signing in again will not fix."""
+
+
+class ThalovantAdmissionFailedError(ThalovantApiError):
+    """The platform gave up admitting a new connection."""
 
 
 class ThalovantPlanError(ThalovantApiError):
@@ -122,7 +137,7 @@ class ThalovantUnsupportedError(ThalovantApiError):
 class DeviceLoginPending(ThalovantError):
     """Not approved yet; poll again after interval seconds."""
 
-    def __init__(self, message: str = "", *, interval: int) -> None:
+    def __init__(self, message: str = "", *, interval: float) -> None:
         """Keep the interval, already longer after a slow_down."""
         super().__init__(message)
         self.interval = interval
@@ -140,11 +155,11 @@ class DeviceLoginDenied(ThalovantError):
 class DeviceLogin:
     """A started device login."""
 
-    device_code: str
+    device_code: str = field(repr=False)
     user_code: str
     verification_uri: str
     verification_uri_complete: str | None
-    interval: int
+    interval: float
     expires_in: int
     sdk: Any = field(default=None, repr=False, compare=False)
 
@@ -159,22 +174,31 @@ def _text(data: Mapping[str, Any], key: str, *, optional: bool = False) -> Any:
     return value
 
 
+def _optional_text(value: Any) -> str | None:
+    """A string with something in it, or None."""
+    return value.strip() or None if isinstance(value, str) else None
+
+
 @dataclass(frozen=True, slots=True)
 class Tokens:
-    """The API token from a device login. The form stored in the entry."""
+    """The API token from a device login. The form stored in the entry.
+
+    There is no refresh token: a device-login token lives a year. token_id is
+    what revokes it.
+    """
 
     access_token: str = field(repr=False)
-    refresh_token: str | None = field(repr=False)
     expires_at: datetime | None
     scopes: tuple[str, ...]
+    token_id: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Return a JSON-safe form."""
         return {
             "access_token": self.access_token,
-            "refresh_token": self.refresh_token,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "scopes": list(self.scopes),
+            "token_id": self.token_id,
         }
 
     @classmethod
@@ -190,9 +214,9 @@ class Tokens:
             raise ValueError("scopes is not a list of strings")
         return cls(
             access_token=_text(data, "access_token"),
-            refresh_token=_text(data, "refresh_token", optional=True),
             expires_at=datetime.fromisoformat(expires_at) if expires_at else None,
             scopes=tuple(scopes),
+            token_id=_text(data, "token_id", optional=True),
         )
 
 
@@ -207,12 +231,10 @@ class Account:
 
 @dataclass(frozen=True, slots=True)
 class Hub:
-    """A hub the account may link."""
+    """A hub the account may link: its own hubs, then the public ones."""
 
     id: str
     name: str
-    public: bool
-    languages: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -223,7 +245,7 @@ class ConnectionCredentials:
     connection_id: str
     name: str
     endpoint: str
-    secret: Mapping[str, str] = field(repr=False, hash=False)
+    secret: Mapping[str, Any] = field(repr=False, hash=False)
     operation_url: str | None = None
 
     def __post_init__(self) -> None:
@@ -247,11 +269,8 @@ class ConnectionCredentials:
         if not isinstance(data, Mapping):
             raise ValueError("credentials are not a mapping")  # noqa: TRY004 - one error type for bad data
         secret = data.get("secret")
-        if not isinstance(secret, Mapping) or not all(
-            isinstance(key, str) and isinstance(value, str)
-            for key, value in secret.items()
-        ):
-            raise ValueError("secret is missing or not a mapping of strings")
+        if not isinstance(secret, Mapping) or not secret:
+            raise ValueError("secret is missing")
         return cls(
             hub_id=_text(data, "hub_id"),
             connection_id=_text(data, "connection_id"),
@@ -282,39 +301,63 @@ def _sdk(name: str) -> Any:
         raise ThalovantError(f"The installed thalovant SDK has no {name}") from err
 
 
-# Most specific first: the first SDK class the error is an instance of wins.
-_ERRORS: Final[tuple[tuple[str, type[ThalovantError]], ...]] = (
-    ("DeviceLoginPending", DeviceLoginPending),
-    ("DeviceLoginExpired", DeviceLoginExpired),
-    ("DeviceLoginDenied", DeviceLoginDenied),
-    ("ThalovantAuthError", ThalovantAuthError),
-    ("ThalovantConnectionError", ThalovantConnectionError),
-    ("ThalovantPlanError", ThalovantPlanError),
-    ("ThalovantAlreadyLinkedError", ThalovantAlreadyLinkedError),
-    ("ThalovantUnsupportedError", ThalovantUnsupportedError),
-    ("ThalovantApiError", ThalovantApiError),
-    ("ThalovantError", ThalovantError),
-)
+def _is(err: BaseException, name: str) -> bool:
+    """Whether err is an instance of the SDK class called name."""
+    cls = getattr(_sdk_module, name, None)
+    return isinstance(cls, type) and isinstance(err, cls)
 
 
 def _translate(err: Exception) -> ThalovantError | None:
-    """Turn an SDK error into ours; None for anything that is not one."""
-    for name, ours in _ERRORS:
-        theirs = getattr(_sdk_module, name, None)
-        if not isinstance(theirs, type) or not isinstance(err, theirs):
-            continue
-        if ours is DeviceLoginPending:
-            return DeviceLoginPending(
-                str(err), interval=int(getattr(err, "interval", 0) or 0)
-            )
-        facts: dict[str, Any] = {
-            "status": getattr(err, "status", None),
-            "code": getattr(err, "code", None),
-            "detail": getattr(err, "detail", None),
-        }
-        if ours is ThalovantAlreadyLinkedError:
-            facts["connection_id"] = getattr(err, "connection_id", None)
-        return ours(str(err), **facts)
+    """Turn an SDK error into ours; None for anything that is not one.
+
+    Most specific first: several SDK errors derive from ThalovantAPIError or
+    ThalovantConnectionError.
+    """
+    message = str(err)
+    facts: dict[str, Any] = {
+        "status": getattr(err, "status_code", None),
+        "code": getattr(err, "code", None),
+        "detail": getattr(err, "detail", None),
+    }
+    if _is(err, "ThalovantDeviceLoginPending"):
+        return DeviceLoginPending(message, interval=float(getattr(err, "interval", 0)))
+    if _is(err, "ThalovantDeviceLoginExpired"):
+        return DeviceLoginExpired(message, **facts)
+    if _is(err, "ThalovantDeviceLoginDenied"):
+        return DeviceLoginDenied(message, **facts)
+    if _is(err, "ThalovantHubRefusedError"):
+        # A connection error in the SDK; for the integration it means the
+        # credentials, so reauthentication (after the admission grace).
+        return ThalovantAuthError(message)
+    if _is(err, "ThalovantAdmissionTimeoutError"):
+        return ThalovantAdmissionTimeoutError(message)
+    if _is(err, "ThalovantAdmissionFailedError"):
+        return ThalovantAdmissionFailedError(
+            message, code=getattr(err, "error_code", None)
+        )
+    if _is(err, "ThalovantAPIUnreachableError"):
+        # DNS, TCP, TLS or a timeout: the API never answered.
+        return ThalovantConnectionError(message)
+    if _is(err, "ThalovantAuthError"):
+        return ThalovantAuthError(message, **facts)
+    if _is(err, "ThalovantPlanError"):
+        return ThalovantPlanError(message, **facts)
+    if _is(err, "ThalovantAlreadyLinkedError"):
+        return ThalovantAlreadyLinkedError(
+            message, connection_id=getattr(err, "client_id", None), **facts
+        )
+    if _is(err, "ThalovantUnsupportedConnectionTypeError"):
+        return ThalovantUnsupportedError(message, **facts)
+    if _is(err, "ThalovantConnectionError") or _is(err, "ThalovantTimeoutError"):
+        return ThalovantConnectionError(message)
+    if _is(err, "ThalovantAPIError"):
+        status = facts["status"]
+        # The API answered, but 429 and 5xx pass with time.
+        if status is not None and (status == 429 or status >= 500):
+            return ThalovantConnectionError(message, **facts)
+        return ThalovantApiError(message, **facts)
+    if _is(err, "ThalovantError"):
+        return ThalovantError(message)
     return None
 
 
@@ -331,43 +374,78 @@ async def _translated() -> AsyncIterator[None]:
         raise ours from err
 
 
+def _control_plane(
+    session: aiohttp.ClientSession,
+    *,
+    api_url: str | None,
+    access_token: str | None = None,
+) -> Any:
+    """An SDK control plane over Home Assistant's session."""
+    args = (api_url,) if api_url else ()
+    return _sdk("AsyncThalovantControlPlane")(
+        *args, access_token=access_token, session=session
+    )
+
+
+async def _pages(
+    fetch: Callable[[str | None], Awaitable[Mapping[str, Any]]],
+) -> list[Mapping[str, Any]]:
+    """Every item of a paginated listing ({"data": [...], "meta": {"next": ...}})."""
+    items: list[Mapping[str, Any]] = []
+    cursor: str | None = None
+    for _ in range(MAX_PAGES):
+        body = await fetch(cursor)
+        data = body.get("data")
+        if isinstance(data, list):
+            items.extend(item for item in data if isinstance(item, Mapping))
+        meta = body.get("meta")
+        cursor = _optional_text(meta.get("next")) if isinstance(meta, Mapping) else None
+        if cursor is None:
+            break
+    return items
+
+
 class ThalovantAuth:
     """Device login against the control plane."""
 
-    def __init__(self, session: aiohttp.ClientSession) -> None:
+    def __init__(
+        self, session: aiohttp.ClientSession, *, api_url: str | None = None
+    ) -> None:
         """Use Home Assistant's shared session."""
         self._session = session
-        self._client: Any = None
+        self._api_url = api_url
+        self._plane: Any = None
 
-    def _auth(self) -> Any:
-        if self._client is None:
-            self._client = _sdk("ThalovantAuth")(self._session)
-        return self._client
+    def _control(self) -> Any:
+        # One plane for every poll: it remembers each slow_down.
+        if self._plane is None:
+            self._plane = _control_plane(self._session, api_url=self._api_url)
+        return self._plane
 
     async def start_device_login(
         self, *, client_name: str, scopes: Sequence[str]
     ) -> DeviceLogin:
         """Ask for a device code."""
         async with _translated():
-            login = await self._auth().start_device_login(
-                client_name=client_name, scopes=list(scopes)
+            grant = await self._control().begin_device_login(
+                scopes=list(scopes), client_name=client_name
             )
         return DeviceLogin(
-            device_code=login.device_code,
-            user_code=login.user_code,
-            verification_uri=login.verification_uri,
-            verification_uri_complete=login.verification_uri_complete,
-            interval=int(login.interval),
-            expires_in=int(login.expires_in),
-            sdk=login,
+            device_code=grant.device_code,
+            user_code=grant.user_code,
+            verification_uri=grant.verification_uri,
+            verification_uri_complete=grant.verification_uri_complete,
+            interval=float(grant.interval),
+            expires_in=int(grant.expires_in),
+            sdk=grant,
         )
 
     async def poll_device_login(self, login: DeviceLogin) -> Tokens:
         """Poll once: the tokens, or DeviceLoginPending, Expired or Denied."""
         async with _translated():
-            sdk_login = login.sdk
-            if sdk_login is None:
-                sdk_login = _sdk("DeviceLogin")(
+            grant = login.sdk
+            if grant is None:
+                grant = _sdk("DeviceAuthorization")(
                     device_code=login.device_code,
                     user_code=login.user_code,
                     verification_uri=login.verification_uri,
@@ -375,129 +453,198 @@ class ThalovantAuth:
                     interval=login.interval,
                     expires_in=login.expires_in,
                 )
-            tokens = await self._auth().poll_device_login(sdk_login)
-        return Tokens.from_dict(tokens.to_dict())
+            token = await self._control().poll_device_login(grant)
+        return Tokens(
+            access_token=token.access_token,
+            expires_at=token.expires_at,
+            scopes=tuple(token.scopes),
+            token_id=token.token_id,
+        )
 
 
 class ThalovantApi:
     """The control plane, as the signed-in account."""
 
-    def __init__(self, session: aiohttp.ClientSession, tokens: Tokens) -> None:
+    def __init__(
+        self,
+        session: aiohttp.ClientSession,
+        tokens: Tokens,
+        *,
+        api_url: str | None = None,
+    ) -> None:
         """Use Home Assistant's shared session and the account's token."""
         self._session = session
         self._tokens = tokens
-        self._client: Any = None
+        self._api_url = api_url
+        self._plane: Any = None
+        self._account_id: str | None = None
 
-    def _api(self) -> Any:
-        if self._client is None:
-            sdk_tokens = _sdk("Tokens").from_dict(self._tokens.to_dict())
-            self._client = _sdk("ThalovantApi")(self._session, sdk_tokens)
-        return self._client
+    def _control(self) -> Any:
+        if self._plane is None:
+            self._plane = _control_plane(
+                self._session,
+                api_url=self._api_url,
+                access_token=self._tokens.access_token,
+            )
+        return self._plane
 
     async def get_account(self) -> Account:
         """Return the signed-in account."""
         async with _translated():
-            account = await self._api().get_account()
+            profile = await self._control().get_profile()
+        account_id = _optional_text(profile.get("id"))
+        if account_id is None:
+            raise ThalovantApiError("The Thalovant profile carried no account id")
+        self._account_id = account_id
         return Account(
-            id=account.id, display_name=account.display_name, email=account.email
+            id=account_id,
+            display_name=_optional_text(profile.get("display_name")),
+            email=_optional_text(profile.get("email")),
         )
 
     async def list_hubs(self) -> list[Hub]:
-        """Return the hubs this account may link."""
+        """Return the hubs this account may link: its own, then the public ones.
+
+        The own hubs are asked for by owner, because an administrator's token
+        otherwise lists every tenant's. Locked hubs take no new connection.
+        """
+        owner = self._account_id or (await self.get_account()).id
+        control = self._control()
+        display_name = _sdk("hub_display_name")
+        hubs: dict[str, Hub] = {}
         async with _translated():
-            hubs = await self._api().list_hubs()
-        return [
-            Hub(
-                id=hub.id,
-                name=hub.name,
-                public=bool(hub.public),
-                languages=tuple(hub.languages),
+            own = await _pages(
+                lambda cursor: control.list_hubs(owner_id=owner, cursor=cursor)
             )
-            for hub in hubs
-        ]
+            public = await _pages(
+                lambda cursor: control.list_public_hubs(cursor=cursor)
+            )
+        for item in own:
+            hub_id = _optional_text(item.get("id"))
+            if hub_id and item.get("is_locked") is not True:
+                hubs.setdefault(hub_id, Hub(id=hub_id, name=display_name(item)))
+        for item in public:
+            hub_id = _optional_text(item.get("id"))
+            if hub_id:
+                name = _optional_text(item.get("title")) or display_name(item)
+                hubs.setdefault(hub_id, Hub(id=hub_id, name=name))
+        return list(hubs.values())
 
     async def create_connection(
         self, hub_id: str, *, name: str, kind: str
     ) -> ConnectionCredentials:
-        """Create this installation's connection on a hub."""
+        """Create this installation's connection on a hub, of the given kind."""
         async with _translated():
-            credentials = await self._api().create_connection(
-                hub_id, name=name, kind=kind
+            result = await self._control().create_client_identity(
+                hub_id, name=name, connection_type=kind
             )
-        return ConnectionCredentials.from_dict(credentials.to_dict())
+        connection_id = _optional_text(result.client_id)
+        if connection_id is None:
+            raise ThalovantApiError("The connection was created without an id")
+        identity = result.identity
+        operation = result.operation
+        return ConnectionCredentials(
+            hub_id=hub_id,
+            connection_id=connection_id,
+            name=name,
+            endpoint=getattr(result.endpoint, "endpoint", None)
+            or identity.default_master,
+            secret=identity.as_dict(include_secrets=True),
+            operation_url=(
+                (operation.links.get("self") or operation.id) if operation else None
+            ),
+        )
 
     async def wait_for_admission(
         self, credentials: ConnectionCredentials, *, timeout: float
     ) -> None:
-        """Return once the hub has admitted the connection."""
+        """Return once the hub has admitted the connection, or nothing tracks it."""
         async with _translated():
-            sdk_credentials = _sdk("ConnectionCredentials").from_dict(
-                credentials.to_dict()
+            await self._control().wait_for_admission(
+                credentials.operation_url, timeout=timeout
             )
-            await self._api().wait_for_admission(sdk_credentials, timeout=timeout)
 
     async def delete_connection(self, connection_id: str) -> None:
         """Delete a connection; one already gone counts as deleted."""
         async with _translated():
-            await self._api().delete_connection(connection_id)
+            await self._control().delete_client(connection_id)
+
+    async def revoke_token(self) -> None:
+        """Revoke the API token this client signs in with."""
+        if self._tokens.token_id is None:
+            raise ThalovantApiError("The stored API token has no id to revoke it by")
+        async with _translated():
+            await self._control().revoke_api_token(self._tokens.token_id)
 
 
 class HubConnection:
     """The outbound link to one hub."""
 
     def __init__(
-        self, session: aiohttp.ClientSession, credentials: ConnectionCredentials
+        self,
+        session: aiohttp.ClientSession,
+        credentials: ConnectionCredentials,
+        *,
+        state_dir: str | None = None,
     ) -> None:
-        """Prepare the link. Raises ValueError if the credentials are unusable."""
-        sdk_credentials = _sdk("ConnectionCredentials").from_dict(credentials.to_dict())
-        self._connection = _sdk("HubConnection")(session, sdk_credentials)
+        """Prepare the link. Raises ValueError if the credentials are unusable.
+
+        state_dir holds this installation's Noise static key, which the hub
+        pins on first contact, so it must outlive restarts and updates.
+        """
+        try:
+            identity = _sdk("ThalovantIdentity").from_mapping(credentials.secret)
+        except Exception as err:
+            if _is(err, "ThalovantIdentityError"):
+                raise ValueError(
+                    "The stored connection credentials are unusable"
+                ) from err
+            raise
+        self._link = _sdk("AsyncHubSession").for_identity(
+            identity, session=session, noise_state_dir=state_dir
+        )
 
     @property
     def connected(self) -> bool:
         """Whether the link is up."""
-        return bool(self._connection.connected)
+        return bool(self._link.connected)
 
     async def connect(self) -> None:
         """Make one attempt; raises ThalovantAuthError or ThalovantConnectionError."""
         async with _translated():
-            await self._connection.connect()
+            await self._link.connect()
 
     async def run(self) -> None:
-        """Stay connected until close(); raises ThalovantAuthError if refused."""
+        """Stay connected until close(); raises ThalovantAuthError once refused for good."""
         async with _translated():
-            await self._connection.run()
+            await self._link.run()
 
     async def close(self) -> None:
         """Close the link."""
         async with _translated():
-            await self._connection.close()
+            await self._link.close()
 
     def on_state_change(self, callback: Callable[[bool], None]) -> Callable[[], None]:
         """Call back with the new state on every change; returns the unsubscribe."""
-        return cast(Callable[[], None], self._connection.on_state_change(callback))
+        return cast(Callable[[], None], self._link.on_state_change(callback))
 
     def on_message(
-        self,
-        msg_type: str,
-        callback: Callable[[HubMessage], Awaitable[None] | None],
+        self, msg_type: str, callback: Callable[[HubMessage], None]
     ) -> Callable[[], None]:
         """Call back for every message of one type; returns the unsubscribe."""
 
-        def relay(message: Any) -> Awaitable[None] | None:
-            return callback(
+        def relay(event: Any) -> None:
+            callback(
                 HubMessage(
-                    type=message.type,
-                    data=message.data,
-                    context=message.context,
-                    sdk=message,
+                    type=event.name, data=event.data, context=event.context, sdk=event
                 )
             )
 
-        return cast(Callable[[], None], self._connection.on_message(msg_type, relay))
+        return cast(Callable[[], None], self._link.on(msg_type, relay))
 
     async def reply(
         self, request: HubMessage, msg_type: str, data: Mapping[str, Any]
     ) -> None:
         """Answer a message, keeping its context, session and routing."""
         async with _translated():
-            await self._connection.reply(request.sdk, msg_type, data)
+            await self._link.reply(request.sdk, msg_type, dict(data))

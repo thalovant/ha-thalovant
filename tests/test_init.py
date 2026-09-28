@@ -16,6 +16,7 @@ from custom_components.thalovant.api import (
 from custom_components.thalovant.const import (
     CONF_CREDENTIALS,
     CONF_LINKED_AT,
+    CONF_TOKENS,
     DOMAIN,
     REQUEST_MESSAGE_TYPE,
 )
@@ -45,6 +46,10 @@ async def test_setup_and_unload(
     assert mock_config_entry.runtime_data.connection is mock_hub_connection
     credentials = mock_hub_connection.factory.call_args.args[1]
     assert credentials.connection_id == CONNECTION_ID
+    # The Noise key the hub pins lives with Home Assistant's own storage.
+    assert mock_hub_connection.factory.call_args.kwargs == {
+        "state_dir": hass.config.path(".storage", "thalovant")
+    }
     mock_hub_connection.connect.assert_awaited_once()
     mock_hub_connection.run.assert_awaited_once()
     assert len(mock_hub_connection.message_callbacks[REQUEST_MESSAGE_TYPE]) == 1
@@ -162,7 +167,7 @@ async def test_remove_deletes_connection(
     mock_api: MagicMock,
     issue_registry: ir.IssueRegistry,
 ) -> None:
-    """Removing the entry deletes its connection on the hub and its issue."""
+    """Removing the entry deletes its connection, revokes its token, drops its issue."""
     await _setup(hass, mock_config_entry)
     issue_id = agent_issue_id(mock_config_entry.entry_id)
     ir.async_create_issue(
@@ -177,6 +182,11 @@ async def test_remove_deletes_connection(
     await hass.async_block_till_done()
 
     mock_api.delete_connection.assert_awaited_once_with(CONNECTION_ID)
+    mock_api.revoke_token.assert_awaited_once_with()
+    assert [name for name, *_ in mock_api.method_calls[-2:]] == [
+        "delete_connection",
+        "revoke_token",
+    ]
     assert hass.config_entries.async_entries(DOMAIN) == []
     assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
 
@@ -195,12 +205,16 @@ async def test_remove_survives_api_failure(
 ) -> None:
     """Removal goes through even when the control plane cannot be reached."""
     mock_api.delete_connection.side_effect = side_effect
+    mock_api.revoke_token.side_effect = side_effect
     await _setup(hass, mock_config_entry)
     await hass.config_entries.async_remove(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
     assert hass.config_entries.async_entries(DOMAIN) == []
-    assert "remove it from the Thalovant dashboard" in caplog.text
+    # A failed delete does not stop the revocation, and both are said.
+    mock_api.revoke_token.assert_awaited_once_with()
+    assert "Could not delete the Home Assistant connection on Maison" in caplog.text
+    assert "Could not revoke the Thalovant API token of Maison" in caplog.text
 
 
 async def test_unreadable_credentials_start_reauth(
@@ -268,3 +282,22 @@ async def test_refusal_after_grace_starts_reauth(
     assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
     flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_remove_with_unreadable_token(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_api: MagicMock,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Without a readable token nothing can be cleaned up remotely; removal goes on."""
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, data={**mock_config_entry.data, CONF_TOKENS: None}
+    )
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    assert hass.config_entries.async_entries(DOMAIN) == []
+    mock_api.delete_connection.assert_not_awaited()
+    assert "The stored Thalovant token for Maison cannot be read" in caplog.text
