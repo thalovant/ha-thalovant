@@ -1,6 +1,7 @@
 """Tests for setting up and removing a Thalovant entry."""
 
 import asyncio
+from collections.abc import Callable
 import logging
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -9,14 +10,22 @@ from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.thalovant import _noise_dir_name, key_changed_issue_id
+from custom_components.thalovant import (
+    _noise_dir_name,
+    _token_in_use,
+    key_changed_issue_id,
+    key_rejected_issue_id,
+)
 from custom_components.thalovant.api import (
     ThalovantAuthError,
+    ThalovantClientKeyRejectedError,
     ThalovantConnectionError,
     ThalovantError,
     ThalovantHubKeyChangedError,
+    Tokens,
 )
 from custom_components.thalovant.const import (
+    CONF_ACCOUNT_ID,
     CONF_CREDENTIALS,
     CONF_LINKED_AT,
     CONF_TOKENS,
@@ -28,7 +37,7 @@ from homeassistant.config_entries import SOURCE_REAUTH, ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 
-from .conftest import CONNECTION_ID, FakeHubConnection
+from .conftest import ACCOUNT_ID, CONNECTION_ID, OTHER_HUB_ID, FakeHubConnection
 
 
 async def _setup(hass: HomeAssistant, entry: MockConfigEntry) -> None:
@@ -241,11 +250,22 @@ async def test_unreadable_credentials_start_reauth(
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
 
 
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        ThalovantAuthError("unknown key"),
+        # Even one that names the key: a hub that has not admitted the
+        # connection yet has pinned nothing to compare it with.
+        ThalovantClientKeyRejectedError("key rejected"),
+    ],
+)
 async def test_refusal_right_after_linking_retries(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_hub_connection: FakeHubConnection,
     freezer: FrozenDateTimeFactory,
+    issue_registry: ir.IssueRegistry,
+    refusal: ThalovantAuthError,
 ) -> None:
     """A new connection the hub refuses is not admitted yet: retry, no reauth."""
     freezer.move_to("2026-09-27T12:05:00+00:00")
@@ -254,7 +274,7 @@ async def test_refusal_right_after_linking_retries(
         mock_config_entry,
         data={**mock_config_entry.data, CONF_LINKED_AT: "2026-09-27T12:00:00+00:00"},
     )
-    mock_hub_connection.connect.side_effect = ThalovantAuthError("unknown key")
+    mock_hub_connection.connect.side_effect = refusal
     await hass.config_entries.async_setup(mock_config_entry.entry_id)
     await hass.async_block_till_done()
 
@@ -264,6 +284,7 @@ async def test_refusal_right_after_linking_retries(
         == "The hub Maison has not admitted this connection yet"
     )
     assert hass.config_entries.flow.async_progress_by_handler(DOMAIN) == []
+    assert not issue_registry.issues
 
 
 async def test_refusal_after_grace_starts_reauth(
@@ -354,25 +375,144 @@ async def test_hub_key_changed_while_running(
     assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
 
 
-async def test_relinked_hub_clears_the_issue(
+async def test_client_key_rejected_at_setup(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    issue_registry: ir.IssueRegistry,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A hub that refuses this installation's key: a repair issue, then re-link."""
+    mock_hub_connection.connect.side_effect = ThalovantClientKeyRejectedError(
+        "The hub refused this client's Noise key"
+    )
+    await _setup(hass, mock_config_entry)
+
+    assert mock_config_entry.state is ConfigEntryState.SETUP_ERROR
+    assert mock_config_entry.reason == (
+        "The hub Maison refused this Home Assistant's security key for the link"
+    )
+    issue = issue_registry.async_get_issue(
+        DOMAIN, key_rejected_issue_id(mock_config_entry.entry_id)
+    )
+    assert issue is not None
+    assert issue.severity is ir.IssueSeverity.ERROR
+    assert issue.translation_key == "client_key_rejected"
+    assert issue.translation_placeholders == {"hub": "Maison"}
+    assert "re-link it to make a new connection" in caplog.text
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+async def test_client_key_rejected_while_running(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,
     mock_hub_connection: FakeHubConnection,
     issue_registry: ir.IssueRegistry,
 ) -> None:
-    """Once the link connects again, the key-changed issue goes away."""
-    issue_id = key_changed_issue_id(mock_config_entry.entry_id)
+    """The SDK stops the link at once on a refused key; the entry asks to re-link."""
+    rejected = asyncio.Event()
+
+    async def run() -> None:
+        await rejected.wait()
+        raise ThalovantClientKeyRejectedError("rejected")
+
+    mock_hub_connection.run.side_effect = run
+    await _setup(hass, mock_config_entry)
+    issue_id = key_rejected_issue_id(mock_config_entry.entry_id)
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+
+    rejected.set()
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert issue_registry.async_get_issue(DOMAIN, issue_id) is not None
+    flows = hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    assert [flow["context"]["source"] for flow in flows] == [SOURCE_REAUTH]
+
+
+@pytest.mark.parametrize(
+    ("issue_id", "translation_key"),
+    [
+        (key_changed_issue_id, "hub_key_changed"),
+        (key_rejected_issue_id, "client_key_rejected"),
+    ],
+)
+async def test_relinked_hub_clears_the_issue(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    issue_registry: ir.IssueRegistry,
+    issue_id: Callable[[str], str],
+    translation_key: str,
+) -> None:
+    """Once the link connects again, the issue about keys goes away."""
+    issue = issue_id(mock_config_entry.entry_id)
     ir.async_create_issue(
         hass,
         DOMAIN,
-        issue_id,
+        issue,
         is_fixable=False,
         severity=ir.IssueSeverity.ERROR,
-        translation_key="hub_key_changed",
+        translation_key=translation_key,
     )
     await _setup(hass, mock_config_entry)
     assert mock_config_entry.state is ConfigEntryState.LOADED
-    assert issue_registry.async_get_issue(DOMAIN, issue_id) is None
+    assert issue_registry.async_get_issue(DOMAIN, issue) is None
+
+
+async def test_remove_keeps_a_token_other_links_use(
+    hass: HomeAssistant,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    mock_api: MagicMock,
+) -> None:
+    """The account's token is revoked with the last entry that signs in with it."""
+    other = MockConfigEntry(
+        domain=DOMAIN,
+        title="Daily Desk",
+        unique_id=f"{ACCOUNT_ID}:{OTHER_HUB_ID}",
+        data={
+            **mock_config_entry.data,
+            CONF_CREDENTIALS: {
+                **mock_config_entry.data[CONF_CREDENTIALS],
+                "connection_id": "conn-desk",
+            },
+        },
+    )
+    await _setup(hass, mock_config_entry)
+    await _setup(hass, other)
+
+    await hass.config_entries.async_remove(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+    mock_api.delete_connection.assert_awaited_once_with(CONNECTION_ID)
+    mock_api.revoke_token.assert_not_awaited()
+
+    await hass.config_entries.async_remove(other.entry_id)
+    await hass.async_block_till_done()
+    mock_api.delete_connection.assert_awaited_with("conn-desk")
+    mock_api.revoke_token.assert_awaited_once_with()
+
+
+def test_token_in_use(hass: HomeAssistant, mock_config_entry: MockConfigEntry) -> None:
+    """Only another entry holding the same token keeps it; the removed one does not."""
+    mock_config_entry.add_to_hass(hass)
+    tokens = Tokens.from_dict(mock_config_entry.data[CONF_TOKENS])
+    assert _token_in_use(hass, mock_config_entry, tokens) is False
+
+    unreadable = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{ACCOUNT_ID}:{OTHER_HUB_ID}",
+        data={CONF_ACCOUNT_ID: ACCOUNT_ID, CONF_TOKENS: "not a mapping"},
+    )
+    unreadable.add_to_hass(hass)
+    assert _token_in_use(hass, mock_config_entry, tokens) is False
+
+    sharing = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{ACCOUNT_ID}:hub-third",
+        data={CONF_ACCOUNT_ID: ACCOUNT_ID, CONF_TOKENS: tokens.to_dict()},
+    )
+    sharing.add_to_hass(hass)
+    assert _token_in_use(hass, mock_config_entry, tokens) is True
 
 
 async def test_noise_folders_follow_the_connections(

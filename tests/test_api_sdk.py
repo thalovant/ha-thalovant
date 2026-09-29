@@ -3,7 +3,7 @@
 Skipped unless the SDK is installed; CI always installs it. Locally:
 
     uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
-        "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@8fb35b1"
+        thalovant==0.9.1
 
 Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
@@ -28,6 +28,7 @@ from custom_components.thalovant.api import (
     ThalovantApiError,
     ThalovantAuth,
     ThalovantAuthError,
+    ThalovantClientKeyRejectedError,
     ThalovantConnectionError,
     ThalovantHubKeyChangedError,
     ThalovantPlanError,
@@ -321,9 +322,11 @@ async def test_device_login(
     )
     assert login.user_code == "WXYZ-2345"
     assert login.interval == 5.0
+    # As the registered app the API knows, with this installation's own label.
     assert plane.requests[0][2] == {
         "scopes": list(LOGIN_SCOPES),
         "client_name": "Home Assistant (Home)",
+        "client_id": "thalovant-home-assistant",
     }
 
     with pytest.raises(DeviceLoginPending) as slow:
@@ -548,6 +551,17 @@ async def test_unreachable_api() -> None:
     assert isinstance(caught.value.__cause__, thalovant.ThalovantAPIUnreachableError)
 
 
+async def test_revoking_a_dead_token(
+    control_plane: tuple[ControlPlane, str, ClientSession],
+) -> None:
+    """A token the API no longer knows counts as revoked: it is dead either way."""
+    plane, url, session = control_plane
+    await ThalovantApi(
+        session, Tokens("replaced", None, (), "tok-old"), api_url=url
+    ).revoke_token()
+    assert plane.revoked == []
+
+
 async def test_rejected_token(
     control_plane: tuple[ControlPlane, str, ClientSession],
 ) -> None:
@@ -573,6 +587,10 @@ def test_unusable_identity() -> None:
     [
         (thalovant.ThalovantHubRefusedError("refused"), ThalovantAuthError),
         (thalovant.ThalovantHubKeyChangedError("changed"), ThalovantHubKeyChangedError),
+        (
+            thalovant.ThalovantClientKeyRejectedError("rejected", key_folder="/x"),
+            ThalovantClientKeyRejectedError,
+        ),
         (
             thalovant.ThalovantAdmissionTimeoutError("slow"),
             ThalovantAdmissionTimeoutError,

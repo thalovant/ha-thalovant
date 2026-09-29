@@ -11,11 +11,10 @@ rules:
   config-flow-test-coverage: done
   config-flow: done
   dependency-transparency:
-    status: todo
+    status: done
     comment: >
-      The thalovant SDK is MIT-licensed, public, and released to PyPI from CI, but
-      the async-native release this integration pins (thalovant==0.9.0) is not
-      published yet.
+      The thalovant SDK is MIT-licensed, public, and released to PyPI from CI;
+      the manifest pins thalovant==0.9.1.
   docs-actions:
     status: exempt
     comment: The integration registers no service actions.

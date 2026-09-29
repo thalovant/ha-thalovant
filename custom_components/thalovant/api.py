@@ -5,7 +5,7 @@ integration's own, in the shapes of the shared contract: config entries store
 the to_dict() forms of Tokens and ConnectionCredentials, and the integration's
 tests patch ThalovantAuth, ThalovantApi and HubConnection.
 
-Underneath, each call goes to the async API of the ``thalovant`` SDK (0.9.0):
+Underneath, each call goes to the async API of the ``thalovant`` SDK (0.9.1):
 AsyncThalovantControlPlane for the control plane and AsyncHubSession for the
 link to a hub. SDK objects are turned into the types below on the way out, and
 SDK errors into the errors below. SDK_NAMES lists everything taken from it.
@@ -30,6 +30,7 @@ SDK_NAMES: Final = (
     "AsyncHubSession",
     "ThalovantIdentity",
     "DeviceAuthorization",
+    "HOME_ASSISTANT_CLIENT_ID",
     "hub_display_name",
     "ThalovantError",
     "ThalovantAPIError",
@@ -40,6 +41,7 @@ SDK_NAMES: Final = (
     "ThalovantUnsupportedConnectionTypeError",
     "ThalovantConnectionError",
     "ThalovantHubRefusedError",
+    "ThalovantClientKeyRejectedError",
     "ThalovantHubKeyChangedError",
     "ThalovantTimeoutError",
     "ThalovantAdmissionTimeoutError",
@@ -96,6 +98,17 @@ class ThalovantError(Exception):
 
 class ThalovantAuthError(ThalovantError):
     """The API token, or the connection's credentials at the hub, were rejected."""
+
+
+class ThalovantClientKeyRejectedError(ThalovantAuthError):
+    """The hub refused this connection's own Noise key: it remembers another.
+
+    A hub keeps the first key a connection shows it and refuses any other.
+    This installation lost the key it linked with (a restore without
+    .storage/thalovant, say), or another copy of it uses the same connection
+    with its own key. No retry changes that; re-linking makes a new
+    connection, which the hub meets afresh.
+    """
 
 
 class ThalovantConnectionError(ThalovantError):
@@ -371,6 +384,10 @@ def _translate(err: Exception) -> ThalovantError | None:
         return DeviceLoginDenied(message, **facts)
     if _is(err, "ThalovantHubKeyChangedError"):
         return ThalovantHubKeyChangedError(message)
+    if _is(err, "ThalovantClientKeyRejectedError"):
+        # A refusal too (the SDK's class derives from it), but one that names
+        # the cause: checked first.
+        return ThalovantClientKeyRejectedError(message)
     if _is(err, "ThalovantHubRefusedError"):
         # A connection error in the SDK; for the integration it means the
         # credentials, so reauthentication (after the admission grace).
@@ -476,10 +493,18 @@ class ThalovantAuth:
     async def start_device_login(
         self, *, client_name: str, scopes: Sequence[str]
     ) -> DeviceLogin:
-        """Ask for a device code."""
+        """Ask for a device code, as the registered Home Assistant app.
+
+        The approval page then names the request Home Assistant, marked as an
+        app Thalovant knows, with client_name beside it as this installation's
+        own label. Approving it replaces the token the app already held for
+        the account instead of counting a second one against the plan.
+        """
         async with _translated():
             grant = await self._control().begin_device_login(
-                scopes=list(scopes), client_name=client_name
+                scopes=list(scopes),
+                client_name=client_name,
+                client_id=_sdk("HOME_ASSISTANT_CLIENT_ID"),
             )
         return DeviceLogin(
             device_code=grant.device_code,
@@ -537,6 +562,9 @@ class ThalovantApi:
                 api_url=self._api_url,
                 access_token=self._tokens.access_token,
             )
+            # The token's own id: revoking it then counts a token that is
+            # already dead (a 401) as revoked, which is what it is.
+            self._plane.token_id = self._tokens.token_id
         return self._plane
 
     async def get_account(self) -> Account:
@@ -626,7 +654,7 @@ class ThalovantApi:
             await self._control().delete_client(connection_id)
 
     async def revoke_token(self) -> None:
-        """Revoke the API token this client signs in with."""
+        """Revoke the API token this client signs in with; one already dead counts."""
         if self._tokens.token_id is None:
             raise ThalovantApiError("The stored API token has no id to revoke it by")
         async with _translated():

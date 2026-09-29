@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Mapping
+from contextlib import suppress
 from typing import TYPE_CHECKING, Any, Final, override
 
 import probatio
@@ -205,6 +206,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             return self._async_show_start_form()
         if TYPE_CHECKING:
             assert self._account is not None
+        if self._minted is not None:
+            self._async_share_token(self._account.id, self._minted)
 
         self._hubs = {hub.id: hub for hub in hubs}
         if any(hub.can_link is False for hub in hubs):
@@ -345,11 +348,14 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Delete an unused connection, then revoke an unused token."""
         if credentials is not None:
             await self._async_discard_connection(credentials)
-        if minted is None:
-            return
+        if minted is not None:
+            await self._async_revoke(minted)
+
+    async def _async_revoke(self, tokens: Tokens) -> None:
+        """Revoke an API token nothing uses any more, best effort."""
         try:
             await ThalovantApi(
-                async_get_clientsession(self.hass), minted
+                async_get_clientsession(self.hass), tokens
             ).revoke_token()
         except Exception as err:  # noqa: BLE001 - best effort, and said so
             LOGGER.warning(
@@ -357,6 +363,36 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
                 "from the Thalovant dashboard",
                 type(err).__name__,
             )
+
+    @callback
+    def _async_share_token(self, account_id: str, tokens: Tokens) -> None:
+        """Hand a new token to every entry this account has already linked.
+
+        Home Assistant signs in as a registered app, and approving the app
+        again revokes the token its last approval gave: the one those entries
+        hold. They need a live one to delete their connection when they are
+        removed, and to try first at reauth. From here the entries hold the
+        new token, so the flow no longer revokes it if it ends early. A token
+        replaced here that is still alive (one from before the integration
+        signed in as the app) is revoked, since nothing holds it any more.
+        """
+        stored = tokens.to_dict()
+        replaced: dict[str, Tokens] = {}
+        for entry in self._async_current_entries(include_ignore=False):
+            if entry.data.get(CONF_ACCOUNT_ID) != account_id:
+                continue
+            self._minted = None
+            with suppress(KeyError, TypeError, ValueError):
+                old = Tokens.from_dict(entry.data[CONF_TOKENS])
+                replaced[old.access_token] = old
+            self.hass.config_entries.async_update_entry(
+                entry, data={**entry.data, CONF_TOKENS: stored}
+            )
+        for old in replaced.values():
+            if old.access_token != tokens.access_token:
+                self.hass.async_create_background_task(
+                    self._async_revoke(old), name=f"{DOMAIN} revoke replaced token"
+                )
 
     @property
     def _start_step_id(self) -> str:

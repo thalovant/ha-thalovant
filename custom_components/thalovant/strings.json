@@ -22,7 +22,7 @@
     },
     "progress": {
       "wait_for_admission": "Your hub {hub} is admitting Home Assistant. This usually takes about a minute and a half.",
-      "wait_for_login": "Open {url} and approve the sign-in. The page names the request **Home Assistant**. If you are asked for a code, enter:\n\n```\n{code}\n```\n\nThis step moves on by itself once you approve."
+      "wait_for_login": "Open {url} and approve the sign-in. The page names the request **Home Assistant** and marks it as a Thalovant-registered app. If you are asked for a code, enter:\n\n```\n{code}\n```\n\nThis step moves on by itself once you approve."
     },
     "error": {
       "admission_failed": "The hub did not admit Home Assistant. Try again in a few minutes.",
@@ -78,6 +78,9 @@
     "cannot_connect": {
       "message": "Could not reach the hub {hub}"
     },
+    "client_key_rejected": {
+      "message": "The hub {hub} refused this Home Assistant's security key for the link"
+    },
     "credentials_invalid": {
       "message": "The stored credentials for {hub} cannot be read"
     },
@@ -92,6 +95,10 @@
     "agent_unavailable": {
       "title": "The conversation agent for {hub} is gone",
       "description": "Requests from {hub} go to the conversation agent `{agent}`, which Home Assistant cannot find any more. Until you choose another agent in the Thalovant integration's options, the hub gets an error for everything it asks."
+    },
+    "client_key_rejected": {
+      "title": "{hub} no longer recognizes this Home Assistant",
+      "description": "The hub {hub} refused the security key Home Assistant uses for this link. The hub remembers the key Home Assistant had when you linked it, and this one is different. That usually means Home Assistant lost its key, for example after restoring a partial backup that left out the `.storage/thalovant` folder.\n\nTo fix it, re-link the hub: open the Thalovant integration and follow its request to re-authenticate. Re-linking makes a new connection with a new key."
     },
     "hub_key_changed": {
       "title": "{hub} answered with a different security key",

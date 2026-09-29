@@ -22,7 +22,7 @@
     },
     "progress": {
       "wait_for_admission": "Votre hub {hub} est en train d'accepter Home Assistant. Cela prend en général une minute et demie.",
-      "wait_for_login": "Ouvrez {url} et approuvez la connexion. La page présente la demande sous le nom **Home Assistant**. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
+      "wait_for_login": "Ouvrez {url} et approuvez la connexion. La page présente la demande sous le nom **Home Assistant**, comme une application enregistrée auprès de Thalovant. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
     },
     "error": {
       "admission_failed": "Le hub n'a pas accepté Home Assistant. Réessayez dans quelques minutes.",
@@ -78,6 +78,9 @@
     "cannot_connect": {
       "message": "Impossible de joindre le hub {hub}"
     },
+    "client_key_rejected": {
+      "message": "Le hub {hub} a refusé la clé de sécurité de ce Home Assistant pour cette liaison"
+    },
     "credentials_invalid": {
       "message": "Les identifiants enregistrés pour {hub} sont illisibles"
     },
@@ -92,6 +95,10 @@
     "agent_unavailable": {
       "title": "L'agent de conversation de {hub} a disparu",
       "description": "Les demandes de {hub} sont confiées à l'agent de conversation `{agent}`, que Home Assistant ne trouve plus. Tant que vous n'aurez pas choisi un autre agent dans les options de l'intégration Thalovant, le hub recevra une erreur pour chacune de ses demandes."
+    },
+    "client_key_rejected": {
+      "title": "{hub} ne reconnaît plus ce Home Assistant",
+      "description": "Le hub {hub} a refusé la clé de sécurité que Home Assistant utilise pour cette liaison. Le hub retient la clé que Home Assistant avait quand vous l'avez relié, et celle-ci est différente. Cela signifie en général que Home Assistant a perdu sa clé, par exemple après la restauration d'une sauvegarde partielle qui ne contenait pas le dossier `.storage/thalovant`.\n\nPour corriger cela, reliez le hub à nouveau : ouvrez l'intégration Thalovant et suivez sa demande de réauthentification. La nouvelle liaison crée une nouvelle connexion avec une nouvelle clé."
     },
     "hub_key_changed": {
       "title": "{hub} a répondu avec une autre clé de sécurité",
