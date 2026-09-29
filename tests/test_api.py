@@ -1,6 +1,6 @@
 """Tests for the adapter between the integration and the Thalovant SDK.
 
-These drive api.py with a fake SDK that has thalovant 0.9.0's names and shapes
+These drive api.py with a fake SDK that has thalovant 0.9.1's names and shapes
 (see api.SDK_NAMES), so they need no SDK installed. test_api_sdk.py runs the
 same adapter against the real SDK when it is installed.
 """
@@ -32,6 +32,7 @@ from custom_components.thalovant.api import (
     ThalovantApiError,
     ThalovantAuth,
     ThalovantAuthError,
+    ThalovantClientKeyRejectedError,
     ThalovantConnectionError,
     ThalovantError,
     ThalovantHubKeyChangedError,
@@ -64,6 +65,10 @@ class SdkTimeoutError(SdkError):
 
 
 class SdkHubRefusedError(SdkConnectionError):
+    pass
+
+
+class SdkClientKeyRejectedError(SdkHubRefusedError):
     pass
 
 
@@ -127,12 +132,13 @@ class SdkDeviceAuthorization:
 
 @pytest.fixture
 def sdk() -> Generator[SimpleNamespace]:
-    """A fake thalovant 0.9.0, installed for one test."""
+    """A fake thalovant 0.9.1, installed for one test."""
     fake = SimpleNamespace(
         AsyncThalovantControlPlane=MagicMock(),
         AsyncHubSession=MagicMock(),
         ThalovantIdentity=MagicMock(),
         DeviceAuthorization=SdkDeviceAuthorization,
+        HOME_ASSISTANT_CLIENT_ID="thalovant-home-assistant",
         hub_display_name=lambda hub: f"display:{hub['name']}",
         ThalovantError=SdkError,
         ThalovantAPIError=SdkAPIError,
@@ -143,6 +149,7 @@ def sdk() -> Generator[SimpleNamespace]:
         ThalovantUnsupportedConnectionTypeError=SdkUnsupportedError,
         ThalovantConnectionError=SdkConnectionError,
         ThalovantHubRefusedError=SdkHubRefusedError,
+        ThalovantClientKeyRejectedError=SdkClientKeyRejectedError,
         ThalovantHubKeyChangedError=SdkHubKeyChangedError,
         ThalovantTimeoutError=SdkTimeoutError,
         ThalovantAdmissionTimeoutError=SdkAdmissionTimeoutError,
@@ -242,8 +249,9 @@ async def test_device_login(sdk: SimpleNamespace) -> None:
     login = await auth.start_device_login(client_name="HA", scopes=("hubs:read",))
     assert login == DeviceLogin("dc", "WXYZ-2345", "https://v", "https://v?c", 5.0, 900)
     assert login.sdk is grant
+    # As the registered app: the approval page vouches for the name.
     plane.begin_device_login.assert_awaited_once_with(
-        scopes=["hubs:read"], client_name="HA"
+        scopes=["hubs:read"], client_name="HA", client_id="thalovant-home-assistant"
     )
 
     assert await auth.poll_device_login(login) == _tokens()
@@ -342,6 +350,8 @@ async def test_api_calls(sdk: SimpleNamespace) -> None:
 
     thalovant = ThalovantApi(session, _tokens())
     assert await thalovant.get_account() == Account("a1", "G", None)
+    # The plane knows its token's id, so revoking a dead token is not an error.
+    assert plane.token_id == "t1"
     credentials = await thalovant.create_connection(
         HUB_ID, name="Home Assistant (Maison)", kind="home_assistant"
     )
@@ -550,6 +560,12 @@ async def test_list_hubs_stops_paging(sdk: SimpleNamespace) -> None:
             {"status": 503},
         ),
         (SdkHubRefusedError("refused"), ThalovantAuthError, {"status": None}),
+        # The hub refusing this connection's own key: a refusal that says why.
+        (
+            SdkClientKeyRejectedError("key rejected", key_folder="/x"),
+            ThalovantClientKeyRejectedError,
+            {"status": None},
+        ),
         # A changed hub key is not a refusal and not a blip.
         (SdkHubKeyChangedError("key changed"), ThalovantHubKeyChangedError, {}),
         (SdkAdmissionTimeoutError("slow"), ThalovantAdmissionTimeoutError, {}),
@@ -663,6 +679,9 @@ async def test_hub_connection_errors(sdk: SimpleNamespace) -> None:
     with pytest.raises(ThalovantAuthError):
         await connection.connect()
     with pytest.raises(ThalovantConnectionError):
+        await connection.run()
+    link.run = AsyncMock(side_effect=SdkClientKeyRejectedError("key rejected"))
+    with pytest.raises(ThalovantClientKeyRejectedError):
         await connection.run()
 
 

@@ -59,8 +59,8 @@ Home Assistant.
    choose **Thalovant**.
 2. Select **Submit**. Home Assistant shows a link and a code.
 3. Open the link, sign in to Thalovant, check the code matches, and approve.
-   The page names the request **Home Assistant**. The dialog in Home
-   Assistant moves on by itself.
+   The page names the request **Home Assistant** and marks it as a
+   Thalovant-registered app. The dialog in Home Assistant moves on by itself.
 4. Pick the hub whose devices should reach this Home Assistant. Hubs that can
    link come first. A hub that can't yet is marked "can't link Home Assistant
    yet", and picking it says so without creating anything.
@@ -78,6 +78,11 @@ Home Assistant.
 The sign-in asks Thalovant for three permissions: read your hubs
 (`hubs:read`), and read and create connections (`clients:read`,
 `clients:write`). It asks for nothing that can change a hub.
+
+Home Assistant holds one API token per Thalovant account. Signing in again, to
+link another hub or to re-link one, replaces it: every hub linked with that
+account moves to the new token, and the old one is revoked. It does not count
+against your plan's API tokens.
 
 ### Options
 
@@ -158,10 +163,11 @@ automation:
 ## Privacy
 
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
-  year) and the connection's keys, in Home Assistant's config entry storage,
-  like any other integration's credentials. The key the hub recognises this
-  Home Assistant by, and the hub's own key, live in `.storage/thalovant/`, one
-  folder per link, so they survive updates and are part of your backups.
+  year, one per account) and the connection's keys, in Home Assistant's config
+  entry storage, like any other integration's credentials. The key the hub
+  recognises this Home Assistant by, and the hub's own key, live in
+  `.storage/thalovant/`, one folder per link, so they survive updates and are
+  part of your backups.
 - **What leaves your home.** Only Assist's answers, sent to your hub. No
   Home Assistant token, and no entity list.
 - **Logs.** This integration never logs what was said or what Assist answered,
@@ -212,6 +218,13 @@ talking to it and asks you to re-authenticate. Do that only if you know the
 hub was replaced or reset: re-linking makes a new connection and trusts the
 key the hub presents now.
 
+**"no longer recognizes this Home Assistant" in Repairs.** The hub refused
+the key Home Assistant uses for the link: it remembers the one Home Assistant
+had when you linked it, and this one is different. Home Assistant usually
+lost its key, for example after restoring a partial backup without the
+`.storage/thalovant` folder. Follow the request to re-authenticate: re-linking
+makes a new connection with a new key.
+
 **The hub says Home Assistant didn't understand.** Try the same sentence in
 Assist in Home Assistant. If it fails there too, the entity is probably not
 exposed to Assist, or its name differs from what you said.
@@ -234,9 +247,9 @@ logger:
 
 1. Go to **Settings** > **Devices & services**, open **Thalovant**, and
    delete each entry. Deleting an entry also deletes its connection on the
-   hub and revokes the API token it signed in with. If Thalovant cannot be
-   reached at that moment, the log says so; remove them from the
-   [Thalovant dashboard][dashboard] instead.
+   hub, and deleting the last entry of an account revokes the API token. If
+   Thalovant cannot be reached at that moment, the log says so; remove them
+   from the [Thalovant dashboard][dashboard] instead.
 2. To remove the code too, open **HACS**, find **Thalovant**, and select
    **Remove**, then restart Home Assistant.
 
@@ -248,8 +261,7 @@ python3.14 -m venv .venv
 # The SDK, under Home Assistant's own package constraints, the way Home
 # Assistant installs an integration's requirements.
 constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
-.venv/bin/pip install -c "$constraints" \
-    "thalovant @ git+https://github.com/thalovant/thalovant-python-sdk@8fb35b1"
+.venv/bin/pip install -c "$constraints" thalovant==0.9.1
 .venv/bin/pytest --cov
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy
 ```

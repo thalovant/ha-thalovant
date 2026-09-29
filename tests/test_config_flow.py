@@ -365,6 +365,59 @@ async def test_unused_token_revoke_fails(
     assert "Could not revoke the unused Thalovant API token" in caplog.text
 
 
+async def test_new_token_moves_the_accounts_links_to_it(
+    hass: HomeAssistant,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+    tokens: Tokens,
+) -> None:
+    """Approving Home Assistant again revokes the token the account's links hold.
+
+    Each entry of the account gets the new token, the old one is revoked in
+    case it was still alive, and the flow no longer revokes the new token
+    when it ends without a link: the entries hold it.
+    """
+    old = Tokens("old-access", None, ("hubs:read",), "tok-old")
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry, data={**mock_config_entry.data, CONF_TOKENS: old.to_dict()}
+    )
+    unreadable = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"{ACCOUNT_ID}:hub-third",
+        data={**mock_config_entry.data, CONF_HUB_ID: "hub-third", CONF_TOKENS: None},
+    )
+    unreadable.add_to_hass(hass)
+    stranger_tokens = Tokens("stranger-access", None, (), "tok-stranger").to_dict()
+    stranger = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=f"acct-other:{HUB_ID}",
+        data={
+            **mock_config_entry.data,
+            CONF_ACCOUNT_ID: "acct-other",
+            CONF_TOKENS: stranger_tokens,
+        },
+    )
+    stranger.add_to_hass(hass)
+
+    with patch(
+        "custom_components.thalovant.config_flow.ThalovantApi", return_value=mock_api
+    ) as api_class:
+        result = await _finish_login(hass, await _start(hass))
+        assert result["step_id"] == "hub"
+        assert mock_config_entry.data[CONF_TOKENS] == tokens.to_dict()
+        assert unreadable.data[CONF_TOKENS] == tokens.to_dict()
+        assert stranger.data[CONF_TOKENS] == stranger_tokens
+        await hass.async_block_till_done(wait_background_tasks=True)
+        mock_api.revoke_token.assert_awaited_once_with()
+        assert api_class.call_args_list[-1].args[1] == old
+
+        hass.config_entries.flow.async_abort(result["flow_id"])
+        await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_awaited_once_with()
+
+
 async def test_linked_hubs_are_not_offered(
     hass: HomeAssistant,
     mock_auth: MagicMock,

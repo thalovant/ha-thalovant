@@ -19,6 +19,7 @@ from .api import (
     HubConnection,
     ThalovantApi,
     ThalovantAuthError,
+    ThalovantClientKeyRejectedError,
     ThalovantConnectionError,
     ThalovantHubKeyChangedError,
     Tokens,
@@ -44,6 +45,11 @@ _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_-]")
 def key_changed_issue_id(entry_id: str) -> str:
     """The repair issue raised when a hub's Noise key no longer matches its pin."""
     return f"hub_key_changed_{entry_id}"
+
+
+def key_rejected_issue_id(entry_id: str) -> str:
+    """The repair issue raised when the hub refuses this connection's own key."""
+    return f"client_key_rejected_{entry_id}"
 
 
 def _noise_root(hass: HomeAssistant) -> Path:
@@ -102,6 +108,34 @@ def _async_hub_key_changed(hass: HomeAssistant, entry: ThalovantConfigEntry) -> 
     )
 
 
+@callback
+def _async_client_key_rejected(
+    hass: HomeAssistant, entry: ThalovantConfigEntry
+) -> None:
+    """Explain a refused client key; retrying cannot fix it, re-linking can."""
+    LOGGER.warning(
+        "The hub %s no longer accepts this Home Assistant's key for the link; "
+        "re-link it to make a new connection",
+        entry.title,
+    )
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        key_rejected_issue_id(entry.entry_id),
+        is_fixable=False,
+        severity=ir.IssueSeverity.ERROR,
+        translation_key="client_key_rejected",
+        translation_placeholders={"hub": entry.title},
+    )
+
+
+@callback
+def _async_delete_key_issues(hass: HomeAssistant, entry_id: str) -> None:
+    """Clear the repair issues about keys: the link works, or it is gone."""
+    ir.async_delete_issue(hass, DOMAIN, key_changed_issue_id(entry_id))
+    ir.async_delete_issue(hass, DOMAIN, key_rejected_issue_id(entry_id))
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -> bool:
     """Connect to the hub and answer its requests."""
     try:
@@ -158,9 +192,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
                 translation_key="not_admitted_yet",
                 translation_placeholders={"hub": entry.title},
             ) from err
+        key_rejected = isinstance(err, ThalovantClientKeyRejectedError)
+        if key_rejected:
+            _async_client_key_rejected(hass, entry)
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
-            translation_key="auth_failed",
+            translation_key="client_key_rejected" if key_rejected else "auth_failed",
             translation_placeholders={"hub": entry.title},
         ) from err
     except ThalovantConnectionError as err:
@@ -170,7 +207,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
             translation_placeholders={"hub": entry.title},
         ) from err
     state_logger(connection.connected)
-    ir.async_delete_issue(hass, DOMAIN, key_changed_issue_id(entry.entry_id))
+    _async_delete_key_issues(hass, entry.entry_id)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -188,9 +225,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -> None:
-    """Delete the connection on the hub, then revoke the API token, best effort."""
+    """Delete the connection on the hub, then revoke the API token, best effort.
+
+    The token is the account's, shared by every entry it linked (see the
+    config flow), so it is revoked only with the last of them.
+    """
     ir.async_delete_issue(hass, DOMAIN, agent_issue_id(entry.entry_id))
-    ir.async_delete_issue(hass, DOMAIN, key_changed_issue_id(entry.entry_id))
+    _async_delete_key_issues(hass, entry.entry_id)
     if (directory := _noise_dir(hass, entry)) is not None:
         await hass.async_add_executor_job(shutil.rmtree, directory, True)
     try:
@@ -215,6 +256,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
             type(err).__name__,
         )
     # Deleting the connection needs the token, so the token goes last.
+    if _token_in_use(hass, entry, tokens):
+        return
     try:
         async with asyncio.timeout(REMOVE_TIMEOUT):
             await api.revoke_token()
@@ -236,11 +279,29 @@ async def _async_keep_connected(
     except ThalovantHubKeyChangedError:
         _async_hub_key_changed(hass, entry)
         entry.async_start_reauth(hass)
+    except ThalovantClientKeyRejectedError:
+        _async_client_key_rejected(hass, entry)
+        entry.async_start_reauth(hass)
     except ThalovantAuthError:
         LOGGER.warning("The hub %s rejected this connection's credentials", entry.title)
         entry.async_start_reauth(hass)
     except Exception:
         LOGGER.exception("The connection to %s stopped", entry.title)
+
+
+def _token_in_use(
+    hass: HomeAssistant, removed: ThalovantConfigEntry, tokens: Tokens
+) -> bool:
+    """Whether another entry still signs in with this API token."""
+    for other in hass.config_entries.async_entries(DOMAIN):
+        if other.entry_id == removed.entry_id:
+            continue
+        stored = other.data.get(CONF_TOKENS)
+        if isinstance(stored, dict) and (
+            stored.get("access_token") == tokens.access_token
+        ):
+            return True
+    return False
 
 
 def _recently_linked(entry: ThalovantConfigEntry) -> bool:
