@@ -51,6 +51,11 @@ REPLY_RESERVE: Final = 0.5
 # behind a slow agent.
 MAX_CONCURRENT_REQUESTS: Final = 8
 
+# Devices that have spoken through one hub, kept so each can be given an area.
+# A hub has no reason to have more; past this, requests are answered as before,
+# with no room.
+MAX_DEVICES_PER_HUB: Final = 50
+
 # Removing an entry must not hang on an unreachable control plane.
 REMOVE_TIMEOUT: Final = 10.0
 

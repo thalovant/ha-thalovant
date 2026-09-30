@@ -10,17 +10,25 @@ from homeassistant.components import conversation
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import Context, HomeAssistant, callback
 from homeassistant.generated.languages import LANGUAGES
-from homeassistant.helpers import intent, issue_registry as ir, translation
+from homeassistant.helpers import (
+    device_registry as dr,
+    intent,
+    issue_registry as ir,
+    translation,
+)
 from homeassistant.util import dt as dt_util, language as language_util
 
 from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
+    CONF_HUB_ID,
     CONVERSE_TIMEOUT,
     DOMAIN,
     HUB_TIMEOUT,
     LOGGER,
+    MANUFACTURER,
     MAX_CONCURRENT_REQUESTS,
+    MAX_DEVICES_PER_HUB,
     REPLY_RESERVE,
     RESPONSE_MESSAGE_TYPE,
 )
@@ -262,6 +270,48 @@ class HomeRequestHandler:
         except Exception as err:  # noqa: BLE001 - the hub times out on its own
             LOGGER.debug("Could not send the answer to request %s: %r", request_id, err)
 
+    @callback
+    def _async_device_id(self, device: Any) -> str | None:
+        """The registry id of the Thalovant device that spoke, made on first use.
+
+        Assist takes the room from the device's area, so each speaker is a
+        device of its own under the hub's, for the user to place in an area.
+        The hub says which device it was from its own record of the sender,
+        never from what the device announced. No id, or a full registry,
+        means no room: the request is answered as it always was.
+        """
+        if not isinstance(device, Mapping):
+            return None
+        client_id = device.get("id")
+        if not isinstance(client_id, str) or not (client_id := client_id.strip()):
+            return None
+        name = device.get("name")
+        name = name.strip() if isinstance(name, str) else ""
+        hub = (DOMAIN, self._entry.data[CONF_HUB_ID])
+        identifier = (DOMAIN, f"{hub[1]}:{client_id}")
+        registry = dr.async_get(self._hass)
+        existing = registry.async_get_device(identifiers={identifier})
+        if existing is None:
+            known = sum(
+                1
+                for entry in dr.async_entries_for_config_entry(
+                    registry, self._entry.entry_id
+                )
+                if entry.via_device_id is not None
+            )
+            if known >= MAX_DEVICES_PER_HUB:
+                LOGGER.debug("Device limit reached; answering without a room")
+                return None
+        created = registry.async_get_or_create(
+            config_entry_id=self._entry.entry_id,
+            identifiers={identifier},
+            via_device=hub,
+            manufacturer=MANUFACTURER,
+            model="Device",
+            name=name or f"Thalovant device {client_id[:8]}",
+        )
+        return created.id
+
     async def _async_converse(
         self, request_id: str, data: Mapping[str, Any], budget: float
     ) -> dict[str, Any]:
@@ -299,6 +349,7 @@ class HomeRequestHandler:
             return error_response(request_id, ERROR_TIMEOUT, conversation_id)
 
         language = async_resolve_language(self._hass, data.get("lang"), agent_id)
+        device_id = self._async_device_id(data.get("device"))
         LOGGER.debug("Request %s: asking %s in %s", request_id, agent_id, language)
         # Its own task, waited for with asyncio.wait rather than a timeout
         # around the await: an agent that ignores cancellation must not hold
@@ -312,6 +363,7 @@ class HomeRequestHandler:
                 context=Context(),
                 language=language,
                 agent_id=agent_id,
+                device_id=device_id,
             ),
             name=f"{DOMAIN} converse",
         )

@@ -28,10 +28,10 @@ from homeassistant.components.homeassistant.exposed_entities import async_expose
 from homeassistant.const import MATCH_ALL
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import intent, issue_registry as ir
+from homeassistant.helpers import device_registry as dr, intent, issue_registry as ir
 from homeassistant.setup import async_setup_component
 
-from .conftest import FakeHubConnection
+from .conftest import HUB_ID, FakeHubConnection
 
 AGENT_OWNER = "fake_agent"
 UTTERANCE = "turn off the kitchen light"
@@ -821,3 +821,176 @@ async def test_reply_withdrawn_at_deadline(
     await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=9.9)
     await _until(lambda: "could not be sent before the hub gave up" in caplog.text)
     mock_hub_connection.reply.assert_awaited_once()
+
+
+def _entry_id(hass: HomeAssistant) -> str:
+    return hass.config_entries.async_entries(DOMAIN)[0].entry_id
+
+
+def _speaker_devices(hass: HomeAssistant) -> list[dr.DeviceEntry]:
+    return [
+        device
+        for device in dr.async_entries_for_config_entry(
+            dr.async_get(hass), _entry_id(hass)
+        )
+        if device.via_device_id is not None
+    ]
+
+
+async def test_device_becomes_a_registry_device_and_reaches_assist(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """The speaking device is passed to Assist, so its area gives the room."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    agent = use_agent(FakeAgent(answer))
+    await _ask(
+        hass, mock_hub_connection, _request(device={"id": "42", "name": "Kitchen"})
+    )
+
+    (device,) = _speaker_devices(hass)
+    assert device.name == "Kitchen"
+    assert device.identifiers == {(DOMAIN, f"{HUB_ID}:42")}
+    assert agent.inputs[0].device_id == device.id
+    (hub,) = (
+        d
+        for d in dr.async_entries_for_config_entry(dr.async_get(hass), _entry_id(hass))
+        if (DOMAIN, HUB_ID) in d.identifiers
+    )
+    assert device.via_device_id == hub.id
+
+
+async def test_device_is_reused_and_renamed(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """The same device keeps its registry entry, and its area, across requests."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    agent = use_agent(FakeAgent(answer))
+    await _ask(
+        hass, mock_hub_connection, _request(device={"id": "42", "name": "Kitchen"})
+    )
+    (device,) = _speaker_devices(hass)
+    dr.async_get(hass).async_update_device(device.id, area_id="kitchen")
+
+    await _ask(
+        hass, mock_hub_connection, _request(device={"id": "42", "name": "Pantry"})
+    )
+
+    (same,) = _speaker_devices(hass)
+    assert same.id == device.id
+    assert same.name == "Pantry"
+    assert same.area_id == "kitchen"
+    assert [i.device_id for i in agent.inputs] == [device.id, device.id]
+
+
+async def test_user_chosen_name_survives_a_rename(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """A name the user set in Home Assistant is never overwritten."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    use_agent(FakeAgent(answer))
+    await _ask(
+        hass, mock_hub_connection, _request(device={"id": "42", "name": "Kitchen"})
+    )
+    (device,) = _speaker_devices(hass)
+    dr.async_get(hass).async_update_device(device.id, name_by_user="Mine")
+
+    await _ask(
+        hass, mock_hub_connection, _request(device={"id": "42", "name": "Pantry"})
+    )
+
+    (same,) = _speaker_devices(hass)
+    assert same.name_by_user == "Mine"
+
+
+@pytest.mark.parametrize(
+    "device", [None, "x", {}, {"id": ""}, {"id": "  "}, {"id": 42}, {"name": "Kitchen"}]
+)
+async def test_no_usable_device_means_no_room(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+    device: Any,
+) -> None:
+    """A request without a usable device is answered as before, with no room."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    agent = use_agent(FakeAgent(answer))
+    await _ask(hass, mock_hub_connection, _request(device=device))
+
+    assert agent.inputs[0].device_id is None
+    assert _speaker_devices(hass) == []
+
+
+async def test_nameless_device_gets_a_name(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """A device with no name is still a device, named after its id."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    use_agent(FakeAgent(answer))
+    await _ask(hass, mock_hub_connection, _request(device={"id": "1234567890"}))
+
+    (device,) = _speaker_devices(hass)
+    assert device.name == "Thalovant device 12345678"
+
+
+async def test_device_limit(
+    hass: HomeAssistant,
+    loaded_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+    use_agent: Callable[[FakeAgent], FakeAgent],
+) -> None:
+    """Past the limit a new device is answered with no room; known ones still get theirs."""
+
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Done.")
+
+    agent = use_agent(FakeAgent(answer))
+    with patch("custom_components.thalovant.handler.MAX_DEVICES_PER_HUB", 1):
+        await _ask(hass, mock_hub_connection, _request(device={"id": "1", "name": "A"}))
+        await _ask(hass, mock_hub_connection, _request(device={"id": "2", "name": "B"}))
+        await _ask(hass, mock_hub_connection, _request(device={"id": "1", "name": "A"}))
+
+    assert len(_speaker_devices(hass)) == 1
+    first, second, third = (i.device_id for i in agent.inputs)
+    assert first is not None
+    assert second is None
+    assert third == first
