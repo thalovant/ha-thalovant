@@ -90,6 +90,9 @@ Open the integration and select **Configure**.
 ## What you get
 
 - **A device for each linked hub**, listed as a service.
+- **A device for each Thalovant device that speaks through it**, created the
+  first time it asks something. Give it an area and Assist knows which room
+  "turn off the lights" means.
 - **Hub connection**, a connectivity sensor on that device. It is on while the
   hub can reach this Home Assistant, and off while the link is down.
 - **Diagnostics** you can download from the integration page. They hold
@@ -104,9 +107,12 @@ connection does. Nothing is polled.
 
 1. A Thalovant device (the appliance, the desktop app, or your phone) hears
    "turn off the kitchen light".
-2. The home skill on your hub sends the sentence, with its language, to the
-   Home Assistant connection of the account that owns the device.
-3. This integration hands it to Assist in that language.
+2. The home skill on your hub sends the sentence, with its language and the
+   device's id and name, to the Home Assistant connection of the account that
+   owns the device. The hub takes the id from its own record of the sender,
+   never from what the device says about itself.
+3. This integration hands it to Assist in that language, along with the
+   Home Assistant device that stands for the one that asked.
 4. Assist acts and answers. The integration sends the answer back within 10
    seconds, and the hub speaks it.
 
@@ -123,6 +129,21 @@ Anything Assist understands works. With the built-in agent, for example:
 - "Is the front door locked?"
 - "What is the temperature in the living room?"
 - "Allume la lumière du salon."
+
+### Rooms
+
+Say "turn off the lights" with no room, and Assist picks the lights in the area
+of the device that heard you, the way it does for a Home Assistant voice
+satellite.
+
+1. Ask the device something once, so it shows up.
+2. Go to **Settings** > **Devices & services**, open **Thalovant**, and open
+   the device under the hub.
+3. Set its **Area**.
+
+The device takes the name you gave it in Thalovant; rename it in Home Assistant
+and your name is kept. A device with no area behaves as before: Assist has no
+room to go on, so name the room in the sentence.
 
 Get told when the link to the hub drops for more than five minutes:
 
