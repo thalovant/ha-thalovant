@@ -20,11 +20,6 @@ answer on the device that asked.
 The [Link Home Assistant guide][guide] on docs.thalovant.com covers the same
 steps with what each device sentence means when something goes wrong.
 
-> [!IMPORTANT]
-> The hub side is still being built. Until your hub runs the Thalovant home
-> skill and can create Home Assistant connections, pairing stops with "This hub
-> can't link Home Assistant yet".
-
 ## Requirements
 
 - Home Assistant 2026.9 or later.
