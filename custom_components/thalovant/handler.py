@@ -16,6 +16,7 @@ from homeassistant.helpers import (
     issue_registry as ir,
     translation,
 )
+from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util, language as language_util
 
 from .api import HubConnection, HubMessage, plain_speech
@@ -290,22 +291,28 @@ class HomeRequestHandler:
         hub = (DOMAIN, self._entry.data[CONF_HUB_ID])
         identifier = (DOMAIN, f"{hub[1]}:{client_id}")
         registry = dr.async_get(self._hass)
-        existing = registry.async_get_device(identifiers={identifier})
+        entry_id = self._entry.entry_id
+        # Identifiers are unique within a config entry, so the lookups are
+        # scoped to ours (the registry-wide lookup is deprecated).
+        existing = registry.async_get_device_by_identifier(identifier, entry_id)
         if existing is None:
             known = sum(
                 1
-                for entry in dr.async_entries_for_config_entry(
-                    registry, self._entry.entry_id
-                )
+                for entry in dr.async_entries_for_config_entry(registry, entry_id)
                 if entry.via_device_id is not None
             )
             if known >= MAX_DEVICES_PER_HUB:
                 LOGGER.debug("Device limit reached; answering without a room")
                 return None
+        # The speaker hangs under the hub's service device. The registry
+        # takes the hub's id rather than its identifier; without a hub
+        # device there is nothing to hang it under, and the link is added
+        # by a later request once the hub device exists.
+        hub_device = registry.async_get_device_by_identifier(hub, entry_id)
         created = registry.async_get_or_create(
-            config_entry_id=self._entry.entry_id,
+            config_entry_id=entry_id,
             identifiers={identifier},
-            via_device=hub,
+            via_device_id=hub_device.id if hub_device is not None else UNDEFINED,
             manufacturer=MANUFACTURER,
             model="Device",
             name=name or f"Thalovant device {client_id[:8]}",
