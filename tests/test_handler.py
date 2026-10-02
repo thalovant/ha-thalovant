@@ -842,6 +842,7 @@ async def test_device_becomes_a_registry_device_and_reaches_assist(
     loaded_entry: MockConfigEntry,
     mock_hub_connection: FakeHubConnection,
     use_agent: Callable[[FakeAgent], FakeAgent],
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The speaking device is passed to Assist, so its area gives the room."""
 
@@ -865,6 +866,9 @@ async def test_device_becomes_a_registry_device_and_reaches_assist(
         if (DOMAIN, HUB_ID) in d.identifiers
     )
     assert device.via_device_id == hub.id
+    # Home Assistant reports a deprecated registry call as a warning on the
+    # integration's name; the registry must be used the way it asks.
+    assert "Detected that custom integration 'thalovant'" not in caplog.text
 
 
 async def test_device_is_reused_and_renamed(
