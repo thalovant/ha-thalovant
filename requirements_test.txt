@@ -1,11 +1,11 @@
 # Matches Home Assistant 2026.9.4, the release the integration is tested against.
-pytest-homeassistant-custom-component==0.13.367
+pytest-homeassistant-custom-component==0.13.368
 
 # Requirements of the conversation integration this one depends on; the test
 # harness does not install integration requirements.
 gazetteer-matcher==1.2.0
 hassil==3.12.1
-home-assistant-intents==2026.9.17
+home-assistant-intents==2026.9.30
 
 # The thalovant SDK is installed on its own, under Home Assistant's package
 # constraints: see the README's Development section and the CI workflow.

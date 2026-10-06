@@ -2,7 +2,11 @@
 
 from typing import override
 
-from homeassistant.components.binary_sensor import (
+# Home Assistant 2026.10 moved BinarySensorDeviceClass to binary_sensor.const
+# and re-exports it only implicitly, which mypy refuses. That module does not
+# exist in 2026.9, the oldest release hacs.json admits, so keep the package
+# import, which works at runtime on both.
+from homeassistant.components.binary_sensor import (  # type: ignore[attr-defined]
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )

@@ -10,6 +10,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+from pytest_homeassistant_custom_component.syrupy import HomeAssistantSnapshotExtension
+from syrupy.assertion import SnapshotAssertion
 
 from custom_components.thalovant.api import (
     Account,
@@ -49,6 +51,17 @@ def auto_enable_custom_integrations(enable_custom_integrations: None) -> None:
 def hass_config_dir(hass_tmp_config_dir: str) -> str:
     """Give every test its own config directory: the integration writes to .storage."""
     return hass_tmp_config_dir
+
+
+@pytest.fixture
+def snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
+    """Read snapshots from tests/snapshots whichever plugin pytest loaded last.
+
+    syrupy and the Home Assistant plugin both define this fixture, and which one
+    wins follows entry-point order, which changes from one install to the next.
+    Plain syrupy looks in __snapshots__ and reports the snapshot missing.
+    """
+    return snapshot.use_extension(HomeAssistantSnapshotExtension)
 
 
 @pytest.fixture(autouse=True)
