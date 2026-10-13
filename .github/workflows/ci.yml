@@ -23,7 +23,7 @@ jobs:
           persist-credentials: false
       # The action runs the ghcr.io/home-assistant/hassfest image, which follows
       # Home Assistant's dev branch; the pin covers the wrapper only.
-      - uses: home-assistant/actions/hassfest@06749dd8c0b54f350bc69c8752456cee498808a3 # master
+      - uses: home-assistant/actions/hassfest@50baf3a307f87100cf550d4ae127746595030d5d # master
 
   hacs:
     # HACS reads hacs.json and the manifest from raw.githubusercontent.com
