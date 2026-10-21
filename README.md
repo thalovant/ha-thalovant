@@ -32,15 +32,15 @@ steps with what each device sentence means when something goes wrong.
 
 ### With HACS
 
-1. In Home Assistant, open **HACS**.
-2. Open the menu (three dots, top right) and choose **Custom repositories**.
-3. Enter `https://github.com/thalovant/ha-thalovant`, choose the type
-   **Integration**, and select **Add**.
-4. Search for **Thalovant**, open it, and select **Download**.
-5. Restart Home Assistant.
+Thalovant is in the HACS default repository list, so there is nothing to add
+by hand.
+
+1. In Home Assistant, open **HACS** and search for **Thalovant**.
+2. Open it and select **Download**.
+3. Restart Home Assistant.
 
 If your Home Assistant is set up for My Home Assistant links,
-[this link][my-hacs] opens the repository in HACS and does steps 1 to 3.
+[this link][my-hacs] opens Thalovant in HACS, which is step 1.
 
 ### By hand
 
