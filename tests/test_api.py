@@ -1,6 +1,6 @@
 """Tests for the adapter between the integration and the Thalovant SDK.
 
-These drive api.py with a fake SDK that has thalovant 0.9.1's names and shapes
+These drive api.py with a fake SDK that has thalovant 0.10.0's names and shapes
 (see api.SDK_NAMES), so they need no SDK installed. test_api_sdk.py runs the
 same adapter against the real SDK when it is installed.
 """
@@ -132,7 +132,7 @@ class SdkDeviceAuthorization:
 
 @pytest.fixture
 def sdk() -> Generator[SimpleNamespace]:
-    """A fake thalovant 0.9.1, installed for one test."""
+    """A fake thalovant 0.10.0, installed for one test."""
     fake = SimpleNamespace(
         AsyncThalovantControlPlane=MagicMock(),
         AsyncHubSession=MagicMock(),

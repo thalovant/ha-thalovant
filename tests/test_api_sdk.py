@@ -3,7 +3,7 @@
 Skipped unless the SDK is installed; CI always installs it. Locally:
 
     uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
-        thalovant==0.9.1
+        thalovant==0.10.0
 
 Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
