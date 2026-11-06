@@ -14,7 +14,7 @@ rules:
     status: done
     comment: >
       The thalovant SDK is MIT-licensed, public, and released to PyPI from CI;
-      the manifest pins thalovant==0.9.1.
+      the manifest pins thalovant==0.10.0.
   docs-actions:
     status: exempt
     comment: The integration registers no service actions.

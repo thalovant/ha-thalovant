@@ -3,12 +3,13 @@
 Skipped unless the SDK is installed; CI always installs it. Locally:
 
     uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
-        thalovant==0.9.1
+        thalovant==0.10.0
 
 Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
 
 from collections.abc import AsyncIterator
+import json
 from pathlib import Path
 from typing import Any
 
@@ -309,6 +310,56 @@ def test_constants_match_the_sdk() -> None:
     assert CONNECTION_KIND == thalovant.CONNECTION_TYPE_HOME_ASSISTANT
     assert REQUEST_MESSAGE_TYPE == thalovant.HOME_REQUEST
     assert RESPONSE_MESSAGE_TYPE == thalovant.HOME_RESPONSE
+
+
+def test_installed_sdk_is_the_manifest_pin() -> None:
+    """These tests run against the SDK the manifest pins, not a leftover.
+
+    CI installs the manifest's requirement under Home Assistant's constraints.
+    A local environment that kept an older SDK would pass every test here
+    without testing the pin, so the installed version has to be the pinned one.
+    """
+    manifest = json.loads(
+        (
+            Path(__file__).parents[1]
+            / "custom_components"
+            / "thalovant"
+            / "manifest.json"
+        ).read_text(encoding="utf-8")
+    )
+    [requirement] = manifest["requirements"]
+    assert requirement == f"thalovant=={thalovant.__version__}"
+
+
+def test_setup_link_identity_selects_wss() -> None:
+    """An identity whose default_master is the hub's wss:// URL goes over WSS.
+
+    The API's identify payload names the hub as default_master; the explicit
+    data_plane_endpoints came later (2026-10-05), so an entry stored before
+    that carries the master alone. Up to thalovant 0.9.6, endpoint_for("wss")
+    found no WSS endpoint in such an identity and the session fell back to
+    HTTPS polling, about ten requests a second; 0.9.7 reads the master. The
+    identity is built as HubConnection builds it, from the stored secret, and
+    no hub is contacted: this checks what the session selects from, not a
+    handshake.
+    """
+    credentials = ConnectionCredentials(
+        HUB,
+        CLIENT,
+        "n",
+        "wss://maison.hubs.example",
+        {
+            "access_key": "k",
+            "password": "p",
+            "site_id": "home-assistant",
+            "default_master": "wss://maison.hubs.example",
+            "default_port": 443,
+        },
+        None,
+    )
+    identity = thalovant.ThalovantIdentity.from_mapping(credentials.secret)
+    assert identity.endpoint_for("wss") == "wss://maison.hubs.example"
+    assert identity.supports_protocol("wss")
 
 
 async def test_device_login(

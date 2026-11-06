@@ -5,7 +5,7 @@ integration's own, in the shapes of the shared contract: config entries store
 the to_dict() forms of Tokens and ConnectionCredentials, and the integration's
 tests patch ThalovantAuth, ThalovantApi and HubConnection.
 
-Underneath, each call goes to the async API of the ``thalovant`` SDK (0.9.1):
+Underneath, each call goes to the async API of the ``thalovant`` SDK (0.10.0):
 AsyncThalovantControlPlane for the control plane and AsyncHubSession for the
 link to a hub. SDK objects are turned into the types below on the way out, and
 SDK errors into the errors below. SDK_NAMES lists everything taken from it.
