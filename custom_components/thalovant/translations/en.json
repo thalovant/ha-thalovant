@@ -3,7 +3,13 @@
     "step": {
       "user": {
         "title": "Link your hub",
-        "description": "Home Assistant signs in to your Thalovant account with a one-time code, then connects to the hub you choose. The link is an outgoing connection: there is no port to open, and no Home Assistant token leaves your home.\n\nSelect **Submit** to get a code. The [guide]({guide_url}) walks through every step."
+        "description": "Home Assistant signs in to your Thalovant account with a one-time code, then connects to the hub you choose. The link is an outgoing connection: there is no port to open, and no Home Assistant token leaves your home.\n\nSelect **Submit** to get a code. The [guide]({guide_url}) walks through every step.",
+        "data": {
+          "self_hosted": "Link a self-hosted Christmas hub"
+        },
+        "data_description": {
+          "self_hosted": "Use a dedicated connection issued by your private hub operator. Leave this off to sign in to your Thalovant account."
+        }
       },
       "reauth_confirm": {
         "title": "Sign in again",
@@ -17,6 +23,22 @@
         },
         "data_description": {
           "hub_id": "Requests from this hub's devices will reach this Home Assistant. Hubs that can link come first. You can link more hubs later."
+        }
+      },
+      "self_hosted": {
+        "title": "Link a private Christmas hub",
+        "description": "Enter the secure WebSocket URL and the dedicated Home Assistant connection issued by your hub operator. Only the specified Voice connection can ask the built-in Assist agent for Christmas mirror lighting.",
+        "data": {
+          "endpoint": "Hub WebSocket URL",
+          "home_client_id": "Home Assistant connection ID",
+          "voice_client_id": "Authorized Voice connection ID",
+          "access_key": "Home Assistant access key",
+          "password": "Home Assistant password"
+        },
+        "data_description": {
+          "endpoint": "Use the WSS URL at the root of your private hub, such as wss://hub.example.com. The certificate must be trusted by Home Assistant.",
+          "home_client_id": "The numeric ID assigned by the hub to the dedicated Home Assistant connection.",
+          "voice_client_id": "The numeric ID assigned by the hub to the Voice connection that may control Christmas lighting."
         }
       }
     },
@@ -36,7 +58,8 @@
       "login_expired": "The code expired before it was approved. Select **Submit** to get a new one.",
       "plan_limit": "Your Thalovant plan has no room for another link. Remove one in the Thalovant dashboard, then try again.",
       "public_hubs_only": "Your Thalovant plan links Home Assistant to public hubs only. Choose a public hub, or upgrade your plan to use your own.",
-      "unknown": "Something unexpected went wrong. Try again; if it keeps happening, the Home Assistant log has the details."
+      "unknown": "Something unexpected went wrong. Try again; if it keeps happening, the Home Assistant log has the details.",
+      "invalid_private_link": "Enter a secure WSS hub URL, two distinct numeric connection IDs and valid operator-issued credentials."
     },
     "abort": {
       "all_hubs_linked": "Every hub on this Thalovant account is already linked to this Home Assistant.",
@@ -45,7 +68,8 @@
       "hub_not_found": "This hub is no longer available to your Thalovant account.",
       "no_hubs": "This Thalovant account has no hub that Home Assistant can be linked to.",
       "reauth_successful": "Home Assistant is linked to the hub again.",
-      "wrong_account": "You signed in with a different Thalovant account. Sign in with the account this link belongs to."
+      "wrong_account": "You signed in with a different Thalovant account. Sign in with the account this link belongs to.",
+      "different_private_hub": "The renewed connection must be on the same private hub and keep the same authorized Voice ID."
     }
   },
   "options": {
@@ -62,6 +86,9 @@
     },
     "error": {
       "agent_not_found": "This conversation agent is not available."
+    },
+    "abort": {
+      "private_agent_fixed": "Private Christmas lighting always uses Home Assistant’s built-in Assist agent."
     }
   },
   "entity": {

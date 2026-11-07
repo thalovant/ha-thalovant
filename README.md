@@ -1,3 +1,5 @@
+Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Document private Christmas lighting pairing and its access boundary.
+
 # Thalovant for Home Assistant
 
 Say "turn off the kitchen light" to any Thalovant device, at home or away, and
@@ -86,6 +88,35 @@ Open the integration and select **Configure**.
 | Option | What it means |
 | --- | --- |
 | Conversation agent | The agent that answers requests from the hub. The default is Home Assistant's own agent, which only acts on entities exposed to Assist. |
+
+### Private Christmas hubs
+
+If you run Christmas Protocol on your own HiveMind hub, turn on **Link a
+self-hosted Christmas hub** in the first setup screen. Use the private hub's
+root `wss://` URL with a certificate trusted by Home Assistant. Enter the access
+key, password and numeric connection ID for a dedicated Home Assistant client
+issued by the hub operator. Enter the separate numeric ID of the Voice client
+allowed to control the mirror's Christmas lighting.
+
+The private listener needs `hivemind-home-router` and one listener replica.
+The hub operator must bind the Home Assistant client to the same owner as the
+Voice client, give it the `home_assistant` connection kind and grant only
+`thalovant.home.response`. The link uses the existing Christmas lighting
+receiver in Home Assistant. It accepts the seven Christmas mirror lighting
+commands from the configured Voice client and uses the built-in Assist agent.
+The host and Voice ID stay fixed when you renew the credentials.
+
+After setup, check that the **Hub connection** sensor is on. The integration
+stores the credentials in its Home Assistant entry and retains the Noise key
+under `.storage/thalovant`. Enter the credentials in your trusted Home Assistant
+administration session. WSS secures the connection from Home Assistant to the hub.
+When removing the private integration entry, ask
+your hub operator to revoke its dedicated client. The credentials were issued
+by that hub, so its operator manages the link's lifecycle.
+
+See [private link implementation and validation](docs/index.md), the
+[Home router contract](https://github.com/thalovant/hivemind-home-router) and
+the [Christmas Protocol receiver](https://github.com/thalovant/thalovant-skill-christmas-protocol).
 
 ## What you get
 

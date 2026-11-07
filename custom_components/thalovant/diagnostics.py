@@ -5,7 +5,15 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_ACCOUNT_ID, CONF_CREDENTIALS, CONF_HUB_NAME, CONF_TOKENS
+from .const import (
+    CONF_ACCOUNT_ID,
+    CONF_CREDENTIALS,
+    CONF_HOME_CLIENT_ID,
+    CONF_HUB_NAME,
+    CONF_SELF_HOSTED,
+    CONF_TOKENS,
+    CONF_VOICE_CLIENT_ID,
+)
 from .models import ThalovantConfigEntry
 
 # The tokens and the connection's credentials are dropped whole; the account,
@@ -13,8 +21,10 @@ from .models import ThalovantConfigEntry
 TO_REDACT = {
     CONF_ACCOUNT_ID,
     CONF_CREDENTIALS,
+    CONF_HOME_CLIENT_ID,
     CONF_HUB_NAME,
     CONF_TOKENS,
+    CONF_VOICE_CLIENT_ID,
     "title",
     "unique_id",
 }
@@ -38,7 +48,11 @@ async def async_get_config_entry_diagnostics(
         ),
         "connection": {
             "connected": entry.runtime_data.connection.connected,
-            "endpoint": credentials.get("endpoint"),
+            "endpoint": (
+                "**REDACTED**"
+                if entry.data.get(CONF_SELF_HOSTED) is True
+                else credentials.get("endpoint")
+            ),
             "has_secret": bool(credentials.get("secret")),
             "token_scopes": list(entry.data.get(CONF_TOKENS, {}).get("scopes", [])),
         },

@@ -28,6 +28,7 @@ from .const import (
     ADMISSION_GRACE_PERIOD,
     CONF_CREDENTIALS,
     CONF_LINKED_AT,
+    CONF_SELF_HOSTED,
     CONF_TOKENS,
     DOMAIN,
     LOGGER,
@@ -36,6 +37,7 @@ from .const import (
 )
 from .handler import HomeRequestHandler, agent_issue_id
 from .models import ThalovantConfigEntry, ThalovantRuntimeData
+from .self_hosted import async_create_session, validate_credentials
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR]
 
@@ -140,12 +142,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     """Connect to the hub and answer its requests."""
     try:
         credentials = ConnectionCredentials.from_dict(entry.data[CONF_CREDENTIALS])
+        self_hosted = entry.data.get(CONF_SELF_HOSTED) is True
+        if self_hosted:
+            validate_credentials(credentials, entry.data)
+            session = async_create_session(hass)
+        else:
+            session = async_get_clientsession(hass)
         connection = HubConnection(
-            async_get_clientsession(hass),
+            session,
             credentials,
             state_dir=str(
                 _noise_root(hass) / _noise_dir_name(credentials.connection_id)
             ),
+            **({"self_hosted": True} if self_hosted else {}),
         )
     except (KeyError, TypeError, ValueError) as err:
         # Unreadable keys are replaced the same way rejected ones are.
@@ -234,6 +243,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
     _async_delete_key_issues(hass, entry.entry_id)
     if (directory := _noise_dir(hass, entry)) is not None:
         await hass.async_add_executor_job(shutil.rmtree, directory, True)
+    if entry.data.get(CONF_SELF_HOSTED) is True:
+        return
     try:
         tokens = Tokens.from_dict(entry.data[CONF_TOKENS])
     except KeyError, TypeError, ValueError:

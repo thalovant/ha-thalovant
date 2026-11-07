@@ -14,6 +14,9 @@ CONF_HUB_NAME: Final = "hub_name"
 CONF_TOKENS: Final = "tokens"
 CONF_CREDENTIALS: Final = "credentials"
 CONF_LINKED_AT: Final = "linked_at"
+CONF_SELF_HOSTED: Final = "self_hosted"
+CONF_HOME_CLIENT_ID: Final = "home_client_id"
+CONF_VOICE_CLIENT_ID: Final = "voice_client_id"
 
 # Keys in ConfigEntry.options.
 CONF_AGENT_ID: Final = "agent_id"
