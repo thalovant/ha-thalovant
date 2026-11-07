@@ -688,6 +688,7 @@ class HubConnection:
         options = {"protocol": "wss", "self_signed": False} if self_hosted else {}
         if self_hosted and identity.endpoint_for("wss") != credentials.endpoint:
             raise ValueError("Private hub identity does not match its endpoint")
+        self._self_hosted = self_hosted
         self._link = _sdk("AsyncHubSession").for_identity(
             identity, session=session, noise_state_dir=state_dir, **options
         )
@@ -722,10 +723,14 @@ class HubConnection:
         """Call back for every message of one type; returns the unsubscribe."""
 
         def relay(event: Any) -> None:
+            context = event.context
+            if self._self_hosted:
+                # The SDK rewrites source to this node's address on delivery.
+                # Private admission must use the original authenticated sender.
+                wire_context = getattr(event.raw, "wire_context", None)
+                context = wire_context if isinstance(wire_context, Mapping) else {}
             callback(
-                HubMessage(
-                    type=event.name, data=event.data, context=event.context, sdk=event
-                )
+                HubMessage(type=event.name, data=event.data, context=context, sdk=event)
             )
 
         return cast(Callable[[], None], self._link.on(msg_type, relay))

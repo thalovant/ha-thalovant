@@ -1,11 +1,11 @@
-Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Record the private link release and supported entry points.
+Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Update the private link release version.
 
 # Quick facts
 
 | Fact | Value |
 | --- | --- |
 | Project | `ha-thalovant` |
-| Home Assistant integration domain and version | `thalovant`, `0.2.3` |
+| Home Assistant integration domain and version | `thalovant`, `0.2.4` |
 | SDK requirement | `thalovant==0.10.0` |
 | Config entry points | `ThalovantConfigFlow.async_step_user()`, `async_step_self_hosted()`, `async_step_reauth()` |
 | Runtime entry points | `async_setup_entry()`, `async_unload_entry()`, `async_remove_entry()` |
