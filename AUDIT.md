@@ -1,4 +1,4 @@
-Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Record private link boundaries and verification limits.
+Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Verify router provenance on actual SDK delivery.
 
 # Audit
 
@@ -16,8 +16,16 @@ checks TLS, rejects redirects and uses the SDK's persistent Noise identity.
 [Request boundary](custom_components/thalovant/self_hosted.py),
 [transport regressions](tests/test_self_hosted_transport.py).
 
-Local validation passed 315 tests with 100% statement and branch coverage.
-The Home Assistant 2026.11.0 smoke passed with a real Assist automation and
-an in-memory hub connection.
+Version 0.2.3 dropped routed requests because the SDK's local event identifies
+the receiving node as the source. The same serialized request produces no reply
+on 0.2.3 and an exact Assist receipt on 0.2.4. The fixed integration checks the
+original context from the authenticated connection and denies events with a
+forged source or missing original context. The SDK retains the router
+destination and correlated session on the reply.
+[Routed request regression](tests/test_self_hosted_transport.py).
+
+Local validation passed 317 tests with 100% statement and branch coverage.
+The Home Assistant 2026.11.0 smoke used actual SDK receive and reply framing,
+the device registry and built-in Assist with an in-memory transport.
 Live hub admission, the physical mirror and restoration are separate acceptance
 checks for the deployment.
