@@ -670,6 +670,7 @@ class HubConnection:
         credentials: ConnectionCredentials,
         *,
         state_dir: str | None = None,
+        self_hosted: bool = False,
     ) -> None:
         """Prepare the link. Raises ValueError if the credentials are unusable.
 
@@ -684,8 +685,11 @@ class HubConnection:
                     "The stored connection credentials are unusable"
                 ) from err
             raise
+        options = {"protocol": "wss", "self_signed": False} if self_hosted else {}
+        if self_hosted and identity.endpoint_for("wss") != credentials.endpoint:
+            raise ValueError("Private hub identity does not match its endpoint")
         self._link = _sdk("AsyncHubSession").for_identity(
-            identity, session=session, noise_state_dir=state_dir
+            identity, session=session, noise_state_dir=state_dir, **options
         )
 
     @property

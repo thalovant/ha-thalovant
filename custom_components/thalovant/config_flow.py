@@ -19,11 +19,15 @@ from homeassistant.core import callback
 from homeassistant.helpers import issue_registry as ir, translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    BooleanSelector,
     ConversationAgentSelector,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
+    TextSelectorType,
 )
 from homeassistant.util import dt as dt_util
 
@@ -52,16 +56,25 @@ from .const import (
     CONF_ACCOUNT_ID,
     CONF_AGENT_ID,
     CONF_CREDENTIALS,
+    CONF_HOME_CLIENT_ID,
     CONF_HUB_ID,
     CONF_HUB_NAME,
     CONF_LINKED_AT,
+    CONF_SELF_HOSTED,
     CONF_TOKENS,
+    CONF_VOICE_CLIENT_ID,
     CONNECTION_KIND,
     DOMAIN,
     LOGGER,
     LOGIN_SCOPES,
 )
 from .handler import agent_issue_id
+from .self_hosted import (
+    connection_client_ids,
+    connection_secret,
+    credentials_for,
+    normalize_endpoint,
+)
 
 # Never poll faster than this, whatever the server says.
 MIN_POLL_INTERVAL: Final = 1
@@ -75,6 +88,10 @@ GUIDE_URL: Final = "https://docs.thalovant.com/manage/home-assistant/"
 
 # The picker's label for a hub that cannot link, when no translation has one.
 NOT_READY_LABEL: Final = "{hub} (can't link Home Assistant yet)"
+
+_CONF_ENDPOINT: Final = "endpoint"
+_CONF_ACCESS_KEY: Final = "access_key"
+_CONF_PASSWORD: Final = "password"
 
 
 class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
@@ -115,6 +132,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Explain the sign-in, then start it."""
         if user_input is None:
             return self._async_show_start_form()
+        if user_input.get(CONF_SELF_HOSTED) is True:
+            return await self.async_step_self_hosted()
         return await self._async_start_login()
 
     async def async_step_reauth(
@@ -125,6 +144,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         The stored API token is tried first; a device login only follows when
         the control plane rejects it too.
         """
+        if entry_data.get(CONF_SELF_HOSTED) is True:
+            return await self.async_step_self_hosted()
         try:
             self._tokens = Tokens.from_dict(entry_data[CONF_TOKENS])
         except KeyError, TypeError, ValueError:
@@ -139,6 +160,60 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         if user_input is None:
             return self._async_show_start_form()
         return await self._async_start_login()
+
+    async def async_step_self_hosted(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Pair operator-issued credentials for a private Christmas hub."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            try:
+                endpoint = normalize_endpoint(user_input.get(_CONF_ENDPOINT))
+                home_id, voice_id = connection_client_ids(user_input)
+                credentials = credentials_for(
+                    endpoint,
+                    home_id,
+                    connection_secret(user_input.get(_CONF_ACCESS_KEY)),
+                    connection_secret(user_input.get(_CONF_PASSWORD)),
+                )
+            except ValueError:
+                errors["base"] = "invalid_private_link"
+            else:
+                await self.async_set_unique_id(credentials.hub_id)
+                data = {
+                    CONF_HUB_ID: credentials.hub_id,
+                    CONF_HUB_NAME: credentials.name,
+                    CONF_CREDENTIALS: credentials.to_dict(),
+                    CONF_SELF_HOSTED: True,
+                    CONF_HOME_CLIENT_ID: home_id,
+                    CONF_VOICE_CLIENT_ID: voice_id,
+                }
+                if self.source == SOURCE_REAUTH:
+                    entry = self._get_reauth_entry()
+                    self._abort_if_unique_id_mismatch(reason="different_private_hub")
+                    if entry.data.get(CONF_VOICE_CLIENT_ID) != voice_id:
+                        return self.async_abort(reason="different_private_hub")
+                    return self.async_update_reload_and_abort(entry, data=data)
+                self._abort_if_unique_id_configured()
+                return self.async_create_entry(title=credentials.name, data=data)
+
+        return self.async_show_form(
+            step_id="self_hosted",
+            data_schema=_schema(
+                {
+                    probatio.Required(_CONF_ENDPOINT): TextSelector(),
+                    probatio.Required(CONF_HOME_CLIENT_ID): TextSelector(),
+                    probatio.Required(CONF_VOICE_CLIENT_ID): TextSelector(),
+                    probatio.Required(_CONF_ACCESS_KEY): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                    probatio.Required(_CONF_PASSWORD): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            errors=errors,
+        )
 
     async def async_step_login(
         self, user_input: dict[str, Any] | None = None
@@ -406,7 +481,11 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         step_id = self._start_step_id
         return self.async_show_form(
             step_id=step_id,
-            data_schema=_schema({}),
+            data_schema=_schema(
+                {probatio.Optional(CONF_SELF_HOSTED, default=False): BooleanSelector()}
+                if step_id == "user"
+                else {}
+            ),
             errors=errors,
             description_placeholders=(
                 {"guide_url": GUIDE_URL} if step_id == "user" else None
@@ -612,6 +691,8 @@ class ThalovantOptionsFlow(OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Manage the options."""
+        if self.config_entry.data.get(CONF_SELF_HOSTED) is True:
+            return self.async_abort(reason="private_agent_fixed")
         errors: dict[str, str] = {}
         if user_input is not None:
             if (

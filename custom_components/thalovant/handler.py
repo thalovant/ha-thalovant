@@ -23,6 +23,8 @@ from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
     CONF_HUB_ID,
+    CONF_SELF_HOSTED,
+    CONF_VOICE_CLIENT_ID,
     CONVERSE_TIMEOUT,
     DOMAIN,
     HUB_TIMEOUT,
@@ -34,6 +36,7 @@ from .const import (
     RESPONSE_MESSAGE_TYPE,
 )
 from .models import ThalovantConfigEntry
+from .self_hosted import permits_lighting_request
 
 # Error codes this integration adds to the ones Assist reports.
 ERROR_TIMEOUT = "timeout"
@@ -190,6 +193,7 @@ class HomeRequestHandler:
         self._hass = hass
         self._entry = entry
         self._connection = connection
+        self._self_hosted = entry.data.get(CONF_SELF_HOSTED) is True
         self._in_flight = 0
 
     @callback
@@ -211,6 +215,11 @@ class HomeRequestHandler:
         reply what is left. An answer with no time left is not sent at all,
         since the hub would take it for the next request's.
         """
+        if self._self_hosted and not permits_lighting_request(
+            message, self._entry.data.get(CONF_VOICE_CLIENT_ID)
+        ):
+            return
+
         deadline = message.received_at + HUB_TIMEOUT
 
         def left() -> float:
@@ -332,9 +341,9 @@ class HomeRequestHandler:
             LOGGER.debug("Request %s carries no utterance", request_id)
             return error_response(request_id, ERROR_UNKNOWN, conversation_id)
 
-        agent_id: str = self._entry.options.get(
-            CONF_AGENT_ID, conversation.HOME_ASSISTANT_AGENT
-        )
+        agent_id: str = conversation.HOME_ASSISTANT_AGENT
+        if not self._self_hosted:
+            agent_id = self._entry.options.get(CONF_AGENT_ID, agent_id)
         if conversation.async_get_agent_info(self._hass, agent_id) is None:
             LOGGER.debug("Request %s: agent %s is not available", request_id, agent_id)
             ir.async_create_issue(

@@ -3,7 +3,13 @@
     "step": {
       "user": {
         "title": "Relier votre hub",
-        "description": "Home Assistant se connecte à votre compte Thalovant avec un code à usage unique, puis au hub de votre choix. La liaison est une connexion sortante : aucun port à ouvrir, et aucun jeton Home Assistant ne quitte votre domicile.\n\nCliquez sur **Valider** pour obtenir un code. Le [guide]({guide_url}) (en anglais) détaille chaque étape."
+        "description": "Home Assistant se connecte à votre compte Thalovant avec un code à usage unique, puis au hub de votre choix. La liaison est une connexion sortante : aucun port à ouvrir, et aucun jeton Home Assistant ne quitte votre domicile.\n\nCliquez sur **Valider** pour obtenir un code. Le [guide]({guide_url}) (en anglais) détaille chaque étape.",
+        "data": {
+          "self_hosted": "Associer un hub de Noël auto-hébergé"
+        },
+        "data_description": {
+          "self_hosted": "Utilisez une connexion dédiée fournie par l’administrateur de votre hub privé. Laissez cette option désactivée pour vous connecter à votre compte Thalovant."
+        }
       },
       "reauth_confirm": {
         "title": "Se reconnecter",
@@ -17,6 +23,22 @@
         },
         "data_description": {
           "hub_id": "Les demandes des appareils de ce hub arriveront sur ce Home Assistant. Les hubs qui peuvent être reliés apparaissent en premier. Vous pourrez relier d'autres hubs plus tard."
+        }
+      },
+      "self_hosted": {
+        "title": "Associer un hub de Noël privé",
+        "description": "Saisissez l’URL WebSocket sécurisée et les identifiants Home Assistant dédiés fournis par l’administrateur de votre hub. Seule la connexion vocale indiquée peut demander à l’agent Assist intégré de contrôler l’éclairage du miroir de Noël.",
+        "data": {
+          "endpoint": "URL WebSocket du hub",
+          "home_client_id": "ID de connexion Home Assistant",
+          "voice_client_id": "ID de la connexion vocale autorisée",
+          "access_key": "Clé d’accès Home Assistant",
+          "password": "Mot de passe Home Assistant"
+        },
+        "data_description": {
+          "endpoint": "Utilisez l’URL WSS à la racine de votre hub privé, par exemple wss://hub.example.com. Home Assistant doit faire confiance au certificat.",
+          "home_client_id": "ID numérique attribué par le hub à la connexion Home Assistant dédiée.",
+          "voice_client_id": "ID numérique attribué par le hub à la connexion vocale autorisée à contrôler l’éclairage de Noël."
         }
       }
     },
@@ -36,7 +58,8 @@
       "login_expired": "Le code a expiré avant d'être approuvé. Cliquez sur **Valider** pour en obtenir un nouveau.",
       "plan_limit": "Votre forfait Thalovant n'a plus de place pour une nouvelle liaison. Supprimez-en une dans le tableau de bord Thalovant, puis réessayez.",
       "public_hubs_only": "Votre forfait Thalovant ne permet de relier Home Assistant qu'à des hubs publics. Choisissez un hub public, ou changez de forfait pour utiliser le vôtre.",
-      "unknown": "Une erreur inattendue s'est produite. Réessayez ; si elle se répète, le journal de Home Assistant donne les détails."
+      "unknown": "Une erreur inattendue s'est produite. Réessayez ; si elle se répète, le journal de Home Assistant donne les détails.",
+      "invalid_private_link": "Saisissez une URL WSS sécurisée, deux identifiants de connexion numériques distincts et les identifiants valides fournis par l’administrateur."
     },
     "abort": {
       "all_hubs_linked": "Tous les hubs de ce compte Thalovant sont déjà reliés à ce Home Assistant.",
@@ -45,7 +68,8 @@
       "hub_not_found": "Ce hub n'est plus disponible pour votre compte Thalovant.",
       "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
       "reauth_successful": "Home Assistant est de nouveau relié au hub.",
-      "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison."
+      "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison.",
+      "different_private_hub": "La nouvelle connexion doit viser le même hub privé et garder le même ID de connexion vocale autorisée."
     }
   },
   "options": {
@@ -62,6 +86,9 @@
     },
     "error": {
       "agent_not_found": "Cet agent de conversation n'est pas disponible."
+    },
+    "abort": {
+      "private_agent_fixed": "L’éclairage de Noël privé utilise toujours l’agent Assist intégré à Home Assistant."
     }
   },
   "entity": {
