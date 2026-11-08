@@ -9,7 +9,7 @@
           "self_hosted": "Link a self-hosted Christmas hub"
         },
         "data_description": {
-          "link_method": "**Link account** opens Thalovant in your browser, and your approval comes back to this Home Assistant through My Home Assistant. **Link with a code instead** shows a one-time code to approve from a phone or computer on this Home Assistant's network.",
+          "link_method": "Either way, approve from a phone or computer on the same network as this Home Assistant, with any VPN turned off. **Link account** opens Thalovant in your browser and comes back through My Home Assistant. **Link with a code instead** shows a one-time code.",
           "self_hosted": "Use a dedicated connection issued by your private hub operator. Leave this off to sign in to your Thalovant account."
         }
       },
@@ -20,16 +20,16 @@
           "link_method": "How to link"
         },
         "data_description": {
-          "link_method": "**Link account** opens Thalovant in your browser, and your approval comes back to this Home Assistant through My Home Assistant. **Link with a code instead** shows a one-time code to approve from a phone or computer on this Home Assistant's network."
+          "link_method": "Either way, approve from a phone or computer on the same network as this Home Assistant, with any VPN turned off. **Link account** opens Thalovant in your browser and comes back through My Home Assistant. **Link with a code instead** shows a one-time code."
         }
       },
       "auth": {
         "title": "Approve in your browser",
-        "description": "Thalovant opens in a new tab. Sign in if it asks, check that the request names **Home Assistant**, and approve it. The browser then comes back to this Home Assistant through My Home Assistant, and this step moves on by itself."
+        "description": "Thalovant opens in a new tab. This phone or computer must be on the same network as this Home Assistant (your home Wi-Fi, with any VPN turned off): Thalovant accepts the approval only from there. Sign in if it asks, check that the request names **Home Assistant**, and approve it. This step moves on by itself once My Home Assistant brings the browser back."
       },
       "no_my_home_assistant": {
         "title": "Link with a code instead",
-        "description": "**Link account** brings your approval back through My Home Assistant, which is not turned on in this Home Assistant. Thalovant only sends it back that way, so that it reaches the Home Assistant that asked for it and no other. To use **Link account**, add `my:` to `configuration.yaml` (`default_config:` includes it) and restart Home Assistant.\n\nSelect **Submit** to link with a one-time code instead."
+        "description": "**Link account** brings your approval back through My Home Assistant, which is not turned on in this Home Assistant, and Thalovant sends it back no other way. To use **Link account**, add `my:` to `configuration.yaml` (`default_config:` includes it) and restart Home Assistant.\n\nSelect **Submit** to link with a one-time code instead."
       },
       "hub": {
         "title": "Choose a hub",
@@ -71,6 +71,7 @@
       "hub_cannot_link": "This hub can't link Home Assistant yet. Pick another hub, or try again later.",
       "invalid_auth": "Thalovant did not accept the sign-in. Select **Submit** to sign in again.",
       "link_failed": "Thalovant did not accept the approval. An approval is only good for a minute: select **Submit** to link again, or choose **Link with a code instead**.",
+      "link_wrong_network": "Thalovant did not accept the approval. This usually means it came from a different network than this Home Assistant's; an approval more than a minute old or already used is refused too. From a phone or computer on the same network as this Home Assistant, with any VPN turned off, select **Submit** to link again.",
       "login_denied": "The sign-in was declined. Select **Submit** to try again.",
       "login_expired": "The code expired before it was approved. Select **Submit** to get a new one.",
       "plan_limit": "Your Thalovant plan has no room for another link. Remove one in the Thalovant dashboard, then try again.",

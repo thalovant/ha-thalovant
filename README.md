@@ -62,6 +62,10 @@ Home Assistant.
 
 ## Linking your hub
 
+Do this from a phone or computer on the same network as Home Assistant (your
+home Wi-Fi, with any VPN turned off): Thalovant accepts the approval only from
+Home Assistant's own network.
+
 1. Go to **Settings** > **Devices & services**, select **Add integration**, and
    choose **Thalovant**.
 2. Leave **Link account** selected and select **Submit**. Thalovant opens in a
@@ -94,13 +98,16 @@ account** without My Home Assistant, the setup says so and offers the code.
 
 ### Why Link account is the default
 
-A one-time code can be passed on: anyone who is sent the link and the code can
-approve it and give their account away, or be tricked into it. **Link account**
-cannot be relayed like that. Your approval comes back through My Home Assistant
-to the very Home Assistant that started the setup, and it is worth nothing
-without a secret (a PKCE verifier) that never leaves that Home Assistant.
-Spotify, Google, Netatmo and other cloud integrations link accounts the same
-way. Both methods give Home Assistant the same token and the same link.
+**Link account** has no code to type, and only the Home Assistant that started
+the setup can use the approval: the request is signed with its own secret, and
+turning the approval into a token takes a key (a PKCE verifier) that never
+leaves it. Spotify, Google, Netatmo and other cloud integrations link accounts
+the same way. Both methods give Home Assistant the same token and the same link.
+
+Either way, approve only sign-in requests you started. Thalovant completes a
+link only when the approval comes from the same network as the Home Assistant
+that asked, so a link sent to someone on another computer or network gives
+them nothing.
 
 ### What the setup asks for
 
@@ -272,9 +279,11 @@ new code.
 to `configuration.yaml` (or keep `default_config:`) and restart, or select
 **Submit** to link with a code.
 
-**"Thalovant did not accept the approval".** An approval is good for one
-minute and only once. Select **Submit** to link again; if it keeps happening,
-choose **Link with a code instead**.
+**"Thalovant did not accept the approval. This usually means it came from a
+different network".** Thalovant refuses an approval given from another network
+than Home Assistant's, for example over mobile data, a VPN or remote access. It
+also refuses one more than a minute old or already used. From a phone or
+computer on Home Assistant's network, select **Submit** to link again.
 
 **"Invalid state. Is My Home Assistant configured to go to the right
 instance?"** My Home Assistant sent your browser to another Home Assistant.

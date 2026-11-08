@@ -209,17 +209,26 @@ async def test_exchange_posts_json(
 
 
 @pytest.mark.parametrize(
-    ("status", "body", "error"),
+    ("status", "body", "error", "detail"),
     [
-        (400, '{"detail": "invalid_grant"}', LinkRejectedError),
-        (400, "", LinkRejectedError),
-        (401, '{"detail": "Not authenticated"}', LinkRejectedError),
-        (404, '{"detail": "Not Found"}', LinkRejectedError),
-        (429, '{"detail": "Too many requests"}', ThalovantConnectionError),
-        (500, "oops", ThalovantConnectionError),
-        (503, "", ThalovantConnectionError),
-        (200, "<html>not json</html>", ThalovantApiError),
-        (200, '["not", "an", "object"]', ThalovantApiError),
+        # What Thalovant answers for a code approved from another network,
+        # an expired or reused one, or one that is not this flow's.
+        (400, '{"detail": "invalid_grant"}', LinkRejectedError, "invalid_grant"),
+        (400, "", LinkRejectedError, None),
+        (400, '["invalid_grant"]', LinkRejectedError, None),
+        (400, '{"detail": 7}', LinkRejectedError, None),
+        (
+            401,
+            '{"detail": "Not authenticated"}',
+            LinkRejectedError,
+            "Not authenticated",
+        ),
+        (404, '{"detail": "Not Found"}', LinkRejectedError, "Not Found"),
+        (429, '{"detail": "Too many requests"}', ThalovantConnectionError, None),
+        (500, "oops", ThalovantConnectionError, None),
+        (503, "", ThalovantConnectionError, None),
+        (200, "<html>not json</html>", ThalovantApiError, None),
+        (200, '["not", "an", "object"]', ThalovantApiError, None),
     ],
 )
 async def test_exchange_errors(
@@ -228,6 +237,7 @@ async def test_exchange_errors(
     status: int,
     body: str,
     error: type[Exception],
+    detail: str | None,
 ) -> None:
     """Each failure has its type, and no message names the code or the verifier."""
     token_endpoint.status = status
@@ -237,6 +247,8 @@ async def test_exchange_errors(
         await implementation.async_resolve_external_data(_came_back())
     if status != 200:
         assert getattr(caught.value, "status", None) == status
+    if isinstance(caught.value, LinkRejectedError):
+        assert caught.value.code == detail
     for text in (str(caught.value), repr(caught.value)):
         assert CODE not in text
         assert implementation.code_verifier not in text

@@ -1,16 +1,24 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account through My Home Assistant replaces the code as the default sign-in.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account is accepted only from Home Assistant's network; no relay claims.
 
 # Maintenance report
 
 ## 2026-11-08 · 0.3.0
 
-**Link account** is the default sign-in. A device code can be relayed to
-somebody else (device-code phishing); Home Assistant's own OAuth 2 flow cannot:
-the browser comes back through My Home Assistant to the very instance that
-started the flow, Home Assistant signs the `state` with its own secret, and
-PKCE makes a code read on the way useless without the verifier, which never
-leaves that Home Assistant. **Link with a code instead** keeps the device login
-exactly as it was.
+**Link account** is the default sign-in: Home Assistant's own OAuth 2 flow
+with PKCE, approved in the browser and brought back by My Home Assistant.
+Home Assistant signs the `state` with its own secret, and a code is useless
+without the verifier, which never leaves the Home Assistant that started the
+flow. **Link with a code instead** keeps the device login exactly as it was.
+
+My Home Assistant sends the browser to whichever Home Assistant it is set up
+for, so the browser alone does not decide who gets the link. Thalovant
+(thalovant-api #502) therefore accepts the Home Assistant exchange only from
+the network that approved it; an exchange from another network gets 400
+`invalid_grant` and the code is spent. That stops a link sent to someone on
+another computer or network: it gives them nothing. It does not make approving
+safe, so approve only sign-in requests you started. The Link account step says
+to approve from a phone or computer on Home Assistant's network, with any VPN
+off, as the code step has since 0.2.5.
 
 - [`ThalovantConfigFlow`](custom_components/thalovant/config_flow.py) now
   subclasses `AbstractOAuth2FlowHandler`. The first step and `reauth_confirm`
@@ -27,7 +35,10 @@ exactly as it was.
   no secret) adds `scope` and `device_name` (at most 120 characters) to the
   authorize URL and posts the exchange to `/v1/auth/native/token` as a JSON
   body of exactly `code`, `code_verifier`, `client_id` and `redirect_uri`.
-  400 is `LinkRejectedError` (`link_failed`), 429 and 5xx or no answer are
+  A refusal is `LinkRejectedError` with the API's `detail` as its `code`.
+  `invalid_grant` is `link_wrong_network`, which says the approval usually
+  came from another network and that an expired or reused one is refused too;
+  any other 4xx is `link_failed`. 429 and 5xx or no answer are
   `cannot_connect`. There is no refresh token.
 - `async_step_creation()` replaces Home Assistant's own step: it drops the
   code, reads the answer with `tokens_from_answer()` (the SDK's leniency for a
@@ -37,24 +48,26 @@ exactly as it was.
   (`error=access_denied`) is `login_denied`; any other error is `link_failed`.
 - Entry data, `VERSION` 1 and `MINOR_VERSION` 1 are unchanged, so entries
   linked with a code before 0.3.0 load and renew as they did.
-- English and Canadian French copy for the choice, the external step, the
-  missing My Home Assistant step and `link_failed`; `strings.json` and
+- English and Canadian French copy for the choice, the external step (with
+  the same-network advice), the missing My Home Assistant step,
+  `link_wrong_network` and `link_failed`; `strings.json` and
   `translations/en.json` are identical (`cmp`).
 
 Verification, local, Python 3.14.10, Home Assistant 2026.10.4
 (`pytest-homeassistant-custom-component==0.13.375`), SDK 0.10.0 installed
 under Home Assistant's package constraints as CI does: `pytest --cov
---cov-report=term-missing` passed 370 tests with 100% statement and branch
+--cov-report=term-missing` passed 374 tests with 100% statement and branch
 coverage; `ruff check .`, `ruff format --check .` and `mypy` passed; hassfest
 (`ghcr.io/home-assistant/hassfest:latest` run with podman on the branch)
 reported 0 invalid integrations. The existing device-login tests pass with
 the code chosen explicitly. [`tests/test_oauth.py`](tests/test_oauth.py)
 checks the authorize URL's every parameter, the RFC 7636 vector and, on a
 local token endpoint over Home Assistant's own client session, the JSON body
-and each failure. [`tests/test_link_account.py`](tests/test_link_account.py)
-drives the flow, once through Home Assistant's `OAuth2AuthorizeCallbackView`.
-Not verified: a real browser, My Home Assistant and the live Thalovant
-dashboard and API, and Home Assistant 2026.9.
+and each failure with its detail. [`tests/test_link_account.py`](tests/test_link_account.py)
+drives the flow, once through Home Assistant's `OAuth2AuthorizeCallbackView`,
+and maps `invalid_grant` to `link_wrong_network` for setup and reauth. Not
+verified: a real browser, My Home Assistant, the live Thalovant dashboard and
+API (including #502's network check), and Home Assistant 2026.9.
 
 Transparency Report: AI Model: Claude Opus 5.5. Actions Taken: designed and
 wrote the OAuth 2 sign-in, its tests and the English and Canadian French

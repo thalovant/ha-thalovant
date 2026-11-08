@@ -1,10 +1,12 @@
 """Link account: Home Assistant's own OAuth 2 flow with PKCE, against Thalovant.
 
-The person approves on the Thalovant dashboard, and the browser brings the
-code back through My Home Assistant to the very Home Assistant that started
-the flow: the state is signed with that Home Assistant's own secret, and the
-code is worth nothing without the PKCE verifier, which never leaves it. That
-is what a device code cannot promise, since a code can be passed on.
+The person approves on the Thalovant dashboard, and My Home Assistant brings
+the browser back to the Home Assistant it is set up for. Only the one that
+started the flow can use the code: the state is signed with its own secret,
+and the code is worth nothing without the PKCE verifier, which never leaves
+it. That does not make approving somebody else's request safe, so Thalovant
+also accepts the exchange only from the network the approval came from: a
+link sent to someone on another computer or network gives them nothing.
 
 What comes back is the same setup token a device login gives, for the same
 registered app: the config flow goes on with it exactly as it does after a
@@ -37,10 +39,12 @@ from .const import (
 
 
 class LinkRejectedError(ThalovantError):
-    """Thalovant refused the code: used, expired (it lives 60 s), or not this flow's.
+    """Thalovant refused the code; code is the API's detail when it gave one.
 
-    The API answers every such failure 400 invalid_grant. Linking again,
-    which makes a new code and a new verifier, is the way out.
+    The API answers 400 invalid_grant for a code approved from another
+    network than the exchange's (the likeliest cause), one older than 60
+    seconds, one already used, or one that is not this flow's. Linking
+    again, which makes a new code and a new verifier, is the way out.
     """
 
 
@@ -116,6 +120,7 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
                     raise LinkRejectedError(
                         f"Thalovant refused the link with HTTP {status}",
                         status=status,
+                        code=await _detail(response),
                     )
                 answer = await response.json(content_type=None)
         except aiohttp.ClientError as err:
@@ -136,6 +141,16 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
         raise ThalovantApiError(
             "A Thalovant link has no refresh token; link the account again"
         )
+
+
+async def _detail(response: aiohttp.ClientResponse) -> str | None:
+    """The detail of a refusal, such as invalid_grant, when it is a string."""
+    try:
+        body = await response.json(content_type=None)
+    except ValueError:
+        return None
+    detail = body.get("detail") if isinstance(body, Mapping) else None
+    return detail if isinstance(detail, str) else None
 
 
 def tokens_from_answer(answer: Mapping[str, Any]) -> Tokens:

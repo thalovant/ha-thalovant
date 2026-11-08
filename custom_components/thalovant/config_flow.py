@@ -107,9 +107,10 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     """Link a Thalovant hub: sign in, pick a hub, create its connection.
 
     Signing in is Link account by default: Home Assistant's OAuth 2 flow
-    with PKCE, whose approval comes back through My Home Assistant to this
-    installation only. Link with a code instead is the device login. Both
-    give the same setup token, and the flow goes on the same way after it.
+    with PKCE, whose approval comes back through My Home Assistant. Link with
+    a code instead is the device login. Thalovant accepts either only when it
+    is approved from this Home Assistant's network. Both give the same setup
+    token, and the flow goes on the same way after it.
     """
 
     DOMAIN = DOMAIN
@@ -215,9 +216,16 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
             tokens = tokens_from_answer(answer)
         except LinkRejectedError as err:
             LOGGER.warning(
-                "Thalovant did not accept the approval (HTTP %s)", err.status
+                "Thalovant did not accept the approval (HTTP %s, %s)",
+                err.status,
+                err.code,
             )
-            error = "link_failed"
+            # invalid_grant now mostly means the approval came from another
+            # network than this Home Assistant's; it also covers an expired
+            # or reused code, so the message says "usually".
+            error = (
+                "link_wrong_network" if err.code == "invalid_grant" else "link_failed"
+            )
         except ThalovantConnectionError, TimeoutError:
             error = "cannot_connect"
         except ThalovantApiError as err:

@@ -9,7 +9,7 @@
           "self_hosted": "Associer un hub de Noël auto-hébergé"
         },
         "data_description": {
-          "link_method": "**Relier le compte** ouvre Thalovant dans votre navigateur, et votre approbation revient à ce Home Assistant par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique à approuver depuis un téléphone ou un ordinateur branché au réseau de ce Home Assistant.",
+          "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique.",
           "self_hosted": "Utilisez une connexion dédiée fournie par l’administrateur de votre hub privé. Laissez cette option désactivée pour vous connecter à votre compte Thalovant."
         }
       },
@@ -20,16 +20,16 @@
           "link_method": "Méthode de liaison"
         },
         "data_description": {
-          "link_method": "**Relier le compte** ouvre Thalovant dans votre navigateur, et votre approbation revient à ce Home Assistant par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique à approuver depuis un téléphone ou un ordinateur branché au réseau de ce Home Assistant."
+          "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique."
         }
       },
       "auth": {
         "title": "Approuver dans votre navigateur",
-        "description": "Thalovant s'ouvre dans un nouvel onglet. Connectez-vous si on vous le demande, vérifiez que la demande porte le nom **Home Assistant**, puis approuvez-la. Le navigateur revient ensuite à ce Home Assistant par My Home Assistant, et cette étape se poursuit d'elle-même."
+        "description": "Thalovant s'ouvre dans un nouvel onglet. Ce téléphone ou cet ordinateur doit être connecté au même réseau que ce Home Assistant (votre Wi-Fi à la maison, sans RPV) : Thalovant n'accepte l'approbation que depuis ce réseau. Connectez-vous si on vous le demande, vérifiez que la demande porte le nom **Home Assistant**, puis approuvez-la. Cette étape se poursuit d'elle-même dès que My Home Assistant ramène le navigateur."
       },
       "no_my_home_assistant": {
         "title": "Relier avec un code plutôt",
-        "description": "**Relier le compte** ramène votre approbation par My Home Assistant, qui n'est pas activé dans ce Home Assistant. Thalovant ne la renvoie que par ce chemin, pour qu'elle parvienne au Home Assistant qui l'a demandée et à aucun autre. Pour utiliser **Relier le compte**, ajoutez `my:` à `configuration.yaml` (`default_config:` l'inclut), puis redémarrez Home Assistant.\n\nCliquez sur **Valider** pour relier plutôt avec un code à usage unique."
+        "description": "**Relier le compte** ramène votre approbation par My Home Assistant, qui n'est pas activé dans ce Home Assistant, et Thalovant ne la renvoie par aucun autre chemin. Pour utiliser **Relier le compte**, ajoutez `my:` à `configuration.yaml` (`default_config:` l'inclut), puis redémarrez Home Assistant.\n\nCliquez sur **Valider** pour relier plutôt avec un code à usage unique."
       },
       "hub": {
         "title": "Choisir un hub",
@@ -71,6 +71,7 @@
       "hub_cannot_link": "Ce hub ne peut pas encore être relié à Home Assistant. Choisissez-en un autre, ou réessayez plus tard.",
       "invalid_auth": "Thalovant n'a pas accepté la connexion. Cliquez sur **Valider** pour vous reconnecter.",
       "link_failed": "Thalovant n'a pas accepté l'approbation. Une approbation n'est valide qu'une minute : cliquez sur **Valider** pour relier de nouveau, ou choisissez **Relier avec un code plutôt**.",
+      "link_wrong_network": "Thalovant n'a pas accepté l'approbation. Le plus souvent, elle provient d'un autre réseau que celui de ce Home Assistant ; une approbation de plus d'une minute ou déjà utilisée est aussi refusée. Depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV, cliquez sur **Valider** pour relier de nouveau.",
       "login_denied": "La connexion a été refusée. Cliquez sur **Valider** pour réessayer.",
       "login_expired": "Le code a expiré avant d'être approuvé. Cliquez sur **Valider** pour en obtenir un nouveau.",
       "plan_limit": "Votre forfait Thalovant n'a plus de place pour une nouvelle liaison. Supprimez-en une dans le tableau de bord Thalovant, puis réessayez.",

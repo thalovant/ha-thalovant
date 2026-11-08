@@ -1,4 +1,4 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Answer the Link account questions of 0.3.0.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Link account is accepted only from Home Assistant's network; no relay claims.
 
 # FAQ
 
@@ -8,11 +8,21 @@ browser and comes back through My Home Assistant; the code is the device
 login of 0.2. See
 [`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py).
 
-**Why is Link account safer than a code?** A code can be sent to somebody
-else, who approves it with their account (device-code phishing). Link
-account's approval comes back only to the Home Assistant that started it,
+**What does Link account add over a code?** No code to type, and only the
+Home Assistant that started the setup can use the approval: the request is
 signed with its own secret, and the code is useless without the PKCE verifier
-that Home Assistant keeps. See [`oauth.py`](custom_components/thalovant/oauth.py).
+that Home Assistant keeps. Neither method makes approving somebody else's
+request safe, so approve only sign-in requests you started. Thalovant
+completes either only when it is approved from the same network as the
+Home Assistant that asked, so a link sent to someone on another computer or
+network gives them nothing. See [`oauth.py`](custom_components/thalovant/oauth.py).
+
+**Link account says Thalovant did not accept the approval.** Thalovant answers
+`invalid_grant` (error `link_wrong_network`) when the approval came from
+another network than Home Assistant's, for example over mobile data, a VPN or
+remote access, and also when it is more than a minute old or already used. Link
+again from a phone or computer on Home Assistant's network. See
+[`ThalovantConfigFlow.async_step_creation()`](custom_components/thalovant/config_flow.py).
 
 **Link account offers a code instead. Why?** My Home Assistant is not turned
 on, so Home Assistant's redirect is not `https://my.home-assistant.io/redirect/oauth`,

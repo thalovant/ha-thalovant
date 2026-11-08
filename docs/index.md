@@ -1,4 +1,4 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Index Link account, the OAuth 2 sign-in through My Home Assistant.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Link account's same-network rule and its link_wrong_network error.
 
 # Thalovant for Home Assistant
 
@@ -28,6 +28,13 @@ Home Assistant brings the browser back. The implementation posts the code
 exchange as JSON; `async_step_creation()` turns the answer into the same
 `Tokens` a device login gives, and the flow continues at `async_step_account()`
 exactly as it does after a code.
+
+Thalovant accepts the exchange only from the network that approved it
+(thalovant-api #502), as it accepts a code's approval only from the device's
+network. My Home Assistant sends the browser to whichever Home Assistant it is
+set up for, so the signed state and PKCE alone do not decide who links. A 400
+`invalid_grant` becomes the error `link_wrong_network`, which says the
+approval usually came from another network.
 
 The API side (client `thalovant-home-assistant`, the consent page and
 `/v1/auth/native/token`) is described in the Thalovant API and the browser

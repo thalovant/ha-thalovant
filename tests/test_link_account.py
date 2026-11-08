@@ -229,15 +229,21 @@ async def test_link_account_invalid_grant(
     aioclient_mock: AiohttpClientMocker,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    """A refused code goes back to the first step; linking again starts afresh."""
+    """invalid_grant says the approval likely came from another network.
+
+    Thalovant spends a code exchanged from another network than the one that
+    approved it, and answers 400 invalid_grant, as it does for an expired or
+    reused code. The first step says which is likeliest; linking again starts
+    afresh.
+    """
     aioclient_mock.post(LINK_TOKEN_URL, status=400, json={"detail": "invalid_grant"})
     first = await _link(hass)
     result = await _come_back(hass, first)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
-    assert result["errors"] == {"base": "link_failed"}
+    assert result["errors"] == {"base": "link_wrong_network"}
     assert _method_field(result)[0].default() == LINK_ACCOUNT
-    assert "did not accept the approval (HTTP 400)" in caplog.text
+    assert "did not accept the approval (HTTP 400, invalid_grant)" in caplog.text
     assert CODE not in caplog.text
 
     aioclient_mock.clear_requests()
@@ -257,6 +263,9 @@ async def test_link_account_invalid_grant(
         ({"exc": aiohttp.ClientConnectionError()}, "cannot_connect"),
         ({"exc": TimeoutError()}, "cannot_connect"),
         ({"status": 404, "json": {"detail": "Not Found"}}, "link_failed"),
+        # A 400 that does not say invalid_grant claims nothing about networks.
+        ({"status": 400, "json": {"detail": "invalid_request"}}, "link_failed"),
+        ({"status": 400, "text": ""}, "link_failed"),
         ({"json": {"token_type": "bearer"}}, "unknown"),
         ({"text": "<html></html>"}, "unknown"),
     ],
@@ -451,7 +460,7 @@ async def test_reauth_link_failure_returns_to_confirm(
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await _come_back(hass, result)
     assert result["step_id"] == "reauth_confirm"
-    assert result["errors"] == {"base": "link_failed"}
+    assert result["errors"] == {"base": "link_wrong_network"}
 
 
 @pytest.mark.usefixtures("my_home_assistant", "token_endpoint")
