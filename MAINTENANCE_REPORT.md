@@ -1,6 +1,26 @@
-Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Document the routed Christmas request correction.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Say to approve the sign-in from Home Assistant's own network.
 
 # Maintenance report
+
+## 2026-11-08 · 0.2.5
+
+The sign-in step (`wait_for_login` in [strings.json](custom_components/thalovant/strings.json),
+[en](custom_components/thalovant/translations/en.json) and
+[fr](custom_components/thalovant/translations/fr.json)) now says to open the
+link on a phone or computer on the same network as this Home Assistant, with
+any VPN off. Thalovant now approves a device sign-in only from the device's own
+network (thalovant-api `fix/device-approval-same-network`), so a code sent to
+somebody else cannot give them the account. Setting up through remote access
+from another network is refused until the browser is on the home network.
+
+`strings.json` and `translations/en.json` stay identical (`cmp`). The copy is
+the only change; the flow and its placeholders are unchanged, which
+`tests/test_config_flow.py` asserts. The suite and hassfest run in CI (the
+local Python 3.14 environment could not be built: the disk quota was full).
+
+Transparency Report: AI Model: Claude Opus 5.5. Actions Taken: wrote the copy
+in English and Canadian French. Oversight: the owner's request of 2026-11-08;
+released as 0.2.5 on the owner's "deploy all", built like 0.2.4: `git archive --format=zip --prefix=ha-thalovant-0.2.5/ v0.2.5 LICENSE README.md custom_components/thalovant docs hacs.json` (the same command rebuilds 0.2.4's published zip byte for byte) and its SHA256SUMS.
 
 ## 2026-11-06 · 0.2.4
 
