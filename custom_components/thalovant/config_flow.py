@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Mapping
 from contextlib import suppress
+import logging
 from typing import TYPE_CHECKING, Any, Final, override
 
 import probatio
@@ -11,13 +12,13 @@ from homeassistant.components import conversation
 from homeassistant.config_entries import (
     SOURCE_REAUTH,
     ConfigEntry,
-    ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
 )
 from homeassistant.core import callback
 from homeassistant.helpers import issue_registry as ir, translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.config_entry_oauth2_flow import AbstractOAuth2FlowHandler
 from homeassistant.helpers.selector import (
     BooleanSelector,
     ConversationAgentSelector,
@@ -65,10 +66,13 @@ from .const import (
     CONF_VOICE_CLIENT_ID,
     CONNECTION_KIND,
     DOMAIN,
+    EXCHANGE_NETWORK_MISMATCH,
+    LINK_TOKEN_TIMEOUT,
     LOGGER,
     LOGIN_SCOPES,
 )
 from .handler import agent_issue_id
+from .oauth import LinkRejectedError, ThalovantOAuth2Implementation, tokens_from_answer
 from .self_hosted import (
     connection_client_ids,
     connection_secret,
@@ -93,15 +97,31 @@ _CONF_ENDPOINT: Final = "endpoint"
 _CONF_ACCESS_KEY: Final = "access_key"
 _CONF_PASSWORD: Final = "password"
 
+# How the first step signs in: Home Assistant's own OAuth 2 flow through My
+# Home Assistant (the default), or a device login with a one-time code.
+_CONF_LINK_METHOD: Final = "link_method"
+LINK_ACCOUNT: Final = "link_account"
+LINK_CODE: Final = "code"
 
-class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
-    """Link a Thalovant hub: device login, pick a hub, create its connection."""
 
+class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
+    """Link a Thalovant hub: sign in, pick a hub, create its connection.
+
+    Signing in is Link account by default: Home Assistant's OAuth 2 flow
+    with PKCE, whose approval comes back through My Home Assistant. Link with
+    a code instead is the device login. Thalovant accepts either only when it
+    is approved from this Home Assistant's network. Both give the same setup
+    token, and the flow goes on the same way after it.
+    """
+
+    DOMAIN = DOMAIN
     VERSION = 1
     MINOR_VERSION = 1
 
     def __init__(self) -> None:
         """Initialize the flow."""
+        super().__init__()
+        self._method: str = LINK_ACCOUNT
         self._login: DeviceLogin | None = None
         self._login_task: asyncio.Task[Tokens] | None = None
         self._tokens: Tokens | None = None
@@ -115,6 +135,9 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         # ends without storing it, since a Free plan allows one API token.
         self._minted: Tokens | None = None
         self._errors: dict[str, str] = {}
+        # Set once Home Assistant has removed the flow: a step still running
+        # then cleans up what it gets instead of keeping it.
+        self._removed = False
         # "{hub} (can't link yet)", in Home Assistant's language.
         self._not_ready_label = NOT_READY_LABEL
 
@@ -125,15 +148,22 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         """Return the options flow."""
         return ThalovantOptionsFlow()
 
+    @property
+    @override
+    def logger(self) -> logging.Logger:
+        """The integration's logger, for Home Assistant's OAuth 2 steps."""
+        return LOGGER
+
     @override
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Explain the sign-in, then start it."""
+        """Explain the sign-in, then start it the way the user chose."""
         if user_input is None:
             return self._async_show_start_form()
         if user_input.get(CONF_SELF_HOSTED) is True:
             return await self.async_step_self_hosted()
+        self._method = user_input.get(_CONF_LINK_METHOD, LINK_ACCOUNT)
         return await self._async_start_login()
 
     async def async_step_reauth(
@@ -156,10 +186,90 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_reauth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Ask before signing in again."""
+        """Ask before signing in again, the way the user chooses."""
         if user_input is None:
             return self._async_show_start_form()
+        self._method = user_input.get(_CONF_LINK_METHOD, LINK_ACCOUNT)
         return await self._async_start_login()
+
+    async def async_step_no_my_home_assistant(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Say why Link account cannot work here, and offer a code instead."""
+        if user_input is None:
+            return self.async_show_form(step_id="no_my_home_assistant")
+        self._method = LINK_CODE
+        return await self._async_start_login()
+
+    @override
+    async def async_step_creation(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Trade the approved code for the setup token, then go on as after a code.
+
+        Replaces Home Assistant's own step, which stores an OAuth token in a
+        new entry: this token is the same setup token a device login gives,
+        and the flow still has a hub to pick and a connection to make.
+        """
+        # The code is single-use; nothing keeps it past this step.
+        external_data, self.external_data = self.external_data, None
+        error: str
+        try:
+            async with asyncio.timeout(LINK_TOKEN_TIMEOUT):
+                answer = await self.flow_impl.async_resolve_external_data(external_data)
+            tokens = tokens_from_answer(answer)
+        except LinkRejectedError as err:
+            LOGGER.warning(
+                "Thalovant did not accept the approval (HTTP %s, %s, %s)",
+                err.status,
+                err.detail,
+                err.code,
+            )
+            # Only the API's own code says "another network". Any other 400
+            # (detail invalid_grant: an expired or used code, or an API that
+            # predates the code) is the generic refusal. Another status is
+            # not one the API sends for a code, so it is not explained as one.
+            if err.code == EXCHANGE_NETWORK_MISMATCH:
+                error = "link_wrong_network"
+            elif err.status == 400:
+                error = "link_failed"
+            else:
+                error = "unknown"
+        except ThalovantConnectionError, TimeoutError:
+            error = "cannot_connect"
+        except ThalovantApiError as err:
+            LOGGER.warning("Could not read Thalovant's answer to the link: %s", err)
+            error = "unknown"
+        except Exception:
+            LOGGER.exception("Unexpected error while linking the account")
+            error = "unknown"
+        else:
+            if self._removed:
+                # Closed while Thalovant answered: async_remove has run, and
+                # nothing will hold this token, so it is revoked now.
+                self.hass.async_create_background_task(
+                    self._async_revoke(tokens), name=f"{DOMAIN} revoke unused link"
+                )
+                return self.async_abort(reason="link_closed")
+            self._tokens = self._minted = tokens
+            return await self.async_step_account()
+        self._errors = {"base": error}
+        return self._async_show_start_form()
+
+    @override
+    async def async_step_authorize_rejected(
+        self, data: None = None
+    ) -> ConfigFlowResult:
+        """The browser came back without a code: declined, or refused."""
+        external_data, self.external_data = self.external_data, None
+        reason = external_data["error"]
+        if reason == "access_denied":
+            self._errors = {"base": "login_denied"}
+        else:
+            # Not a refused code, so not link_failed's "expired or used".
+            LOGGER.warning("Thalovant did not link the account: %s", reason)
+            self._errors = {"base": "unknown"}
+        return self._async_show_start_form()
 
     async def async_step_self_hosted(
         self, user_input: dict[str, Any] | None = None
@@ -409,6 +519,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
     @override
     def async_remove(self) -> None:
         """Clean up what the flow made and never stored: connection, then token."""
+        self._removed = True
         credentials, self._credentials = self._credentials, None
         minted, self._minted = self._minted, None
         if credentials is not None or minted is not None:
@@ -476,16 +587,29 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
 
     @callback
     def _async_show_start_form(self) -> ConfigFlowResult:
-        """Show the step that starts a sign-in, with the last error if any."""
+        """Show the step that starts a sign-in, with the last error if any.
+
+        Link account is the default until the user chooses a code; after
+        that, the method last used is.
+        """
         errors, self._errors = self._errors, {}
         step_id = self._start_step_id
+        fields: dict[Any, Any] = {
+            probatio.Required(_CONF_LINK_METHOD, default=self._method): SelectSelector(
+                SelectSelectorConfig(
+                    options=[LINK_ACCOUNT, LINK_CODE],
+                    translation_key=_CONF_LINK_METHOD,
+                    mode=SelectSelectorMode.LIST,
+                )
+            )
+        }
+        if step_id == "user":
+            fields[probatio.Optional(CONF_SELF_HOSTED, default=False)] = (
+                BooleanSelector()
+            )
         return self.async_show_form(
             step_id=step_id,
-            data_schema=_schema(
-                {probatio.Optional(CONF_SELF_HOSTED, default=False): BooleanSelector()}
-                if step_id == "user"
-                else {}
-            ),
+            data_schema=_schema(fields),
             errors=errors,
             description_placeholders=(
                 {"guide_url": GUIDE_URL} if step_id == "user" else None
@@ -536,7 +660,7 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_start_login(self) -> ConfigFlowResult:
-        """Ask the control plane for a device code, unless a token is in hand.
+        """Sign in the way the user chose, unless a token is in hand.
 
         Each approval mints an API token, and a Free plan allows one, so a
         token that still works (a retry, or reauth with the stored token) is
@@ -544,6 +668,8 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
         """
         if self._tokens is not None:
             return await self.async_step_account()
+        if self._method == LINK_ACCOUNT:
+            return await self._async_start_link_account()
 
         auth = ThalovantAuth(async_get_clientsession(self.hass))
         try:
@@ -559,6 +685,21 @@ class ThalovantConfigFlow(ConfigFlow, domain=DOMAIN):
             return self._async_show_start_form()
         self._login_task = None
         return await self.async_step_login()
+
+    async def _async_start_link_account(self) -> ConfigFlowResult:
+        """Open Thalovant's consent page; the answer comes to async_step_auth.
+
+        A new implementation, and with it a new PKCE verifier, for every
+        attempt. Thalovant answers only My Home Assistant's redirect, so
+        without it the user is offered a code instead.
+        """
+        implementation = ThalovantOAuth2Implementation(
+            self.hass, device_name=self._client_name
+        )
+        if not implementation.through_my_home_assistant:
+            return await self.async_step_no_my_home_assistant()
+        self.async_register_implementation(self.hass, implementation)
+        return await self.async_step_pick_implementation({"implementation": DOMAIN})
 
     async def _async_wait_for_login(self, login: DeviceLogin) -> Tokens:
         """Poll until the user approves, declines, or the code expires."""

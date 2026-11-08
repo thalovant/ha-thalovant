@@ -3,17 +3,33 @@
     "step": {
       "user": {
         "title": "Relier votre hub",
-        "description": "Home Assistant se connecte à votre compte Thalovant avec un code à usage unique, puis au hub de votre choix. La liaison est une connexion sortante : aucun port à ouvrir, et aucun jeton Home Assistant ne quitte votre domicile.\n\nCliquez sur **Valider** pour obtenir un code. Le [guide]({guide_url}) (en anglais) détaille chaque étape.",
+        "description": "Home Assistant se relie à votre compte Thalovant, puis au hub de votre choix. La liaison est une connexion sortante : aucun port à ouvrir, et aucun jeton Home Assistant ne quitte votre domicile.\n\nCliquez sur **Valider** pour relier votre compte. Le [guide]({guide_url}) (en anglais) détaille chaque étape.",
         "data": {
+          "link_method": "Méthode de liaison",
           "self_hosted": "Associer un hub de Noël auto-hébergé"
         },
         "data_description": {
+          "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique.",
           "self_hosted": "Utilisez une connexion dédiée fournie par l’administrateur de votre hub privé. Laissez cette option désactivée pour vous connecter à votre compte Thalovant."
         }
       },
       "reauth_confirm": {
         "title": "Se reconnecter",
-        "description": "La liaison avec {name} ne fonctionne plus. Cliquez sur **Valider** pour la renouveler. Si Thalovant vous demande de vous connecter, utilisez le même compte qu'avant."
+        "description": "La liaison avec {name} ne fonctionne plus. Cliquez sur **Valider** pour la renouveler. Si Thalovant vous demande de vous connecter, utilisez le même compte qu'avant.",
+        "data": {
+          "link_method": "Méthode de liaison"
+        },
+        "data_description": {
+          "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique."
+        }
+      },
+      "auth": {
+        "title": "Approuver dans votre navigateur",
+        "description": "Thalovant s'ouvre dans un nouvel onglet. Ce téléphone ou cet ordinateur doit être connecté au même réseau que ce Home Assistant (votre Wi-Fi à la maison, sans RPV) : Thalovant n'accepte l'approbation que depuis ce réseau. Connectez-vous si on vous le demande, vérifiez que la demande porte le nom **Home Assistant**, puis approuvez-la. Cette étape se poursuit d'elle-même dès que My Home Assistant ramène le navigateur."
+      },
+      "no_my_home_assistant": {
+        "title": "Relier avec un code plutôt",
+        "description": "**Relier le compte** ramène votre approbation par My Home Assistant, qui n'est pas activé dans ce Home Assistant, et Thalovant ne la renvoie par aucun autre chemin. Pour utiliser **Relier le compte**, ajoutez `my:` à `configuration.yaml` (`default_config:` l'inclut), puis redémarrez Home Assistant.\n\nCliquez sur **Valider** pour relier plutôt avec un code à usage unique."
       },
       "hub": {
         "title": "Choisir un hub",
@@ -54,6 +70,8 @@
       "connection_refused": "Thalovant a refusé de créer la connexion. Réessayez plus tard.",
       "hub_cannot_link": "Ce hub ne peut pas encore être relié à Home Assistant. Choisissez-en un autre, ou réessayez plus tard.",
       "invalid_auth": "Thalovant n'a pas accepté la connexion. Cliquez sur **Valider** pour vous reconnecter.",
+      "link_failed": "Thalovant n'a pas accepté l'approbation : elle avait expiré (une approbation n'est valide qu'une minute) ou avait déjà servi. Cliquez sur **Valider** pour réessayer, ou choisissez **Relier avec un code plutôt**.",
+      "link_wrong_network": "Thalovant n'a pas accepté l'approbation parce qu'elle provient d'un autre réseau que celui de ce Home Assistant. Depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV, cliquez sur **Valider** pour relier de nouveau.",
       "login_denied": "La connexion a été refusée. Cliquez sur **Valider** pour réessayer.",
       "login_expired": "Le code a expiré avant d'être approuvé. Cliquez sur **Valider** pour en obtenir un nouveau.",
       "plan_limit": "Votre forfait Thalovant n'a plus de place pour une nouvelle liaison. Supprimez-en une dans le tableau de bord Thalovant, puis réessayez.",
@@ -66,6 +84,7 @@
       "already_configured": "Ce hub est déjà relié à Home Assistant.",
       "already_in_progress": "Une liaison avec ce hub est déjà en cours de configuration.",
       "hub_not_found": "Ce hub n'est plus disponible pour votre compte Thalovant.",
+      "link_closed": "La configuration a été fermée avant la réponse de Thalovant. La connexion obtenue est révoquée ; ajoutez de nouveau l'intégration pour relier votre compte.",
       "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
       "reauth_successful": "Home Assistant est de nouveau relié au hub.",
       "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison.",
@@ -130,6 +149,14 @@
     "hub_key_changed": {
       "title": "{hub} a répondu avec une autre clé de sécurité",
       "description": "Home Assistant a cessé de communiquer avec le hub {hub} : il a répondu avec une clé de sécurité différente de celle qu'il avait quand vous l'avez relié. Cela arrive quand un hub est remplacé ou réinitialisé, mais aussi quand quelque chose s'interpose entre Home Assistant et le hub.\n\nSi vous savez que le hub a été remplacé ou réinitialisé, reliez-le à nouveau : ouvrez l'intégration Thalovant et suivez sa demande de réauthentification. La nouvelle liaison fait confiance à la clé que le hub présente maintenant. Si vous ne vous y attendiez pas, vérifiez le hub dans le tableau de bord Thalovant avant de le relier à nouveau."
+    }
+  },
+  "selector": {
+    "link_method": {
+      "options": {
+        "link_account": "Relier le compte",
+        "code": "Relier avec un code plutôt"
+      }
     }
   },
   "common": {

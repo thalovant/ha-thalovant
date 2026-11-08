@@ -28,6 +28,7 @@ from custom_components.thalovant.api import (
     ThalovantUnsupportedError,
     Tokens,
 )
+from custom_components.thalovant.config_flow import LINK_CODE
 from custom_components.thalovant.const import (
     ADMISSION_TIMEOUT,
     CONF_ACCOUNT_ID,
@@ -53,16 +54,22 @@ from .conftest import ACCOUNT_ID, CONNECTION_ID, HUB_ID, OTHER_HUB_ID
 
 pytestmark = pytest.mark.usefixtures("mock_setup_entry")
 
+# The first step's choice that keeps the device login of 0.2: these tests
+# drive it, test_link_account.py drives Link account.
+WITH_A_CODE = {"link_method": LINK_CODE}
+
 
 async def _start(hass: HomeAssistant) -> dict[str, Any]:
-    """Open the flow and submit the first step."""
+    """Open the flow and choose to link with a code."""
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {}
-    return await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], WITH_A_CODE
+    )
 
 
 async def _finish_progress(
@@ -203,11 +210,14 @@ async def test_start_login_errors(
     result = await hass.config_entries.flow.async_init(
         DOMAIN, context={"source": SOURCE_USER}
     )
-    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], WITH_A_CODE
+    )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
     assert result["errors"] == {"base": error}
 
+    # The form now offers the code again by default.
     mock_auth.start_device_login.side_effect = None
     result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     result = await _pick_hub(hass, await _finish_login(hass, result))
@@ -630,7 +640,9 @@ async def _start_reauth(hass: HomeAssistant, entry: MockConfigEntry) -> dict[str
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "reauth_confirm"
     assert result["description_placeholders"] == {"name": "Maison"}
-    return await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    return await hass.config_entries.flow.async_configure(
+        result["flow_id"], WITH_A_CODE
+    )
 
 
 async def test_reauth_closed_during_admission(

@@ -1,4 +1,4 @@
-Last Edit: Codex - 2026-11-07 - Motive: Add the canonical Thalovant logo with light and dark theme support.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account through My Home Assistant, with a code as the fallback.
 
 <p align="center">
   <picture>
@@ -37,6 +37,8 @@ steps with what each device sentence means when something goes wrong.
 - A Thalovant account with at least one hub. On the Free plan, Home Assistant
   can only be linked to a public hub such as Daily Desk. The link doesn't count
   toward the plan's connections, so your phone or speaker keeps its place.
+- [My Home Assistant][my] turned on, for **Link account**. It is part of
+  `default_config:`; without it, link with a code instead.
 
 ## Installation
 
@@ -60,12 +62,18 @@ Home Assistant.
 
 ## Linking your hub
 
+Do this from a phone or computer on the same network as Home Assistant (your
+home Wi-Fi, with any VPN turned off): Thalovant accepts the approval only from
+Home Assistant's own network.
+
 1. Go to **Settings** > **Devices & services**, select **Add integration**, and
    choose **Thalovant**.
-2. Select **Submit**. Home Assistant shows a link and a code.
-3. Open the link, sign in to Thalovant, check the code matches, and approve.
-   The page names the request **Home Assistant** and marks it as a
-   Thalovant-registered app. The dialog in Home Assistant moves on by itself.
+2. Leave **Link account** selected and select **Submit**. Thalovant opens in a
+   new browser tab.
+3. Sign in to Thalovant if it asks, check that the request names
+   **Home Assistant**, and approve it. The browser comes back to this
+   Home Assistant through My Home Assistant (the first time, My Home Assistant
+   asks for your Home Assistant's address), and the dialog moves on by itself.
 4. Pick the hub whose devices should reach this Home Assistant. Hubs that can
    link come first. A hub that can't yet is marked "can't link Home Assistant
    yet", and picking it says so without creating anything.
@@ -74,13 +82,44 @@ Home Assistant.
    shows under **Connections** in the Thalovant dashboard with the type
    **Home Assistant**.
 
+### Link with a code instead
+
+Choose **Link with a code instead** in the first step when My Home Assistant
+isn't set up, or when you would rather type a code. If you choose **Link
+account** without My Home Assistant, the setup says so and offers the code.
+
+1. Select **Submit**. Home Assistant shows a link and a code.
+2. Open the link on a phone or computer on the same network as this
+   Home Assistant, with any VPN off: Thalovant accepts a code's approval only
+   from Home Assistant's own network. Sign in, check the code matches, and
+   approve. The page names the request **Home Assistant** and marks it as a
+   Thalovant-registered app. The dialog in Home Assistant moves on by itself.
+3. Pick the hub and wait for it, as above.
+
+### Why Link account is the default
+
+**Link account** has no code to type, and only the Home Assistant that started
+the setup can use the approval: the request is signed with its own secret, and
+turning the approval into a token takes a key (a PKCE verifier) that
+Home Assistant sends only to Thalovant when it asks for the token, never
+through your browser. Spotify, Google, Netatmo and other cloud integrations
+link accounts the same way. Both methods give Home Assistant the same token and
+the same link.
+
+Either way, approve only sign-in requests you started, and check that
+My Home Assistant opens your own Home Assistant. Thalovant completes a link
+only when the approval comes from the same network as the Home Assistant that
+asked, so a link sent to someone on another computer or network gives them
+nothing.
+
 ### What the setup asks for
 
 | Field | What it means |
 | --- | --- |
+| How to link | **Link account** (the default) approves in your browser and comes back through My Home Assistant. **Link with a code instead** shows a one-time code to approve. |
 | Hub | The Thalovant hub whose devices will be able to send requests to this Home Assistant. You can link several hubs; each one is its own entry. |
 
-The sign-in asks Thalovant for three permissions: read your hubs
+Either way, the sign-in asks Thalovant for three permissions: read your hubs
 (`hubs:read`), and read and create connections (`clients:read`,
 `clients:write`). It asks for nothing that can change a hub.
 
@@ -218,7 +257,8 @@ automation:
 ## Privacy
 
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
-  year, one per account) and the connection's keys, in Home Assistant's config
+  year, one per account, the same whichever way you linked) and the
+  connection's keys, in Home Assistant's config
   entry storage, like any other integration's credentials. The key the hub
   recognises this Home Assistant by, and the hub's own key, live in
   `.storage/thalovant/`, one folder per link, so they survive updates and are
@@ -236,6 +276,27 @@ automation:
 
 **The sign-in code expired or was declined.** Select **Submit** again for a
 new code.
+
+**"My Home Assistant, which is not turned on in this Home Assistant".**
+**Link account** needs My Home Assistant to bring the approval back. Add `my:`
+to `configuration.yaml` (or keep `default_config:`) and restart, or select
+**Submit** to link with a code.
+
+**"Thalovant did not accept the approval because it came from a different
+network".** Thalovant refuses an approval given from another network than
+Home Assistant's, for example over mobile data, a VPN or remote access. From a
+phone or computer on Home Assistant's network, select **Submit** to link again.
+
+**"Thalovant did not accept the approval: it had expired … or was already
+used".** An approval is good for one minute and only once. Select **Submit** to
+try again.
+
+**"Invalid state. Is My Home Assistant configured to go to the right
+instance?"** If Home Assistant restarted during the sign-in, start a new link:
+a restart forgets the one in progress. If the error persists, My Home Assistant
+is sending your browser to another Home Assistant: open
+[My Home Assistant][my] and check that the address it remembers is this
+Home Assistant's.
 
 **"This hub can't link Home Assistant yet".** The hub or the Thalovant API
 does not support Home Assistant connections yet. Pick another hub; there is
@@ -265,7 +326,8 @@ credentials.
 **Home Assistant asks you to reauthenticate.** The hub rejected the
 connection's keys, for example because the connection was deleted from the
 dashboard. Follow the notification: the integration makes a new connection,
-and only asks you to sign in again if the stored token no longer works.
+and only asks you to sign in again (with **Link account** or a code, as you
+choose) if the stored token no longer works.
 
 **"answered with a different security key" in Repairs.** The hub presented a
 different key than the one it had when you linked it. Home Assistant stops
@@ -335,3 +397,4 @@ plane.
 [guide]: https://docs.thalovant.com/manage/home-assistant/
 [my-hacs]: https://my.home-assistant.io/redirect/hacs_repository/?owner=thalovant&repository=ha-thalovant&category=integration
 [dashboard]: https://dash.thalovant.com
+[my]: https://my.home-assistant.io

@@ -70,6 +70,12 @@ async def setup_homeassistant(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "homeassistant", {})
 
 
+@pytest.fixture
+def my_home_assistant(hass: HomeAssistant) -> None:
+    """My Home Assistant is set up: Home Assistant redirects through it."""
+    hass.config.components.add("my")
+
+
 @pytest.fixture(autouse=True)
 def fast_polling() -> Generator[None]:
     """Let the device login poll without waiting."""
@@ -283,6 +289,49 @@ def mock_config_entry(
             CONF_HUB_NAME: "Maison",
             CONF_TOKENS: tokens.to_dict(),
             CONF_CREDENTIALS: credentials.to_dict(),
+        },
+        version=1,
+        minor_version=1,
+    )
+
+
+@pytest.fixture
+def entry_stored_by_0_2() -> MockConfigEntry:
+    """An entry exactly as 0.2.5 stored it after a device login.
+
+    Written out, not built with today's to_dict(), so that a change to the
+    stored form shows up here instead of moving the fixture along with it.
+    """
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title="Maison",
+        unique_id=f"{ACCOUNT_ID}:{HUB_ID}",
+        data={
+            "account_id": ACCOUNT_ID,
+            "hub_id": HUB_ID,
+            "hub_name": "Maison",
+            "tokens": {
+                "access_token": ACCESS_TOKEN,
+                "expires_at": "2027-09-27T00:00:00+00:00",
+                "scopes": ["hubs:read", "clients:read", "clients:write"],
+                "token_id": TOKEN_ID,
+            },
+            "credentials": {
+                "hub_id": HUB_ID,
+                "connection_id": CONNECTION_ID,
+                "name": "Home Assistant (Maison)",
+                "endpoint": "wss://maison.hubs.thalovant.com/ws",
+                "secret": {
+                    "access_key": ACCESS_KEY,
+                    "password": CONNECTION_SECRET,
+                    "site_id": "home-assistant-maison",
+                    "default_master": "maison.hubs.thalovant.com",
+                    "default_port": 443,
+                    "default_path": "",
+                },
+                "operation_url": "https://api.thalovant.com/v1/operations/op-1",
+            },
+            "linked_at": "2026-09-27T12:00:00+00:00",
         },
         version=1,
         minor_version=1,

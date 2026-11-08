@@ -21,10 +21,29 @@ CONF_VOICE_CLIENT_ID: Final = "voice_client_id"
 # Keys in ConfigEntry.options.
 CONF_AGENT_ID: Final = "agent_id"
 
-# What the device login asks for: list the account's hubs, and read, create or
+# What either sign-in asks for: list the account's hubs, and read, create or
 # delete this installation's own connection. Never hubs:write, which the Free
 # plan cannot grant, so asking for it would fail the approval.
 LOGIN_SCOPES: Final = ("hubs:read", "clients:read", "clients:write")
+
+DASHBOARD_URL: Final = "https://dash.thalovant.com"
+# The control plane the SDK talks to by default (its DEFAULT_CONTROL_API_URL).
+API_URL: Final = "https://api.thalovant.com"
+
+# Link account: Home Assistant's own OAuth 2 flow with PKCE. The client is
+# public (no secret) and is the same registered app a device login names, the
+# SDK's HOME_ASSISTANT_CLIENT_ID, so either approval replaces the token the
+# other gave. Thalovant answers it on My Home Assistant's redirect only.
+LINK_CLIENT_ID: Final = "thalovant-home-assistant"
+LINK_AUTHORIZE_URL: Final = f"{DASHBOARD_URL}/authorize"
+LINK_TOKEN_URL: Final = f"{API_URL}/v1/auth/native/token"
+# The consent page shows the device name and names the token after it.
+LINK_DEVICE_NAME_MAX: Final = 120
+# The code lives 60 seconds; trading it never waits longer than this.
+LINK_TOKEN_TIMEOUT: Final = 30
+# The problem code of a refused exchange whose code was approved from another
+# network than the exchange's. Its detail is still invalid_grant.
+EXCHANGE_NETWORK_MISMATCH: Final = "exchange_network_mismatch"
 
 # The kind of connection the control plane creates for Home Assistant. Its
 # message grant is thalovant.home.request in, thalovant.home.response out.
@@ -62,5 +81,4 @@ MAX_DEVICES_PER_HUB: Final = 50
 # Removing an entry must not hang on an unreachable control plane.
 REMOVE_TIMEOUT: Final = 10.0
 
-DASHBOARD_URL: Final = "https://dash.thalovant.com"
 MANUFACTURER: Final = "Thalovant"

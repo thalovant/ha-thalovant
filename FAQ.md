@@ -1,6 +1,44 @@
-Last Edit: Codex (GPT-6) - 2026-11-06 - Motive: Explain the routed lighting fix for connected hubs.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Link account is accepted only from Home Assistant's network; no relay claims.
 
 # FAQ
+
+**What changed in 0.3.0?** The first step offers **Link account** (the
+default) and **Link with a code instead**. Link account approves in the
+browser and comes back through My Home Assistant; the code is the device
+login of 0.2. See
+[`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py).
+
+**What does Link account add over a code?** No code to type, and only the
+Home Assistant that started the setup can use the approval: the request is
+signed with its own secret, and the code is useless without the PKCE verifier,
+which Home Assistant sends only to Thalovant's token endpoint, never through
+the browser. Neither method makes approving somebody else's
+request safe, so approve only sign-in requests you started. Thalovant
+completes either only when it is approved from the same network as the
+Home Assistant that asked, so a link sent to someone on another computer or
+network gives them nothing. See [`oauth.py`](custom_components/thalovant/oauth.py).
+
+**Link account says Thalovant did not accept the approval.** If it says the
+approval came from a different network (`link_wrong_network`, the API's code
+`exchange_network_mismatch`), it was given over another network than
+Home Assistant's, for example mobile data, a VPN or remote access: link again
+from a phone or computer on Home Assistant's network. Otherwise
+(`link_failed`) the approval expired after a minute or was already used:
+try again. See
+[`ThalovantConfigFlow.async_step_creation()`](custom_components/thalovant/config_flow.py).
+
+**Link account offers a code instead. Why?** My Home Assistant is not turned
+on, so Home Assistant's redirect is not `https://my.home-assistant.io/redirect/oauth`,
+the only one Thalovant answers. Add `my:` (or keep `default_config:`) and
+restart, or link with the code.
+
+**Do entries linked with a code before 0.3.0 keep working?** Yes. Both
+methods store the same token form and the entry version is unchanged; reauth
+offers Link account too. See
+[`test_entries_are_the_same_either_way`](tests/test_link_account.py).
+
+**Is there a refresh token?** No. Either sign-in gives the same setup token,
+valid for a year; approving again replaces it for every hub of the account.
 
 **Why doesn't my private Christmas hub appear when I sign in?** The account
 flow lists hubs registered with the Thalovant control plane. Choose **Link a
