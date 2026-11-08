@@ -41,6 +41,9 @@ LINK_TOKEN_URL: Final = f"{API_URL}/v1/auth/native/token"
 LINK_DEVICE_NAME_MAX: Final = 120
 # The code lives 60 seconds; trading it never waits longer than this.
 LINK_TOKEN_TIMEOUT: Final = 30
+# The problem code of a refused exchange whose code was approved from another
+# network than the exchange's. Its detail is still invalid_grant.
+EXCHANGE_NETWORK_MISMATCH: Final = "exchange_network_mismatch"
 
 # The kind of connection the control plane creates for Home Assistant. Its
 # message grant is thalovant.home.request in, thalovant.home.response out.

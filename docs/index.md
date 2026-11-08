@@ -1,4 +1,4 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Link account's same-network rule and its link_wrong_network error.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: link_wrong_network follows the API's exchange_network_mismatch code only.
 
 # Thalovant for Home Assistant
 
@@ -32,9 +32,11 @@ exactly as it does after a code.
 Thalovant accepts the exchange only from the network that approved it
 (thalovant-api #502), as it accepts a code's approval only from the device's
 network. My Home Assistant sends the browser to whichever Home Assistant it is
-set up for, so the signed state and PKCE alone do not decide who links. A 400
-`invalid_grant` becomes the error `link_wrong_network`, which says the
-approval usually came from another network.
+set up for, so the signed state and PKCE alone do not decide who links. The
+API's refusal names the cause with the Problem+JSON code
+`exchange_network_mismatch` (detail `invalid_grant`), which becomes the error
+`link_wrong_network`. Any other `invalid_grant` is `link_failed`: the code
+expired or was already used.
 
 The API side (client `thalovant-home-assistant`, the consent page and
 `/v1/auth/native/token`) is described in the Thalovant API and the browser

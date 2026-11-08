@@ -18,11 +18,13 @@ completes either only when it is approved from the same network as the
 Home Assistant that asked, so a link sent to someone on another computer or
 network gives them nothing. See [`oauth.py`](custom_components/thalovant/oauth.py).
 
-**Link account says Thalovant did not accept the approval.** Thalovant answers
-`invalid_grant` (error `link_wrong_network`) when the approval came from
-another network than Home Assistant's, for example over mobile data, a VPN or
-remote access, and also when it is more than a minute old or already used. Link
-again from a phone or computer on Home Assistant's network. See
+**Link account says Thalovant did not accept the approval.** If it says the
+approval came from a different network (`link_wrong_network`, the API's code
+`exchange_network_mismatch`), it was given over another network than
+Home Assistant's, for example mobile data, a VPN or remote access: link again
+from a phone or computer on Home Assistant's network. Otherwise
+(`link_failed`) the approval expired after a minute or was already used:
+try again. See
 [`ThalovantConfigFlow.async_step_creation()`](custom_components/thalovant/config_flow.py).
 
 **Link account offers a code instead. Why?** My Home Assistant is not turned

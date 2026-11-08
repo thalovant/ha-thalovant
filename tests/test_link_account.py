@@ -226,27 +226,58 @@ async def test_link_account_through_the_callback_view(
     assert result["step_id"] == "hub"
 
 
+# Thalovant's refusal of a code approved from another network than the
+# exchange's (Problem+JSON; the detail stays invalid_grant).
+NETWORK_MISMATCH = {
+    "type": "about:blank",
+    "title": "Bad Request",
+    "status": 400,
+    "detail": "invalid_grant",
+    "code": "exchange_network_mismatch",
+}
+
+
+@pytest.mark.parametrize(
+    ("refusal", "error", "logged"),
+    [
+        (
+            NETWORK_MISMATCH,
+            "link_wrong_network",
+            "(HTTP 400, invalid_grant, exchange_network_mismatch)",
+        ),
+        # Expired or already used.
+        (
+            {"detail": "invalid_grant", "code": "code_expired"},
+            "link_failed",
+            "(HTTP 400, invalid_grant, code_expired)",
+        ),
+        # An API from before the network code: never called a network problem.
+        ({"detail": "invalid_grant"}, "link_failed", "(HTTP 400, invalid_grant, None)"),
+    ],
+)
 @pytest.mark.usefixtures("my_home_assistant", "mock_auth", "mock_api")
 async def test_link_account_invalid_grant(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     caplog: pytest.LogCaptureFixture,
+    refusal: dict[str, Any],
+    error: str,
+    logged: str,
 ) -> None:
-    """invalid_grant says the approval likely came from another network.
+    """A refused code says why only when Thalovant names the network.
 
-    Thalovant spends a code exchanged from another network than the one that
-    approved it, and answers 400 invalid_grant, as it does for an expired or
-    reused code. The first step says which is likeliest; linking again starts
-    afresh.
+    exchange_network_mismatch is link_wrong_network; any other invalid_grant,
+    including one with no code from an older API, is link_failed (expired or
+    already used). Linking again starts afresh, with a new verifier.
     """
-    aioclient_mock.post(LINK_TOKEN_URL, status=400, json={"detail": "invalid_grant"})
+    aioclient_mock.post(LINK_TOKEN_URL, status=400, json=refusal)
     first = await _link(hass)
     result = await _come_back(hass, first)
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "user"
-    assert result["errors"] == {"base": "link_wrong_network"}
+    assert result["errors"] == {"base": error}
     assert _method_field(result)[0].default() == LINK_ACCOUNT
-    assert "did not accept the approval (HTTP 400, invalid_grant)" in caplog.text
+    assert f"did not accept the approval {logged}" in caplog.text
     assert CODE not in caplog.text
 
     aioclient_mock.clear_requests()
@@ -265,8 +296,10 @@ async def test_link_account_invalid_grant(
         ({"status": 429}, "cannot_connect"),
         ({"exc": aiohttp.ClientConnectionError()}, "cannot_connect"),
         ({"exc": TimeoutError()}, "cannot_connect"),
-        ({"status": 404, "json": {"detail": "Not Found"}}, "link_failed"),
-        # A 400 that does not say invalid_grant claims nothing about networks.
+        # Not a status the API sends for a code: not explained as one.
+        ({"status": 404, "json": {"detail": "Not Found"}}, "unknown"),
+        ({"status": 401, "json": {"detail": "Not authenticated"}}, "unknown"),
+        # A 400 without the network code claims nothing about networks.
         ({"status": 400, "json": {"detail": "invalid_request"}}, "link_failed"),
         ({"status": 400, "text": ""}, "link_failed"),
         ({"json": {"token_type": "bearer"}}, "unknown"),
@@ -303,7 +336,7 @@ async def test_link_account_unexpected_error(
 
 @pytest.mark.parametrize(
     ("reason", "error"),
-    [("access_denied", "login_denied"), ("invalid_scope", "link_failed")],
+    [("access_denied", "login_denied"), ("invalid_scope", "unknown")],
 )
 @pytest.mark.usefixtures("my_home_assistant", "mock_auth")
 async def test_link_account_declined(
@@ -456,7 +489,7 @@ async def test_reauth_link_failure_returns_to_confirm(
 ) -> None:
     """A refused code during reauth comes back to reauth's own first step."""
     aioclient_mock.clear_requests()
-    aioclient_mock.post(LINK_TOKEN_URL, status=400, json={"detail": "invalid_grant"})
+    aioclient_mock.post(LINK_TOKEN_URL, status=400, json=NETWORK_MISMATCH)
     mock_api.get_account.side_effect = ThalovantAuthError("revoked")
     mock_config_entry.add_to_hass(hass)
     result = await mock_config_entry.start_reauth_flow(hass)

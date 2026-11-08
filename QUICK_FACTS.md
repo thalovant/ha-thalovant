@@ -14,7 +14,7 @@ Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account accepted o
 | Token exchange | `POST https://api.thalovant.com/v1/auth/native/token`, JSON `{code, code_verifier, client_id, redirect_uri}` |
 | Redirect | `https://my.home-assistant.io/redirect/oauth` only; without My Home Assistant the flow offers a code (`async_step_no_my_home_assistant()`) |
 | Scopes asked | `hubs:read clients:read clients:write` |
-| Approval network | Either sign-in completes only when approved from Home Assistant's own network; for Link account, an exchange from another network gets 400 `invalid_grant` (error `link_wrong_network`) |
+| Approval network | Either sign-in completes only when approved from Home Assistant's own network; for Link account, an exchange from another network gets 400 `invalid_grant` with code `exchange_network_mismatch` (error `link_wrong_network`); any other `invalid_grant` is `link_failed` |
 | Entry data | Unchanged since 0.2 (`VERSION` 1, `MINOR_VERSION` 1): either sign-in stores the same `tokens` form |
 | Runtime entry points | `async_setup_entry()`, `async_unload_entry()`, `async_remove_entry()` |
 | Private request scope | One authenticated Voice ID and the seven Christmas mirror lighting commands, handled by built-in Assist |

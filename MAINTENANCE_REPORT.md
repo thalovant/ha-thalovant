@@ -13,8 +13,9 @@ only to Thalovant's token endpoint, never through the browser. **Link with a cod
 My Home Assistant sends the browser to whichever Home Assistant it is set up
 for, so the browser alone does not decide who gets the link. Thalovant
 (thalovant-api #502) therefore accepts the Home Assistant exchange only from
-the network that approved it; an exchange from another network gets 400
-`invalid_grant` and the code is spent. That stops a link sent to someone on
+the network that approved it; an exchange from another network gets 400 with
+detail `invalid_grant` and code `exchange_network_mismatch`, and the code is
+spent. That stops a link sent to someone on
 another computer or network: it gives them nothing. It does not make approving
 safe, so approve only sign-in requests you started. The Link account step says
 to approve from a phone or computer on Home Assistant's network, with any VPN
@@ -35,17 +36,18 @@ off, as the code step has since 0.2.5.
   no secret) adds `scope` and `device_name` (at most 120 characters) to the
   authorize URL and posts the exchange to `/v1/auth/native/token` as a JSON
   body of exactly `code`, `code_verifier`, `client_id` and `redirect_uri`.
-  A refusal is `LinkRejectedError` with the API's `detail` as its `code`.
-  `invalid_grant` is `link_wrong_network`, which says the approval usually
-  came from another network and that an expired or reused one is refused too;
-  any other 4xx is `link_failed`. 429 and 5xx or no answer are
-  `cannot_connect`. There is no refresh token.
+  A refusal is `LinkRejectedError` carrying the Problem+JSON `detail` and
+  `code`. Code `exchange_network_mismatch` is `link_wrong_network`, which says
+  the approval came from another network. Any other 400 (detail
+  `invalid_grant`, with another code or none, as from an API before #502) is
+  `link_failed`: expired or already used, try again. Another 4xx is `unknown`.
+  429 and 5xx or no answer are `cannot_connect`. There is no refresh token.
 - `async_step_creation()` replaces Home Assistant's own step: it drops the
   code, reads the answer with `tokens_from_answer()` (the SDK's leniency for a
   device token), sets the same `_tokens` and `_minted` the device login sets,
   and continues at `async_step_account()`. The token is kept, shared with the
   account's other entries and revoked when unused exactly as before. A decline
-  (`error=access_denied`) is `login_denied`; any other error is `link_failed`.
+  (`error=access_denied`) is `login_denied`; any other error is `unknown`.
   A token that arrives after the dialog was closed (`async_remove` sets
   `_removed`) is revoked at once and the step aborts with `link_closed`,
   touching no account or entry.
@@ -61,7 +63,7 @@ off, as the code step has since 0.2.5.
 Verification, local, Python 3.14.10, Home Assistant 2026.10.4
 (`pytest-homeassistant-custom-component==0.13.375`), SDK 0.10.0 installed
 under Home Assistant's package constraints as CI does: `pytest --cov
---cov-report=term-missing` passed 377 tests with 100% statement and branch
+--cov-report=term-missing` passed 381 tests with 100% statement and branch
 coverage; `ruff check .`, `ruff format --check .` and `mypy` passed; hassfest
 (`ghcr.io/home-assistant/hassfest:latest` run with podman on the branch)
 reported 0 invalid integrations. The existing device-login tests pass with
@@ -70,7 +72,8 @@ checks the authorize URL's every parameter, the RFC 7636 vector and, on a
 local token endpoint over Home Assistant's own client session, the JSON body
 and each failure with its detail. [`tests/test_link_account.py`](tests/test_link_account.py)
 drives the flow, once through Home Assistant's `OAuth2AuthorizeCallbackView`,
-and maps `invalid_grant` to `link_wrong_network` for setup and reauth. Not
+and maps `exchange_network_mismatch` to `link_wrong_network` for setup and
+reauth, and `invalid_grant` with another code or none to `link_failed`. Not
 verified: a real browser, My Home Assistant, the live Thalovant dashboard and
 API (including #502's network check), and Home Assistant 2026.9.
 

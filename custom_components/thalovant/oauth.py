@@ -41,12 +41,14 @@ from .const import (
 
 
 class LinkRejectedError(ThalovantError):
-    """Thalovant refused the code; code is the API's detail when it gave one.
+    """Thalovant refused the code, with the problem's detail and code if given.
 
-    The API answers 400 invalid_grant for a code approved from another
-    network than the exchange's (the likeliest cause), one older than 60
-    seconds, one already used, or one that is not this flow's. Linking
-    again, which makes a new code and a new verifier, is the way out.
+    The API answers 400 with detail invalid_grant for every refused code.
+    One approved from another network than the exchange's also carries code
+    exchange_network_mismatch (EXCHANGE_NETWORK_MISMATCH); without a code,
+    the code was older than 60 seconds, already used, or not this flow's,
+    or the API predates that code. Linking again, which makes a new code and
+    a new verifier, is the way out.
     """
 
 
@@ -122,7 +124,7 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
                     raise LinkRejectedError(
                         f"Thalovant refused the link with HTTP {status}",
                         status=status,
-                        code=await _detail(response),
+                        **await _problem(response),
                     )
                 answer = await response.json(content_type=None)
         except aiohttp.ClientError as err:
@@ -145,14 +147,18 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
         )
 
 
-async def _detail(response: aiohttp.ClientResponse) -> str | None:
-    """The detail of a refusal, such as invalid_grant, when it is a string."""
+async def _problem(response: aiohttp.ClientResponse) -> dict[str, str | None]:
+    """A refusal's Problem+JSON detail and code, each only when it is a string."""
     try:
         body = await response.json(content_type=None)
     except ValueError:
-        return None
-    detail = body.get("detail") if isinstance(body, Mapping) else None
-    return detail if isinstance(detail, str) else None
+        body = None
+    if not isinstance(body, Mapping):
+        body = {}
+    return {
+        key: value if isinstance(value := body.get(key), str) else None
+        for key in ("detail", "code")
+    }
 
 
 def tokens_from_answer(answer: Mapping[str, Any]) -> Tokens:

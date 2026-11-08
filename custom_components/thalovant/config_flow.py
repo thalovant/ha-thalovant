@@ -66,6 +66,7 @@ from .const import (
     CONF_VOICE_CLIENT_ID,
     CONNECTION_KIND,
     DOMAIN,
+    EXCHANGE_NETWORK_MISMATCH,
     LINK_TOKEN_TIMEOUT,
     LOGGER,
     LOGIN_SCOPES,
@@ -219,16 +220,21 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
             tokens = tokens_from_answer(answer)
         except LinkRejectedError as err:
             LOGGER.warning(
-                "Thalovant did not accept the approval (HTTP %s, %s)",
+                "Thalovant did not accept the approval (HTTP %s, %s, %s)",
                 err.status,
+                err.detail,
                 err.code,
             )
-            # invalid_grant now mostly means the approval came from another
-            # network than this Home Assistant's; it also covers an expired
-            # or reused code, so the message says "usually".
-            error = (
-                "link_wrong_network" if err.code == "invalid_grant" else "link_failed"
-            )
+            # Only the API's own code says "another network". Any other 400
+            # (detail invalid_grant: an expired or used code, or an API that
+            # predates the code) is the generic refusal. Another status is
+            # not one the API sends for a code, so it is not explained as one.
+            if err.code == EXCHANGE_NETWORK_MISMATCH:
+                error = "link_wrong_network"
+            elif err.status == 400:
+                error = "link_failed"
+            else:
+                error = "unknown"
         except ThalovantConnectionError, TimeoutError:
             error = "cannot_connect"
         except ThalovantApiError as err:
@@ -260,8 +266,9 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         if reason == "access_denied":
             self._errors = {"base": "login_denied"}
         else:
+            # Not a refused code, so not link_failed's "expired or used".
             LOGGER.warning("Thalovant did not link the account: %s", reason)
-            self._errors = {"base": "link_failed"}
+            self._errors = {"base": "unknown"}
         return self._async_show_start_form()
 
     async def async_step_self_hosted(

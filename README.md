@@ -282,11 +282,14 @@ new code.
 to `configuration.yaml` (or keep `default_config:`) and restart, or select
 **Submit** to link with a code.
 
-**"Thalovant did not accept the approval. This usually means it came from a
-different network".** Thalovant refuses an approval given from another network
-than Home Assistant's, for example over mobile data, a VPN or remote access. It
-also refuses one more than a minute old or already used. From a phone or
-computer on Home Assistant's network, select **Submit** to link again.
+**"Thalovant did not accept the approval because it came from a different
+network".** Thalovant refuses an approval given from another network than
+Home Assistant's, for example over mobile data, a VPN or remote access. From a
+phone or computer on Home Assistant's network, select **Submit** to link again.
+
+**"Thalovant did not accept the approval: it had expired … or was already
+used".** An approval is good for one minute and only once. Select **Submit** to
+try again.
 
 **"Invalid state. Is My Home Assistant configured to go to the right
 instance?"** If Home Assistant restarted during the sign-in, start a new link:
