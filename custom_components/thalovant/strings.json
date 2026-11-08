@@ -44,7 +44,7 @@
     },
     "progress": {
       "wait_for_admission": "Your hub {hub} is admitting Home Assistant. This usually takes about a minute and a half.",
-      "wait_for_login": "Open {url} and approve the sign-in. The page names the request **Home Assistant** and marks it as a Thalovant-registered app. If you are asked for a code, enter:\n\n```\n{code}\n```\n\nThis step moves on by itself once you approve."
+      "wait_for_login": "Open {url} on a phone or computer connected to the same network as this Home Assistant (your home Wi-Fi, with any VPN turned off) and approve the sign-in: Thalovant accepts the approval only from the network this Home Assistant is on. The page names the request **Home Assistant** and marks it as a Thalovant-registered app. If you are asked for a code, enter:\n\n```\n{code}\n```\n\nThis step moves on by itself once you approve."
     },
     "error": {
       "admission_failed": "The hub did not admit Home Assistant. Try again in a few minutes.",

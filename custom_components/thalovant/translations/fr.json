@@ -44,7 +44,7 @@
     },
     "progress": {
       "wait_for_admission": "Votre hub {hub} est en train d'accepter Home Assistant. Cela prend en général une minute et demie.",
-      "wait_for_login": "Ouvrez {url} et approuvez la connexion. La page présente la demande sous le nom **Home Assistant**, comme une application enregistrée auprès de Thalovant. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
+      "wait_for_login": "Ouvrez {url} sur un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant (votre Wi-Fi à la maison, sans RPV) et approuvez la connexion : Thalovant n’accepte l’approbation que depuis le réseau où se trouve ce Home Assistant. La page présente la demande sous le nom **Home Assistant**, comme une application enregistrée auprès de Thalovant. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
     },
     "error": {
       "admission_failed": "Le hub n'a pas accepté Home Assistant. Réessayez dans quelques minutes.",
