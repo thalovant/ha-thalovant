@@ -70,6 +70,12 @@ async def setup_homeassistant(hass: HomeAssistant) -> None:
     assert await async_setup_component(hass, "homeassistant", {})
 
 
+@pytest.fixture
+def my_home_assistant(hass: HomeAssistant) -> None:
+    """My Home Assistant is set up: Home Assistant redirects through it."""
+    hass.config.components.add("my")
+
+
 @pytest.fixture(autouse=True)
 def fast_polling() -> Generator[None]:
     """Let the device login poll without waiting."""

@@ -1,6 +1,66 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Say to approve the sign-in from Home Assistant's own network.
+Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account through My Home Assistant replaces the code as the default sign-in.
 
 # Maintenance report
+
+## 2026-11-08 · 0.3.0
+
+**Link account** is the default sign-in. A device code can be relayed to
+somebody else (device-code phishing); Home Assistant's own OAuth 2 flow cannot:
+the browser comes back through My Home Assistant to the very instance that
+started the flow, Home Assistant signs the `state` with its own secret, and
+PKCE makes a code read on the way useless without the verifier, which never
+leaves that Home Assistant. **Link with a code instead** keeps the device login
+exactly as it was.
+
+- [`ThalovantConfigFlow`](custom_components/thalovant/config_flow.py) now
+  subclasses `AbstractOAuth2FlowHandler`. The first step and `reauth_confirm`
+  carry a `link_method` choice, `link_account` by default; after a failed code
+  the default is the code. `_async_start_link_account()` builds a new
+  `ThalovantOAuth2Implementation` per attempt, and when Home Assistant's
+  computed redirect is not exactly `https://my.home-assistant.io/redirect/oauth`
+  shows `no_my_home_assistant`, whose **Submit** starts the device login.
+  Otherwise it registers the implementation (`async_register_implementation`)
+  and picks it by name (`async_step_pick_implementation`), which leads to Home
+  Assistant's external step `auth`.
+- [`ThalovantOAuth2Implementation`](custom_components/thalovant/oauth.py)
+  (a `LocalOAuth2ImplementationWithPkce`, client `thalovant-home-assistant`,
+  no secret) adds `scope` and `device_name` (at most 120 characters) to the
+  authorize URL and posts the exchange to `/v1/auth/native/token` as a JSON
+  body of exactly `code`, `code_verifier`, `client_id` and `redirect_uri`.
+  400 is `LinkRejectedError` (`link_failed`), 429 and 5xx or no answer are
+  `cannot_connect`. There is no refresh token.
+- `async_step_creation()` replaces Home Assistant's own step: it drops the
+  code, reads the answer with `tokens_from_answer()` (the SDK's leniency for a
+  device token), sets the same `_tokens` and `_minted` the device login sets,
+  and continues at `async_step_account()`. The token is kept, shared with the
+  account's other entries and revoked when unused exactly as before. A decline
+  (`error=access_denied`) is `login_denied`; any other error is `link_failed`.
+- Entry data, `VERSION` 1 and `MINOR_VERSION` 1 are unchanged, so entries
+  linked with a code before 0.3.0 load and renew as they did.
+- English and Canadian French copy for the choice, the external step, the
+  missing My Home Assistant step and `link_failed`; `strings.json` and
+  `translations/en.json` are identical (`cmp`).
+
+Verification, local, Python 3.14.10, Home Assistant 2026.10.4
+(`pytest-homeassistant-custom-component==0.13.375`), SDK 0.10.0 installed
+under Home Assistant's package constraints as CI does: `pytest --cov
+--cov-report=term-missing` passed 370 tests with 100% statement and branch
+coverage; `ruff check .`, `ruff format --check .` and `mypy` passed; hassfest
+(`ghcr.io/home-assistant/hassfest:latest` run with podman on the branch)
+reported 0 invalid integrations. The existing device-login tests pass with
+the code chosen explicitly. [`tests/test_oauth.py`](tests/test_oauth.py)
+checks the authorize URL's every parameter, the RFC 7636 vector and, on a
+local token endpoint over Home Assistant's own client session, the JSON body
+and each failure. [`tests/test_link_account.py`](tests/test_link_account.py)
+drives the flow, once through Home Assistant's `OAuth2AuthorizeCallbackView`.
+Not verified: a real browser, My Home Assistant and the live Thalovant
+dashboard and API, and Home Assistant 2026.9.
+
+Transparency Report: AI Model: Claude Opus 5.5. Actions Taken: designed and
+wrote the OAuth 2 sign-in, its tests and the English and Canadian French
+copy, and updated the README, docs and records. Oversight: the lead agent's
+brief for the owner's browser sign-in work; the pull request waits for review,
+and nothing was merged, tagged or released.
 
 ## 2026-11-08 · 0.2.5
 

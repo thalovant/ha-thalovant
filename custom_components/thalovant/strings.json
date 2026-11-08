@@ -3,17 +3,33 @@
     "step": {
       "user": {
         "title": "Link your hub",
-        "description": "Home Assistant signs in to your Thalovant account with a one-time code, then connects to the hub you choose. The link is an outgoing connection: there is no port to open, and no Home Assistant token leaves your home.\n\nSelect **Submit** to get a code. The [guide]({guide_url}) walks through every step.",
+        "description": "Home Assistant links to your Thalovant account, then connects to the hub you choose. The link is an outgoing connection: there is no port to open, and no Home Assistant token leaves your home.\n\nSelect **Submit** to link your account. The [guide]({guide_url}) walks through every step.",
         "data": {
+          "link_method": "How to link",
           "self_hosted": "Link a self-hosted Christmas hub"
         },
         "data_description": {
+          "link_method": "**Link account** opens Thalovant in your browser, and your approval comes back to this Home Assistant through My Home Assistant. **Link with a code instead** shows a one-time code to approve from a phone or computer on this Home Assistant's network.",
           "self_hosted": "Use a dedicated connection issued by your private hub operator. Leave this off to sign in to your Thalovant account."
         }
       },
       "reauth_confirm": {
         "title": "Sign in again",
-        "description": "The link to {name} stopped working. Select **Submit** to renew it. If Thalovant asks you to sign in, use the same account as before."
+        "description": "The link to {name} stopped working. Select **Submit** to renew it. If Thalovant asks you to sign in, use the same account as before.",
+        "data": {
+          "link_method": "How to link"
+        },
+        "data_description": {
+          "link_method": "**Link account** opens Thalovant in your browser, and your approval comes back to this Home Assistant through My Home Assistant. **Link with a code instead** shows a one-time code to approve from a phone or computer on this Home Assistant's network."
+        }
+      },
+      "auth": {
+        "title": "Approve in your browser",
+        "description": "Thalovant opens in a new tab. Sign in if it asks, check that the request names **Home Assistant**, and approve it. The browser then comes back to this Home Assistant through My Home Assistant, and this step moves on by itself."
+      },
+      "no_my_home_assistant": {
+        "title": "Link with a code instead",
+        "description": "**Link account** brings your approval back through My Home Assistant, which is not turned on in this Home Assistant. Thalovant only sends it back that way, so that it reaches the Home Assistant that asked for it and no other. To use **Link account**, add `my:` to `configuration.yaml` (`default_config:` includes it) and restart Home Assistant.\n\nSelect **Submit** to link with a one-time code instead."
       },
       "hub": {
         "title": "Choose a hub",
@@ -54,6 +70,7 @@
       "connection_refused": "Thalovant refused to create the connection. Try again later.",
       "hub_cannot_link": "This hub can't link Home Assistant yet. Pick another hub, or try again later.",
       "invalid_auth": "Thalovant did not accept the sign-in. Select **Submit** to sign in again.",
+      "link_failed": "Thalovant did not accept the approval. An approval is only good for a minute: select **Submit** to link again, or choose **Link with a code instead**.",
       "login_denied": "The sign-in was declined. Select **Submit** to try again.",
       "login_expired": "The code expired before it was approved. Select **Submit** to get a new one.",
       "plan_limit": "Your Thalovant plan has no room for another link. Remove one in the Thalovant dashboard, then try again.",
@@ -130,6 +147,14 @@
     "hub_key_changed": {
       "title": "{hub} answered with a different security key",
       "description": "Home Assistant stopped talking to the hub {hub}: it answered with a different security key than the one it had when you linked it. That happens when a hub is replaced or reset, and also when something sits between Home Assistant and the hub.\n\nIf you know the hub was replaced or reset, re-link it: open the Thalovant integration and follow its request to re-authenticate. Re-linking trusts the key the hub presents now. If you did not expect this, check the hub in the Thalovant dashboard before you re-link."
+    }
+  },
+  "selector": {
+    "link_method": {
+      "options": {
+        "link_account": "Link account",
+        "code": "Link with a code instead"
+      }
     }
   },
   "common": {

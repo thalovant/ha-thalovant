@@ -38,7 +38,10 @@ from custom_components.thalovant.api import (
     plain_speech,
 )
 from custom_components.thalovant.const import (
+    API_URL,
     CONNECTION_KIND,
+    LINK_CLIENT_ID,
+    LINK_TOKEN_URL,
     LOGIN_SCOPES,
     REQUEST_MESSAGE_TYPE,
     RESPONSE_MESSAGE_TYPE,
@@ -310,6 +313,18 @@ def test_constants_match_the_sdk() -> None:
     assert CONNECTION_KIND == thalovant.CONNECTION_TYPE_HOME_ASSISTANT
     assert REQUEST_MESSAGE_TYPE == thalovant.HOME_REQUEST
     assert RESPONSE_MESSAGE_TYPE == thalovant.HOME_RESPONSE
+
+
+def test_link_account_is_the_device_logins_app() -> None:
+    """Link account signs in as the app a device login names, on the same API.
+
+    So either approval replaces the token the other gave, and the token goes
+    to the control plane every other call reaches.
+    """
+    control = pytest.importorskip("thalovant.control")
+    assert LINK_CLIENT_ID == thalovant.HOME_ASSISTANT_CLIENT_ID
+    assert API_URL == control.DEFAULT_CONTROL_API_URL
+    assert LINK_TOKEN_URL.startswith(f"{control.DEFAULT_CONTROL_API_URL}/v1/")
 
 
 def test_installed_sdk_is_the_manifest_pin() -> None:
