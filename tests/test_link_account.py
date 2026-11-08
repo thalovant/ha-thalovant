@@ -13,7 +13,10 @@ import aiohttp
 from freezegun.api import FrozenDateTimeFactory
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
-from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
+from pytest_homeassistant_custom_component.test_util.aiohttp import (
+    AiohttpClientMocker,
+    AiohttpClientMockResponse,
+)
 from yarl import URL
 
 from custom_components.thalovant.api import (
@@ -461,6 +464,84 @@ async def test_reauth_link_failure_returns_to_confirm(
     result = await _come_back(hass, result)
     assert result["step_id"] == "reauth_confirm"
     assert result["errors"] == {"base": "link_wrong_network"}
+
+
+@pytest.mark.usefixtures("my_home_assistant")
+async def test_entry_stored_by_0_2_renews_with_link_account(
+    hass: HomeAssistant,
+    token_endpoint: AiohttpClientMocker,
+    mock_auth: MagicMock,
+    mock_api: MagicMock,
+    entry_stored_by_0_2: MockConfigEntry,
+    account: Account,
+    credentials: ConnectionCredentials,
+) -> None:
+    """Reauth of an entry 0.2.5 stored: its token first, then Link account."""
+    entry_stored_by_0_2.add_to_hass(hass)
+    stored = Tokens.from_dict(entry_stored_by_0_2.data[CONF_TOKENS])
+    mock_api.get_account.side_effect = [ThalovantAuthError("revoked"), account]
+    mock_api.create_connection.return_value = replace(
+        credentials, connection_id="conn-new"
+    )
+    with patch(
+        "custom_components.thalovant.config_flow.ThalovantApi", return_value=mock_api
+    ) as api_class:
+        result = await entry_stored_by_0_2.start_reauth_flow(hass)
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        # The stored token was tried first, as read from the 0.2 entry.
+        assert api_class.call_args_list[0].args[1] == stored
+        result = await _come_back(hass, result)
+        await hass.async_block_till_done()
+        result = await hass.config_entries.flow.async_configure(result["flow_id"])
+    assert result["reason"] == "reauth_successful"
+    assert set(entry_stored_by_0_2.data) == {
+        CONF_ACCOUNT_ID,
+        CONF_HUB_ID,
+        CONF_HUB_NAME,
+        CONF_TOKENS,
+        CONF_CREDENTIALS,
+        CONF_LINKED_AT,
+    }
+    assert entry_stored_by_0_2.data[CONF_TOKENS] == LINKED.to_dict()
+    assert entry_stored_by_0_2.data[CONF_CREDENTIALS]["connection_id"] == "conn-new"
+    mock_api.delete_connection.assert_awaited_once_with(CONNECTION_ID)
+
+
+@pytest.mark.usefixtures("my_home_assistant", "mock_auth")
+async def test_closed_while_thalovant_answers(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    mock_api: MagicMock,
+    mock_config_entry: MockConfigEntry,
+) -> None:
+    """A token that arrives after the dialog closed is revoked, not kept.
+
+    Home Assistant removes the flow while the exchange is in flight; the
+    step still gets the token, which nothing will hold, and nothing else
+    changes: no account read, no other entry handed the token.
+    """
+    mock_config_entry.add_to_hass(hass)
+    before = dict(mock_config_entry.data)
+    result = await _link(hass)
+    flow_id = result["flow_id"]
+
+    async def close_then_answer(*_: Any) -> AiohttpClientMockResponse:
+        hass.config_entries.flow.async_abort(flow_id)
+        return AiohttpClientMockResponse("POST", URL(LINK_TOKEN_URL), json=ANSWER)
+
+    aioclient_mock.post(LINK_TOKEN_URL, side_effect=close_then_answer)
+    done = await hass.config_entries.flow.async_configure(
+        flow_id, {"state": _state(hass, result), "code": CODE}
+    )
+    assert done["type"] is FlowResultType.EXTERNAL_STEP_DONE
+    result = await hass.config_entries.flow.async_configure(flow_id)
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "link_closed"
+
+    await hass.async_block_till_done(wait_background_tasks=True)
+    mock_api.revoke_token.assert_awaited_once_with()
+    mock_api.get_account.assert_not_awaited()
+    assert dict(mock_config_entry.data) == before
 
 
 @pytest.mark.usefixtures("my_home_assistant", "token_endpoint")

@@ -7,8 +7,8 @@ Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account is accepte
 **Link account** is the default sign-in: Home Assistant's own OAuth 2 flow
 with PKCE, approved in the browser and brought back by My Home Assistant.
 Home Assistant signs the `state` with its own secret, and a code is useless
-without the verifier, which never leaves the Home Assistant that started the
-flow. **Link with a code instead** keeps the device login exactly as it was.
+without the verifier, which the Home Assistant that started the flow sends
+only to Thalovant's token endpoint, never through the browser. **Link with a code instead** keeps the device login exactly as it was.
 
 My Home Assistant sends the browser to whichever Home Assistant it is set up
 for, so the browser alone does not decide who gets the link. Thalovant
@@ -46,8 +46,13 @@ off, as the code step has since 0.2.5.
   and continues at `async_step_account()`. The token is kept, shared with the
   account's other entries and revoked when unused exactly as before. A decline
   (`error=access_denied`) is `login_denied`; any other error is `link_failed`.
+  A token that arrives after the dialog was closed (`async_remove` sets
+  `_removed`) is revoked at once and the step aborts with `link_closed`,
+  touching no account or entry.
 - Entry data, `VERSION` 1 and `MINOR_VERSION` 1 are unchanged, so entries
-  linked with a code before 0.3.0 load and renew as they did.
+  linked with a code before 0.3.0 load and renew as they did. A fixture
+  written out as 0.2.5 stored it (`entry_stored_by_0_2`) is set up for real
+  and renewed through Link account.
 - English and Canadian French copy for the choice, the external step (with
   the same-network advice), the missing My Home Assistant step,
   `link_wrong_network` and `link_failed`; `strings.json` and
@@ -56,7 +61,7 @@ off, as the code step has since 0.2.5.
 Verification, local, Python 3.14.10, Home Assistant 2026.10.4
 (`pytest-homeassistant-custom-component==0.13.375`), SDK 0.10.0 installed
 under Home Assistant's package constraints as CI does: `pytest --cov
---cov-report=term-missing` passed 374 tests with 100% statement and branch
+--cov-report=term-missing` passed 377 tests with 100% statement and branch
 coverage; `ruff check .`, `ruff format --check .` and `mypy` passed; hassfest
 (`ghcr.io/home-assistant/hassfest:latest` run with podman on the branch)
 reported 0 invalid integrations. The existing device-login tests pass with

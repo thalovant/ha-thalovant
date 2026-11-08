@@ -76,6 +76,22 @@ async def test_setup_and_unload(
     assert mock_hub_connection.state_callbacks == []
 
 
+async def test_entry_stored_by_0_2_sets_up(
+    hass: HomeAssistant,
+    entry_stored_by_0_2: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+) -> None:
+    """0.3.0 loads an entry 0.2.5 stored, with no migration."""
+    await _setup(hass, entry_stored_by_0_2)
+
+    assert entry_stored_by_0_2.state is ConfigEntryState.LOADED
+    assert (entry_stored_by_0_2.version, entry_stored_by_0_2.minor_version) == (1, 1)
+    credentials = mock_hub_connection.factory.call_args.args[1]
+    assert credentials.connection_id == CONNECTION_ID
+    assert credentials.to_dict() == entry_stored_by_0_2.data[CONF_CREDENTIALS]
+    mock_hub_connection.connect.assert_awaited_once()
+
+
 async def test_setup_retries_when_hub_unreachable(
     hass: HomeAssistant,
     mock_config_entry: MockConfigEntry,

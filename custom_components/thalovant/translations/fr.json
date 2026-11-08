@@ -84,6 +84,7 @@
       "already_configured": "Ce hub est déjà relié à Home Assistant.",
       "already_in_progress": "Une liaison avec ce hub est déjà en cours de configuration.",
       "hub_not_found": "Ce hub n'est plus disponible pour votre compte Thalovant.",
+      "link_closed": "La configuration a été fermée avant la réponse de Thalovant. La connexion obtenue est révoquée ; ajoutez de nouveau l'intégration pour relier votre compte.",
       "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
       "reauth_successful": "Home Assistant est de nouveau relié au hub.",
       "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison.",

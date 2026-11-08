@@ -134,6 +134,9 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         # ends without storing it, since a Free plan allows one API token.
         self._minted: Tokens | None = None
         self._errors: dict[str, str] = {}
+        # Set once Home Assistant has removed the flow: a step still running
+        # then cleans up what it gets instead of keeping it.
+        self._removed = False
         # "{hub} (can't link yet)", in Home Assistant's language.
         self._not_ready_label = NOT_READY_LABEL
 
@@ -235,6 +238,13 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
             LOGGER.exception("Unexpected error while linking the account")
             error = "unknown"
         else:
+            if self._removed:
+                # Closed while Thalovant answered: async_remove has run, and
+                # nothing will hold this token, so it is revoked now.
+                self.hass.async_create_background_task(
+                    self._async_revoke(tokens), name=f"{DOMAIN} revoke unused link"
+                )
+                return self.async_abort(reason="link_closed")
             self._tokens = self._minted = tokens
             return await self.async_step_account()
         self._errors = {"base": error}
@@ -502,6 +512,7 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     @override
     def async_remove(self) -> None:
         """Clean up what the flow made and never stored: connection, then token."""
+        self._removed = True
         credentials, self._credentials = self._credentials, None
         minted, self._minted = self._minted, None
         if credentials is not None or minted is not None:

@@ -5,22 +5,23 @@ Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Record the My Home Assistant f
 ## Link account (0.3.0)
 
 Link account
-([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L671),
+([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L682),
 [`ThalovantOAuth2Implementation`](custom_components/thalovant/oauth.py)) uses Home Assistant's own OAuth 2
 machinery. The `state` is a JWT signed with this installation's secret, and
 Home Assistant's `OAuth2AuthorizeCallbackView` refuses any other with a 400
 and leaves the flow waiting
-([`test_link_account_through_the_callback_view`](tests/test_link_account.py#L202)).
+([`test_link_account_through_the_callback_view`](tests/test_link_account.py#L205)).
 The exchange sends the PKCE verifier, whose S256 challenge went out in the
-authorize URL ([`test_link_account`](tests/test_link_account.py#L135) checks the pair). The
-verifier never leaves this Home Assistant, and each attempt makes a new one
+authorize URL ([`test_link_account`](tests/test_link_account.py#L138) checks the pair). The
+verifier goes only to Thalovant's token endpoint, in the exchange's JSON body
+and never through the browser, and each attempt makes a new one
 ([`test_each_link_has_its_own_verifier`](tests/test_oauth.py#L153),
-[`test_link_account_invalid_grant`](tests/test_link_account.py#L227)). The redirect must be
+[`test_link_account_invalid_grant`](tests/test_link_account.py#L230)). The redirect must be
 exactly My Home Assistant's
-([`through_my_home_assistant`](custom_components/thalovant/oauth.py#L72)); otherwise the flow offers
+([`through_my_home_assistant`](custom_components/thalovant/oauth.py#L74)); otherwise the flow offers
 the device login instead
-([`test_without_my_home_assistant_a_code_is_offered`](tests/test_link_account.py#L319),
-[`test_own_address_is_not_enough`](tests/test_link_account.py#L343)).
+([`test_without_my_home_assistant_a_code_is_offered`](tests/test_link_account.py#L322),
+[`test_own_address_is_not_enough`](tests/test_link_account.py#L346)).
 
 Finding (API review, 2026-11-08): My Home Assistant forwards the code to
 whichever Home Assistant the approving browser is set up for. A signed state
@@ -34,26 +35,34 @@ spends the code. A link sent to someone on another computer or network gives
 them nothing. The copy says to approve from a phone or computer on Home
 Assistant's network, and to approve only requests you started.
 `invalid_grant` maps to `link_wrong_network`
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L227),
-[`test_link_account_invalid_grant`](tests/test_link_account.py#L227),
-[`test_reauth_link_failure_returns_to_confirm`](tests/test_link_account.py#L448)). The
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L230),
+[`test_link_account_invalid_grant`](tests/test_link_account.py#L230),
+[`test_reauth_link_failure_returns_to_confirm`](tests/test_link_account.py#L451)). The
 message says "usually", because the same answer covers a code more than 60
 seconds old or already used. The API's detail is read by
-[`_detail()`](custom_components/thalovant/oauth.py#L146). The network check itself is the API's and
+[`_detail()`](custom_components/thalovant/oauth.py#L148). The network check itself is the API's and
 is not tested here.
 
 Secrets: the exchange posts JSON
-([`oauth.py`](custom_components/thalovant/oauth.py#L112),
+([`oauth.py`](custom_components/thalovant/oauth.py#L114),
 [`test_exchange_posts_json`](tests/test_oauth.py#L190) on a local endpoint).
 No error message carries the code or the verifier
 ([`test_exchange_errors`](tests/test_oauth.py#L234)). A refused code logs the HTTP
 status and the API's detail (`invalid_grant`) only. `async_step_creation()`
 drops the code before the exchange
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L211)). It also replaces Home Assistant's own
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L214)). It also replaces Home Assistant's own
 creation step, which would log a token without `expires_in` in full and store
 it as an OAuth entry. The token is held like a device login's: `_tokens` and
-`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L238)), revoked when unused
-([`test_link_account_no_hubs_revokes_the_token`](tests/test_link_account.py#L365)).
+`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L248)), revoked when unused
+([`test_link_account_no_hubs_revokes_the_token`](tests/test_link_account.py#L368)).
+
+Fixed in review (CodeRabbit on #26): closing the dialog while the exchange
+was in flight let the token arrive after `async_remove` had run, so nothing
+revoked it. `async_step_creation()` now revokes such a token and aborts
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L241),
+[`test_closed_while_thalovant_answers`](tests/test_link_account.py#L511)). The same window
+exists, from before 0.3.0, for a connection whose creation is in flight when
+the dialog closes; it is left as it was.
 
 Known, accepted: the last implementation registered stays in Home Assistant's
 implementation registry (`hass.data`) after its flow ends, with its verifier.

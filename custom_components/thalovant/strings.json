@@ -84,6 +84,7 @@
       "already_configured": "This hub is already linked to Home Assistant.",
       "already_in_progress": "A link to this hub is already being set up.",
       "hub_not_found": "This hub is no longer available to your Thalovant account.",
+      "link_closed": "The setup was closed before Thalovant answered. The sign-in it made is revoked; add the integration again to link.",
       "no_hubs": "This Thalovant account has no hub that Home Assistant can be linked to.",
       "reauth_successful": "Home Assistant is linked to the hub again.",
       "wrong_account": "You signed in with a different Thalovant account. Sign in with the account this link belongs to.",

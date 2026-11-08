@@ -3,10 +3,12 @@
 The person approves on the Thalovant dashboard, and My Home Assistant brings
 the browser back to the Home Assistant it is set up for. Only the one that
 started the flow can use the code: the state is signed with its own secret,
-and the code is worth nothing without the PKCE verifier, which never leaves
-it. That does not make approving somebody else's request safe, so Thalovant
-also accepts the exchange only from the network the approval came from: a
-link sent to someone on another computer or network gives them nothing.
+and the code is worth nothing without the PKCE verifier, which that Home
+Assistant sends only to Thalovant's token endpoint, never through the
+browser. That does not make approving somebody else's request safe, so
+Thalovant also accepts the exchange only from the network the approval came
+from: a link sent to someone on another computer or network gives them
+nothing.
 
 What comes back is the same setup token a device login gives, for the same
 registered app: the config flow goes on with it exactly as it does after a

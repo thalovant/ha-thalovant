@@ -10,8 +10,9 @@ login of 0.2. See
 
 **What does Link account add over a code?** No code to type, and only the
 Home Assistant that started the setup can use the approval: the request is
-signed with its own secret, and the code is useless without the PKCE verifier
-that Home Assistant keeps. Neither method makes approving somebody else's
+signed with its own secret, and the code is useless without the PKCE verifier,
+which Home Assistant sends only to Thalovant's token endpoint, never through
+the browser. Neither method makes approving somebody else's
 request safe, so approve only sign-in requests you started. Thalovant
 completes either only when it is approved from the same network as the
 Home Assistant that asked, so a link sent to someone on another computer or

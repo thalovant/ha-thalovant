@@ -100,14 +100,17 @@ account** without My Home Assistant, the setup says so and offers the code.
 
 **Link account** has no code to type, and only the Home Assistant that started
 the setup can use the approval: the request is signed with its own secret, and
-turning the approval into a token takes a key (a PKCE verifier) that never
-leaves it. Spotify, Google, Netatmo and other cloud integrations link accounts
-the same way. Both methods give Home Assistant the same token and the same link.
+turning the approval into a token takes a key (a PKCE verifier) that
+Home Assistant sends only to Thalovant when it asks for the token, never
+through your browser. Spotify, Google, Netatmo and other cloud integrations
+link accounts the same way. Both methods give Home Assistant the same token and
+the same link.
 
-Either way, approve only sign-in requests you started. Thalovant completes a
-link only when the approval comes from the same network as the Home Assistant
-that asked, so a link sent to someone on another computer or network gives
-them nothing.
+Either way, approve only sign-in requests you started, and check that
+My Home Assistant opens your own Home Assistant. Thalovant completes a link
+only when the approval comes from the same network as the Home Assistant that
+asked, so a link sent to someone on another computer or network gives them
+nothing.
 
 ### What the setup asks for
 
@@ -286,9 +289,11 @@ also refuses one more than a minute old or already used. From a phone or
 computer on Home Assistant's network, select **Submit** to link again.
 
 **"Invalid state. Is My Home Assistant configured to go to the right
-instance?"** My Home Assistant sent your browser to another Home Assistant.
-Open [My Home Assistant][my], change the address it remembers to this
-Home Assistant's, and link again.
+instance?"** If Home Assistant restarted during the sign-in, start a new link:
+a restart forgets the one in progress. If the error persists, My Home Assistant
+is sending your browser to another Home Assistant: open
+[My Home Assistant][my] and check that the address it remembers is this
+Home Assistant's.
 
 **"This hub can't link Home Assistant yet".** The hub or the Thalovant API
 does not support Home Assistant connections yet. Pick another hub; there is
