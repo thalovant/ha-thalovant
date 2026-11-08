@@ -69,8 +69,9 @@ The sign-in step (`wait_for_login` in [strings.json](custom_components/thalovant
 [fr](custom_components/thalovant/translations/fr.json)) now says to open the
 link on a phone or computer on the same network as this Home Assistant, with
 any VPN off. Thalovant now approves a device sign-in only from the device's own
-network (thalovant-api `fix/device-approval-same-network`), so a code sent to
-somebody else cannot give them the account. Setting up through remote access
+network (thalovant-api `fix/device-approval-same-network`). That stops a code
+sent to somebody on another network; it does not make approving safe, so approve
+only sign-in requests you started. Setting up through remote access
 from another network is refused until the browser is on the home network.
 
 `strings.json` and `translations/en.json` stay identical (`cmp`). The copy is
