@@ -2,7 +2,7 @@ Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Say to approve the sign-in fro
 
 # Maintenance report
 
-## 2026-11-08 · unreleased
+## 2026-11-08 · 0.2.5
 
 The sign-in step (`wait_for_login` in [strings.json](custom_components/thalovant/strings.json),
 [en](custom_components/thalovant/translations/en.json) and
@@ -20,7 +20,7 @@ local Python 3.14 environment could not be built: the disk quota was full).
 
 Transparency Report: AI Model: Claude Opus 5.5. Actions Taken: wrote the copy
 in English and Canadian French. Oversight: the owner's request of 2026-11-08;
-no release cut (0.2.4 was published by hand, with its zip and SHA256SUMS).
+released as 0.2.5 on the owner's "deploy all", built like 0.2.4: `git archive --format=zip --prefix=ha-thalovant-0.2.5/ v0.2.5 LICENSE README.md custom_components/thalovant docs hacs.json` (the same command rebuilds 0.2.4's published zip byte for byte) and its SHA256SUMS.
 
 ## 2026-11-06 · 0.2.4
 
