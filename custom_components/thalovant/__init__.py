@@ -5,13 +5,15 @@ from datetime import datetime
 from pathlib import Path
 import re
 import shutil
+from typing import Any
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
-from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import config_validation as cv, issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.storage import STORAGE_DIR
+from homeassistant.helpers.typing import ConfigType
 from homeassistant.util import dt as dt_util
 
 from .api import (
@@ -26,22 +28,56 @@ from .api import (
 )
 from .const import (
     ADMISSION_GRACE_PERIOD,
+    CONF_ALLOW_RECEIVE,
     CONF_CREDENTIALS,
     CONF_LINKED_AT,
     CONF_SELF_HOSTED,
     CONF_TOKENS,
     DOMAIN,
+    INTERCOM_OPTION_KEYS,
     LOGGER,
     REMOVE_TIMEOUT,
     REQUEST_MESSAGE_TYPE,
+    SPEAK_MESSAGE_TYPE,
 )
 from .handler import HomeRequestHandler, agent_issue_id
+from .intercom import IntercomController, can_play_issue_id, unavailable_issue_id
 from .models import ThalovantConfigEntry, ThalovantRuntimeData
 from .self_hosted import async_create_session, validate_credentials
+from .services import async_setup_services
+from .speaker import IntercomSpeakerHandler
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR]
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _UNSAFE_NAME = re.compile(r"[^A-Za-z0-9_-]")
+
+
+async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
+    """Register the service actions, which an entry's options allow or refuse."""
+    async_setup_services(hass)
+    return True
+
+
+def _intercom_options(entry: ThalovantConfigEntry) -> dict[str, Any]:
+    """The options Intercom reads, for telling whether a change needs a reload."""
+    return {key: entry.options.get(key) for key in INTERCOM_OPTION_KEYS}
+
+
+async def _async_options_updated(
+    hass: HomeAssistant, entry: ThalovantConfigEntry
+) -> None:
+    """Reload when an Intercom option changed. The agent option needs no reload."""
+    before = entry.runtime_data.intercom_options
+    if (after := _intercom_options(entry)) == before:
+        return
+    controller = entry.runtime_data.intercom
+    if (
+        controller is not None
+        and before.get(CONF_ALLOW_RECEIVE) is True
+        and after.get(CONF_ALLOW_RECEIVE) is not True
+    ):
+        await controller.async_set_can_play(False)
+    hass.config_entries.async_schedule_reload(entry.entry_id)
 
 
 def key_changed_issue_id(entry_id: str) -> str:
@@ -163,7 +199,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
             translation_key="credentials_invalid",
             translation_placeholders={"hub": entry.title},
         ) from err
-    entry.runtime_data = ThalovantRuntimeData(connection=connection)
+    controller = None if self_hosted else IntercomController(hass, entry)
+    entry.runtime_data = ThalovantRuntimeData(
+        connection=connection,
+        intercom=controller,
+        intercom_options=_intercom_options(entry),
+    )
     await hass.async_add_executor_job(
         _prune_noise_dirs,
         _noise_root(hass),
@@ -184,6 +225,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     )
     state_logger = _StateLogger(entry.title)
     entry.async_on_unload(connection.on_state_change(state_logger))
+    if controller is not None:
+        entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+        if entry.options.get(CONF_ALLOW_RECEIVE) is True:
+            speaker = IntercomSpeakerHandler(hass, entry)
+            entry.async_on_unload(
+                connection.on_message(SPEAK_MESSAGE_TYPE, speaker.async_handle_message)
+            )
 
     try:
         await connection.connect()
@@ -218,7 +266,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     state_logger(connection.connected)
     _async_delete_key_issues(hass, entry.entry_id)
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    platforms = [Platform.BINARY_SENSOR]
+    if controller is not None:
+        platforms.extend(_async_start_intercom(hass, entry, controller))
+    entry.runtime_data.platforms = platforms
+    await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
     entry.async_create_background_task(
         hass,
@@ -228,9 +280,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     return True
 
 
+@callback
+def _async_start_intercom(
+    hass: HomeAssistant, entry: ThalovantConfigEntry, controller: IntercomController
+) -> list[Platform]:
+    """Start what the options turned on, and say which platforms it needs.
+
+    With nothing turned on this contacts nothing and adds nothing: the entry
+    behaves as it did before Intercom existed.
+    """
+    platforms: list[Platform] = []
+    if controller.announcements_allowed:
+        platforms.append(Platform.NOTIFY)
+        entry.async_create_background_task(
+            hass,
+            controller.async_check_availability(),
+            name=f"{DOMAIN} intercom availability",
+        )
+    else:
+        controller.async_clear_issue()
+    if entry.options.get(CONF_ALLOW_RECEIVE) is True:
+        entry.async_create_background_task(
+            hass, controller.async_set_can_play(True), name=f"{DOMAIN} can play"
+        )
+    else:
+        ir.async_delete_issue(hass, DOMAIN, can_play_issue_id(entry.entry_id))
+    return platforms
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -> bool:
     """Unload the entry; the unload callbacks close the connection."""
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    return await hass.config_entries.async_unload_platforms(
+        entry, entry.runtime_data.platforms
+    )
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -> None:
@@ -240,6 +322,8 @@ async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
     config flow), so it is revoked only with the last of them.
     """
     ir.async_delete_issue(hass, DOMAIN, agent_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, unavailable_issue_id(entry.entry_id))
+    ir.async_delete_issue(hass, DOMAIN, can_play_issue_id(entry.entry_id))
     _async_delete_key_issues(hass, entry.entry_id)
     if (directory := _noise_dir(hass, entry)) is not None:
         await hass.async_add_executor_job(shutil.rmtree, directory, True)

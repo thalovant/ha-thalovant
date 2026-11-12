@@ -7,6 +7,22 @@
           "on": "mdi:cloud-check-variant-outline"
         }
       }
+    },
+    "notify": {
+      "intercom": {
+        "default": "mdi:bullhorn-outline"
+      }
+    }
+  },
+  "services": {
+    "announce": {
+      "service": "mdi:bullhorn-outline"
+    },
+    "cancel_announcement": {
+      "service": "mdi:bullhorn-variant-outline"
+    },
+    "list_speakers": {
+      "service": "mdi:speaker-multiple"
     }
   }
 }

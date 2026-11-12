@@ -56,6 +56,16 @@
           "home_client_id": "ID numérique attribué par le hub à la connexion Home Assistant dédiée.",
           "voice_client_id": "ID numérique attribué par le hub à la connexion vocale autorisée à contrôler l’éclairage de Noël."
         }
+      },
+      "intercom_consent": {
+        "title": "Approuver l'autorisation d'annonce",
+        "description": "Pour envoyer des annonces depuis {name}, Thalovant a besoin de votre approbation pour une autorisation supplémentaire (`intercom:read` et `intercom:send`, et `intercom:urgent` pour les annonces urgentes). Rien n'est activé tant que vous n'approuvez pas, et vos options restent inchangées si vous refusez. Votre forfait Thalovant doit inclure Intercom.\n\nCliquez sur **Valider** pour approuver. Si Thalovant vous demande de vous connecter, utilisez le même compte qu'avant.",
+        "data": {
+          "link_method": "Méthode d'approbation"
+        },
+        "data_description": {
+          "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique."
+        }
       }
     },
     "progress": {
@@ -88,32 +98,64 @@
       "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
       "reauth_successful": "Home Assistant est de nouveau relié au hub.",
       "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison.",
-      "different_private_hub": "La nouvelle connexion doit viser le même hub privé et garder le même ID de connexion vocale autorisée."
+      "different_private_hub": "La nouvelle connexion doit viser le même hub privé et garder le même ID de connexion vocale autorisée.",
+      "consent_successful": "C'est fait. Thalovant a accordé l'autorisation et les options sont enregistrées. L'intégration se recharge pour les appliquer.",
+      "consent_scopes_missing": "Thalovant n'a pas accordé l'autorisation d'annonce, donc rien n'a été activé. Votre forfait Thalovant n'inclut peut-être pas Intercom."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Agent de conversation",
+        "title": "Options de Thalovant",
+        "description": "Intercom permet à vos automatisations de dire un court texte sur les haut-parleurs de votre hub, et à votre hub de jouer des annonces sur les lecteurs multimédias de ce Home Assistant. Tout est désactivé tant que vous ne l'activez pas.\n\n**Intercom est en cours de déploiement.** Il n'est peut-être pas encore activé pour votre compte ou votre hub Thalovant. S'il ne l'est pas, les actions le disent, rien n'est envoyé et un avis de réparation l'explique.\n\n**Intercom est une commodité, pas un système de sécurité certifié.** Il ne remplace ni les détecteurs de fumée ou de monoxyde de carbone, ni les dispositifs d'alerte médicale, ni les services d'urgence, et il peut échouer sans bruit : haut-parleur hors ligne, hub qui redémarre, Ne pas déranger, ou liaison coupée.",
         "data": {
-          "agent_id": "Agent de conversation"
+          "agent_id": "Agent de conversation",
+          "allow_announcements": "Envoyer des annonces",
+          "allow_urgent": "Autoriser les annonces urgentes",
+          "allow_receive": "Jouer les annonces sur ce Home Assistant"
         },
         "data_description": {
-          "agent_id": "L'agent qui répond aux demandes du hub. L'agent de Home Assistant n'agit que sur les entités exposées à Assist."
+          "agent_id": "L'agent qui répond aux demandes du hub. L'agent de Home Assistant n'agit que sur les entités exposées à Assist.",
+          "allow_announcements": "Ajoute les actions `announce`, `cancel_announcement` et `list_speakers`, et une entité de notification Intercom, désactivée tant que vous ne l'activez pas. Cocher cette case demande d'abord une autorisation supplémentaire à Thalovant ; si vous refusez, elle reste désactivée. Votre forfait Thalovant doit inclure Intercom, et le propriétaire du hub active Intercom pour ce hub dans le tableau de bord Thalovant.",
+          "allow_urgent": "Permet qu'une annonce soit urgente : elle ignore Ne pas déranger et peut se répéter jusqu'à ce que quelqu'un l'acquitte. Demande sa propre autorisation. Nécessite que les annonces soient activées.",
+          "allow_receive": "Permet au hub de jouer des annonces sur ce Home Assistant, sur les lecteurs multimédias que vous choisirez ensuite. Home Assistant indique à Thalovant que cette connexion peut jouer des annonces, et le propriétaire du hub doit aussi activer la réception pour elle dans le tableau de bord Thalovant, onglet Intercom."
+        }
+      },
+      "receive": {
+        "title": "Où jouer les annonces",
+        "description": "Les annonces de votre hub sont jouées par synthèse vocale sur les lecteurs multimédias que vous choisissez, à leur volume actuel. Choisissez des lecteurs, des pièces, ou les deux. Rien n'est joué sur un lecteur indisponible.",
+        "data": {
+          "speaker_players": "Lecteurs multimédias",
+          "speaker_areas": "Pièces",
+          "tts_entity": "Synthèse vocale"
+        },
+        "data_description": {
+          "speaker_players": "Les annonces sont jouées sur ces lecteurs multimédias.",
+          "speaker_areas": "Les annonces sont aussi jouées sur chaque lecteur multimédia de ces pièces.",
+          "tts_entity": "La synthèse vocale à utiliser. Laissez vide pour utiliser celle par défaut de Home Assistant."
         }
       }
     },
     "error": {
-      "agent_not_found": "Cet agent de conversation n'est pas disponible."
+      "agent_not_found": "Cet agent de conversation n'est pas disponible.",
+      "urgent_needs_announcements": "Les annonces urgentes nécessitent que les annonces soient activées.",
+      "receive_needs_players": "Choisissez au moins un lecteur multimédia ou une pièce."
     },
     "abort": {
-      "private_agent_fixed": "L’éclairage de Noël privé utilise toujours l’agent Assist intégré à Home Assistant."
+      "private_agent_fixed": "L’éclairage de Noël privé utilise toujours l’agent Assist intégré à Home Assistant.",
+      "consent_required": "Thalovant a besoin de votre approbation pour une autorisation supplémentaire avant que les annonces puissent être activées. Ouvrez la demande de réauthentification (dans la notification ou sous **Réparations**) et approuvez-la. Rien n'a été modifié : vos options ne sont enregistrées qu'une fois l'approbation donnée.",
+      "consent_pending": "Une réauthentification attend déjà pour cette liaison. Terminez-la d'abord, puis modifiez ces options."
     }
   },
   "entity": {
     "binary_sensor": {
       "hub_connection": {
         "name": "Connexion au hub"
+      }
+    },
+    "notify": {
+      "intercom": {
+        "name": "Intercom"
       }
     }
   },
@@ -135,6 +177,147 @@
     },
     "not_admitted_yet": {
       "message": "Le hub {hub} n'a pas encore accepté cette connexion"
+    },
+    "announcements_disabled": {
+      "message": "Les annonces sont désactivées pour {hub}. Activez **Envoyer des annonces** dans les options de l'intégration Thalovant."
+    },
+    "urgent_disabled": {
+      "message": "Les annonces urgentes sont désactivées pour {hub}. Activez **Autoriser les annonces urgentes** dans les options de l'intégration Thalovant."
+    },
+    "urgent_scope_required": {
+      "message": "Thalovant n'a pas accordé à {hub} l'autorisation d'envoyer des annonces urgentes. Désactivez puis réactivez **Autoriser les annonces urgentes** dans les options pour l'approuver. Rien n'a été envoyé."
+    },
+    "scope_missing": {
+      "message": "Thalovant n'a pas accordé à {hub} l'autorisation d'envoyer des annonces. Désactivez puis réactivez **Envoyer des annonces** dans les options pour l'approuver."
+    },
+    "token_rejected": {
+      "message": "Thalovant n'accepte plus la connexion de {hub}. Réauthentifiez l'intégration, puis réessayez. Rien n'a été envoyé."
+    },
+    "token_unreadable": {
+      "message": "La connexion Thalovant enregistrée pour {hub} est illisible. Réauthentifiez l'intégration."
+    },
+    "rate_limited_normal": {
+      "message": "Trop d'annonces : {limit} par minute au plus depuis ce Home Assistant. Rien n'a été envoyé."
+    },
+    "rate_limited_urgent": {
+      "message": "Trop d'annonces urgentes : {limit} par heure au plus depuis ce Home Assistant. Rien n'a été envoyé."
+    },
+    "rate_limited_remote": {
+      "message": "La limite d'annonces de Thalovant est atteinte. Rien n'a été envoyé. Réessayez dans {seconds} secondes."
+    },
+    "urgent_busy": {
+      "message": "Thalovant a déjà le maximum d'annonces urgentes qu'il permet de répéter en même temps (2 sur un hub). Rien n'a été envoyé. Arrêtez-en une avec l'action `cancel_announcement`, ou réessayez dans {seconds} secondes."
+    },
+    "hub_unreachable": {
+      "message": "Thalovant n'a pas pu joindre le hub pour faire l'annonce ; elle a peut-être quand même été dite. Vérifiez dans le tableau de bord Thalovant (annonce {announcement}) avant de l'envoyer de nouveau. Home Assistant ne réessaie pas."
+    },
+    "announce_outcome_unknown": {
+      "message": "Thalovant n'a pas répondu : on ne sait pas si l'annonce a été faite. Elle a peut-être quand même été dite : vérifiez avant de l'envoyer de nouveau. Home Assistant ne réessaie pas."
+    },
+    "cancel_outcome_unknown": {
+      "message": "Thalovant n'a pas répondu : on ne sait pas si l'annonce a été arrêtée. Si elle continue de se répéter, arrêtez-la dans le tableau de bord Thalovant ou désactivez Intercom pour le hub."
+    },
+    "cannot_reach_thalovant": {
+      "message": "Impossible de joindre Thalovant. Réessayez."
+    },
+    "plan_limit": {
+      "message": "Votre forfait Thalovant n'inclut pas Intercom. Rien n'a été envoyé."
+    },
+    "skill_not_installed": {
+      "message": "La compétence Intercom n'est pas encore installée sur le hub {hub} : une annonce urgente ne peut donc pas être envoyée. Rien n'a été envoyé. Activez Intercom pour le hub dans le tableau de bord Thalovant, attendez l'installation de la compétence, puis réessayez."
+    },
+    "intercom_unavailable_hub_off": {
+      "message": "Intercom est désactivé pour le hub {hub}. Son propriétaire peut l'activer dans le tableau de bord Thalovant. Rien n'a été envoyé."
+    },
+    "intercom_unavailable_platform": {
+      "message": "Intercom est en cours de déploiement sur Thalovant et n'est pas encore activé. Rien n'a été envoyé. Rien ne cloche de votre côté."
+    },
+    "intercom_unavailable_kid_hub": {
+      "message": "Intercom n'est jamais disponible sur le hub enfant {hub}. Rien n'a été envoyé."
+    },
+    "intercom_unavailable_public_hub": {
+      "message": "Intercom n'est jamais disponible sur le hub public {hub}. Rien n'a été envoyé."
+    },
+    "intercom_unavailable_unknown": {
+      "message": "Thalovant indique qu'Intercom est inutilisable sur le hub {hub}, pour une raison que cette version de l'intégration ne connaît pas. Rien n'a été envoyé. Consultez le hub dans le tableau de bord Thalovant."
+    },
+    "intercom_unavailable_not_configured": {
+      "message": "Intercom n'est pas encore disponible sur Thalovant. Rien n'a été envoyé."
+    },
+    "not_a_speaker": {
+      "message": "Un haut-parleur que vous avez nommé ne peut pas jouer de parole : rien n'a été envoyé. Une liaison Home Assistant ne joue des annonces qu'une fois configurée pour cela, et que son propriétaire a activé la réception. L'action `list_speakers` indique `can_play` pour chaque haut-parleur."
+    },
+    "too_many_targets": {
+      "message": "Cette annonce atteindrait plus de 50 haut-parleurs, le maximum pour une annonce. Rien n'a été envoyé. Nommez une pièce ou un groupe, ou nommez moins de haut-parleurs."
+    },
+    "hub_locked": {
+      "message": "Le hub {hub} est verrouillé sur Thalovant : rien n'a été modifié ni envoyé. Déverrouillez-le dans le tableau de bord Thalovant."
+    },
+    "manager_required": {
+      "message": "Thalovant ne laisse annoncer qu'un propriétaire ou un gestionnaire du compte, et le compte qui a relié {hub} n'est ni l'un ni l'autre. Rien n'a été envoyé."
+    },
+    "not_cancellable": {
+      "message": "Cette annonce ne peut plus être arrêtée : son état est {status}. Seule une annonce qui se répète encore peut être annulée."
+    },
+    "announcement_not_found": {
+      "message": "Thalovant n'a pas cette annonce sur {hub}."
+    },
+    "request_refused": {
+      "message": "Thalovant a refusé la demande (HTTP {status}, code {code})."
+    },
+    "invalid_request": {
+      "message": "La demande a été refusée comme invalide. Vérifiez la cible et les réglages de répétition."
+    },
+    "unexpected": {
+      "message": "Un problème inattendu est survenu en parlant à Thalovant pour {hub}. On ne sait pas si la demande a abouti : vérifiez dans le tableau de bord Thalovant avant de réessayer. Le journal de Home Assistant contient le type d'erreur."
+    },
+    "text_empty": {
+      "message": "Le message est vide."
+    },
+    "text_too_long": {
+      "message": "Le message dépasse 280 caractères."
+    },
+    "text_markup": {
+      "message": "Le message contient `<` ou `>`, qu'une annonce ne peut pas porter : la synthèse vocale d'un haut-parleur pourrait les lire comme du balisage."
+    },
+    "text_bad_characters": {
+      "message": "Le message contient un caractère de contrôle, de direction du texte ou un autre caractère de mise en forme invisible, ou un caractère d'usage privé, qu'une annonce ne peut pas porter."
+    },
+    "invalid_names": {
+      "message": "Un nom de haut-parleur, de pièce ou de groupe est vide, dépasse 64 caractères ou contient un caractère de contrôle, ou il y en a plus de 50."
+    },
+    "names_not_allowed": {
+      "message": "Les noms ne vont qu'avec les cibles haut-parleurs, pièces ou groupes. Pour parler sur tous les haut-parleurs, laissez les noms vides."
+    },
+    "names_required": {
+      "message": "Indiquez au moins un nom pour l'annonce à {target}."
+    },
+    "repeat_urgent_only": {
+      "message": "La répétition est réservée aux annonces urgentes."
+    },
+    "repeat_incomplete": {
+      "message": "Indiquez à la fois le nombre de répétitions et les secondes entre deux répétitions."
+    },
+    "invalid_language": {
+      "message": "La langue doit être une étiquette comme `en-US` ou `fr`."
+    },
+    "invalid_announcement_id": {
+      "message": "Ce n'est pas un identifiant d'annonce."
+    },
+    "ambiguous_speaker": {
+      "message": "Plusieurs haut-parleurs de {hub} portent ce nom. Utilisez l'identifiant court (slug) du haut-parleur donné par l'action `list_speakers`."
+    },
+    "entry_not_found": {
+      "message": "Cette entrée Thalovant n'existe pas."
+    },
+    "no_entries": {
+      "message": "Aucun hub n'est relié à Thalovant."
+    },
+    "entry_required": {
+      "message": "Plusieurs hubs reliés peuvent le faire. Choisissez lequel avec `config_entry_id`."
+    },
+    "entry_not_loaded": {
+      "message": "La liaison avec {hub} ne fonctionne pas pour le moment."
     }
   },
   "issues": {
@@ -149,6 +332,34 @@
     "hub_key_changed": {
       "title": "{hub} a répondu avec une autre clé de sécurité",
       "description": "Home Assistant a cessé de communiquer avec le hub {hub} : il a répondu avec une clé de sécurité différente de celle qu'il avait quand vous l'avez relié. Cela arrive quand un hub est remplacé ou réinitialisé, mais aussi quand quelque chose s'interpose entre Home Assistant et le hub.\n\nSi vous savez que le hub a été remplacé ou réinitialisé, reliez-le à nouveau : ouvrez l'intégration Thalovant et suivez sa demande de réauthentification. La nouvelle liaison fait confiance à la clé que le hub présente maintenant. Si vous ne vous y attendiez pas, vérifiez le hub dans le tableau de bord Thalovant avant de le relier à nouveau."
+    },
+    "intercom_unavailable_plan": {
+      "title": "Intercom ne fait pas partie du forfait de {hub}",
+      "description": "Les annonces sont activées dans Home Assistant pour {hub}, mais le forfait Thalovant du compte qui l'a relié n'inclut pas Intercom : rien ne peut être annoncé ni joué. Changez de forfait dans le tableau de bord Thalovant, ou désactivez **Envoyer des annonces** et **Jouer les annonces sur ce Home Assistant** dans les options de l'intégration."
+    },
+    "intercom_unavailable_kid_hub": {
+      "title": "Intercom n'est pas disponible sur {hub}",
+      "description": "{hub} est un hub enfant, et Intercom n'est jamais disponible sur un hub enfant. Désactivez **Envoyer des annonces** et **Jouer les annonces sur ce Home Assistant** dans les options de l'intégration."
+    },
+    "intercom_unavailable_public_hub": {
+      "title": "Intercom n'est pas disponible sur {hub}",
+      "description": "{hub} est un hub public, et Intercom n'est jamais disponible sur un hub public. Désactivez **Envoyer des annonces** et **Jouer les annonces sur ce Home Assistant** dans les options de l'intégration."
+    },
+    "intercom_unavailable_platform": {
+      "title": "Intercom n'est pas encore activé sur Thalovant",
+      "description": "Intercom est en cours de déploiement sur Thalovant et n'est pas encore activé : {hub} ne peut ni annoncer ni jouer d'annonces. Rien ne cloche de votre côté et il n'y a rien à corriger : Home Assistant revérifie au prochain démarrage, ou quand vous essayez d'annoncer."
+    },
+    "intercom_unavailable_hub_off": {
+      "title": "Intercom est désactivé pour {hub}",
+      "description": "Les annonces sont activées dans Home Assistant, mais Intercom est désactivé pour le hub {hub}. Son propriétaire peut l'activer dans le tableau de bord Thalovant, sur l'onglet Intercom du hub."
+    },
+    "intercom_unavailable_unknown": {
+      "title": "Intercom est inutilisable sur {hub}",
+      "description": "Thalovant indique qu'Intercom n'est pas disponible pour {hub}, pour une raison que cette version de l'intégration ne connaît pas. Consultez le hub dans le tableau de bord Thalovant."
+    },
+    "intercom_can_play": {
+      "title": "Thalovant n'a pas été informé que {hub} peut jouer des annonces",
+      "description": "La lecture des annonces est activée pour {hub}, mais Home Assistant n'a pas pu indiquer à Thalovant que cette connexion peut les jouer : le propriétaire du hub ne peut donc pas encore activer la réception pour elle. Home Assistant réessaie au redémarrage ou quand vous enregistrez les options. Vérifiez que Thalovant est joignable et que l'API de votre compte Thalovant prend en charge Intercom."
     }
   },
   "selector": {
@@ -156,6 +367,20 @@
       "options": {
         "link_account": "Relier le compte",
         "code": "Relier avec un code plutôt"
+      }
+    },
+    "announce_target": {
+      "options": {
+        "all": "Tous les haut-parleurs",
+        "speakers": "Haut-parleurs nommés",
+        "rooms": "Pièces",
+        "groups": "Groupes"
+      }
+    },
+    "announce_priority": {
+      "options": {
+        "normal": "Normale",
+        "urgent": "Urgente"
       }
     }
   },
@@ -167,5 +392,73 @@
     "reply_timeout": "Désolé, Home Assistant a mis trop de temps à répondre.",
     "reply_unknown": "Désolé, un problème est survenu dans Home Assistant.",
     "hub_not_ready": "{hub} (ne peut pas encore être relié)"
+  },
+  "services": {
+    "announce": {
+      "name": "Annoncer",
+      "description": "Dit un court texte à voix haute sur les haut-parleurs de votre hub. Une commodité, pas un système de sécurité certifié : elle ne remplace ni les détecteurs de fumée ou de monoxyde de carbone, ni les dispositifs d'alerte médicale, ni les services d'urgence. Le texte est dit à voix haute chez vous. Cette intégration ne l'enregistre ni ne le conserve ; les traces d'automatisation de Home Assistant peuvent le garder. Intercom est en cours de déploiement : s'il n'est pas encore activé pour votre compte ou votre hub, l'action le dit et n'envoie rien.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Hub relié",
+          "description": "Le hub relié sur lequel annoncer. Nécessaire seulement si plusieurs hubs ont les annonces activées."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Ce qu'il faut dire : de 1 à 280 caractères. Les sauts de ligne deviennent des espaces. Les caractères de contrôle, de direction du texte et autres caractères invisibles, les caractères d'usage privé, ainsi que `<` et `>`, sont refusés."
+        },
+        "target": {
+          "name": "Qui l'entend",
+          "description": "Tous les haut-parleurs qui reçoivent, ou seulement les haut-parleurs, pièces ou groupes nommés."
+        },
+        "names": {
+          "name": "Noms",
+          "description": "Les haut-parleurs, pièces ou groupes à qui parler quand la cible n'est pas tous les haut-parleurs. Un haut-parleur est reconnu par son nom, son identifiant court (slug) ou son identifiant. L'action `list_speakers` les affiche."
+        },
+        "priority": {
+          "name": "Priorité",
+          "description": "Une annonce urgente ignore Ne pas déranger. Elle nécessite que les annonces urgentes soient activées dans les options."
+        },
+        "repeat_times": {
+          "name": "Nombre de répétitions",
+          "description": "Urgent seulement : combien de fois la dire, de 1 à 10. Elle se répète jusqu'à ce que quelqu'un l'acquitte ou qu'elle soit annulée."
+        },
+        "repeat_interval": {
+          "name": "Secondes entre les répétitions",
+          "description": "Urgent seulement : de 5 à 120 secondes. Nécessaire avec le nombre de répétitions."
+        },
+        "language": {
+          "name": "Langue",
+          "description": "Une étiquette comme en-US ou fr. Laissez vide pour la langue par défaut du hub."
+        },
+        "wait": {
+          "name": "Attendre le résultat",
+          "description": "Pour une annonce urgente qui se répète : attend qu'elle se termine, cinq minutes au plus, avant que l'action ne rende la main. Sinon l'action rend la main aussitôt, et l'évènement `thalovant_announcement_updated` signale chaque changement d'état."
+        }
+      }
+    },
+    "cancel_announcement": {
+      "name": "Annuler une annonce",
+      "description": "Arrête une annonce urgente qui se répète encore. Le hub l'arrête aussi quand Intercom est désactivé ou qu'un haut-parleur cesse de recevoir, et un acquittement à voix haute près d'un haut-parleur y met fin. Cela fonctionne même si les annonces sont désactivées dans les options.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Hub relié",
+          "description": "Le hub relié sur lequel l'annonce a été faite. Nécessaire seulement si plusieurs hubs sont reliés."
+        },
+        "announcement_id": {
+          "name": "Identifiant de l'annonce",
+          "description": "L'identifiant rendu par l'action announce."
+        }
+      }
+    },
+    "list_speakers": {
+      "name": "Lister les haut-parleurs",
+      "description": "Rend les haut-parleurs, pièces et groupes du hub, avec le genre de chacun, s'il peut jouer de la parole (`can_play`), ceux qui sont en ligne et ceux qui reçoivent les annonces. Utile pour trouver les noms que l'action announce accepte. `unavailable_reason` dit pourquoi Intercom ne peut pas fonctionner sur le hub, le cas échéant, et `policy_synced` est faux tant qu'un changement peut prendre un moment à atteindre la maison.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Hub relié",
+          "description": "Le hub relié à lister. Nécessaire seulement si plusieurs hubs ont les annonces activées."
+        }
+      }
+    }
   }
 }

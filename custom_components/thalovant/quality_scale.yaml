@@ -1,11 +1,16 @@
 rules:
   # Bronze
   action-setup:
-    status: exempt
-    comment: The integration registers no service actions.
+    status: done
+    comment: >
+      The announce, cancel_announcement and list_speakers actions are registered once,
+      in async_setup(), so a call the options do not allow gets a clear error.
   appropriate-polling:
     status: exempt
-    comment: Push only. The hub connection reports its own state and requests arrive over it.
+    comment: >
+      Push only. The hub connection reports its own state and requests arrive over it.
+      The one exception is an urgent announcement that is still sending: it is read every
+      five seconds until it ends, for as long as it can last.
   brands: done
   common-modules: done
   config-flow-test-coverage: done
@@ -14,10 +19,8 @@ rules:
     status: done
     comment: >
       The thalovant SDK is MIT-licensed, public, and released to PyPI from CI;
-      the manifest pins thalovant==0.10.0.
-  docs-actions:
-    status: exempt
-    comment: The integration registers no service actions.
+      the manifest pins thalovant==0.12.0, the first release with Intercom.
+  docs-actions: done
   docs-conditions:
     status: exempt
     comment: The integration provides no conditions.
@@ -37,8 +40,11 @@ rules:
 
   # Silver
   action-exceptions:
-    status: exempt
-    comment: The integration registers no service actions.
+    status: done
+    comment: >
+      Actions raise ServiceValidationError for what the caller can fix and
+      HomeAssistantError for what happened on the way, both with translations and
+      never the announcement's text.
   config-entry-unloading: done
   docs-configuration-parameters: done
   docs-installation-parameters: done
@@ -75,8 +81,10 @@ rules:
   entity-category: done
   entity-device-class: done
   entity-disabled-by-default:
-    status: exempt
-    comment: The one entity, the hub connection, changes rarely and is how users see the link works.
+    status: done
+    comment: >
+      The Intercom notify entity is disabled by default. The hub connection sensor is
+      not: it changes rarely and is how users see the link works.
   entity-translations: done
   exception-translations: done
   icon-translations: done

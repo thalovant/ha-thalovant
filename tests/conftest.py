@@ -15,14 +15,21 @@ from syrupy.assertion import SnapshotAssertion
 
 from custom_components.thalovant.api import (
     Account,
+    Announcement,
     ConnectionCredentials,
     DeviceLogin,
     Hub,
     HubMessage,
+    IntercomSettings,
+    IntercomSpeaker,
+    IntercomSpeakers,
     Tokens,
 )
 from custom_components.thalovant.const import (
     CONF_ACCOUNT_ID,
+    CONF_ALLOW_ANNOUNCEMENTS,
+    CONF_ALLOW_RECEIVE,
+    CONF_ALLOW_URGENT,
     CONF_CREDENTIALS,
     CONF_HUB_ID,
     CONF_HUB_NAME,
@@ -293,6 +300,147 @@ def mock_config_entry(
         version=1,
         minor_version=1,
     )
+
+
+INTERCOM_ALL_SCOPES = (
+    "hubs:read",
+    "clients:read",
+    "clients:write",
+    "intercom:read",
+    "intercom:send",
+    "intercom:urgent",
+)
+ANNOUNCEMENT_ID = "0fe8d3c2-6a52-4d3b-9a4e-5c1f0b7a9e11"
+SECRET_TEXT = "Dinner is ready, the secret word is pelican"
+
+
+def make_announcement(
+    status: str = "completed",
+    *,
+    announcement_id: str = ANNOUNCEMENT_ID,
+    priority: str = "normal",
+    deliveries: tuple[str, ...] = ("delivered", "delivered", "offline"),
+    acked_by: str | None = None,
+    hub_confirmed: bool | None = None,
+    replayed: bool = False,
+) -> Announcement:
+    """An announcement as the platform reports it."""
+    return Announcement(
+        id=announcement_id,
+        status=status,
+        priority=priority,
+        deliveries=deliveries,
+        acked_by=acked_by,
+        hub_confirmed=hub_confirmed,
+        replayed=replayed,
+    )
+
+
+def make_intercom_entry(
+    credentials: ConnectionCredentials,
+    *,
+    options: dict[str, Any] | None = None,
+    scopes: tuple[str, ...] = INTERCOM_ALL_SCOPES,
+    title: str = "Maison",
+    hub_id: str = HUB_ID,
+) -> MockConfigEntry:
+    """A linked hub with the given options and token scopes."""
+    return MockConfigEntry(
+        domain=DOMAIN,
+        title=title,
+        unique_id=f"{ACCOUNT_ID}:{hub_id}",
+        data={
+            CONF_ACCOUNT_ID: ACCOUNT_ID,
+            CONF_HUB_ID: hub_id,
+            CONF_HUB_NAME: title,
+            CONF_TOKENS: Tokens(
+                access_token=ACCESS_TOKEN,
+                expires_at=datetime(2027, 9, 27, tzinfo=UTC),
+                scopes=scopes,
+                token_id=TOKEN_ID,
+            ).to_dict(),
+            CONF_CREDENTIALS: credentials.to_dict(),
+        },
+        options=options
+        if options is not None
+        else {CONF_ALLOW_ANNOUNCEMENTS: True, CONF_ALLOW_URGENT: True},
+        version=1,
+        minor_version=1,
+    )
+
+
+@pytest.fixture
+def intercom_entry(credentials: ConnectionCredentials) -> MockConfigEntry:
+    """A linked hub whose options turned announcements and urgent on."""
+    return make_intercom_entry(credentials)
+
+
+@pytest.fixture
+def receive_entry(credentials: ConnectionCredentials) -> MockConfigEntry:
+    """A linked hub that plays announcements on one media player."""
+    return make_intercom_entry(
+        credentials,
+        options={
+            CONF_ALLOW_RECEIVE: True,
+            "speaker_players": ["media_player.kitchen"],
+        },
+        scopes=("hubs:read", "clients:read", "clients:write"),
+    )
+
+
+@pytest.fixture
+def mock_intercom_api() -> Generator[MagicMock]:
+    """ThalovantApi, as Intercom sees it."""
+    api = MagicMock()
+    api.announce = AsyncMock(return_value=make_announcement())
+    api.get_announcement = AsyncMock(return_value=make_announcement())
+    api.cancel_announcement = AsyncMock(
+        return_value=make_announcement("cancelled", hub_confirmed=True)
+    )
+    api.list_intercom_speakers = AsyncMock(
+        return_value=IntercomSpeakers(
+            items=(
+                IntercomSpeaker(
+                    client_id="b6b9-kitchen",
+                    slug="kitchen-speaker",
+                    name="Kitchen Speaker",
+                    online=True,
+                    receive=True,
+                    room="kitchen",
+                    groups=("downstairs",),
+                ),
+                IntercomSpeaker(
+                    client_id="c7c0-office",
+                    slug="office-speaker",
+                    name="Office Speaker",
+                    online=False,
+                    receive=False,
+                    room=None,
+                    groups=(),
+                ),
+                IntercomSpeaker(
+                    client_id="d8d1-home",
+                    slug="home-link",
+                    name="Home link",
+                    online=False,
+                    receive=False,
+                    room=None,
+                    groups=(),
+                    kind="home_assistant",
+                    can_play=False,
+                ),
+            ),
+            policy_synced=True,
+        )
+    )
+    api.get_intercom_settings = AsyncMock(
+        return_value=IntercomSettings(
+            enabled=True, plan_allowed=True, unavailable_reason=None
+        )
+    )
+    api.set_connection_can_play = AsyncMock(return_value=None)
+    with patch("custom_components.thalovant.intercom.ThalovantApi", return_value=api):
+        yield api
 
 
 @pytest.fixture

@@ -18,13 +18,43 @@ CONF_SELF_HOSTED: Final = "self_hosted"
 CONF_HOME_CLIENT_ID: Final = "home_client_id"
 CONF_VOICE_CLIENT_ID: Final = "voice_client_id"
 
-# Keys in ConfigEntry.options.
+# Keys in ConfigEntry.options. Every Intercom key is absent until somebody
+# turns the feature on, so an entry that never did is stored as it always was.
 CONF_AGENT_ID: Final = "agent_id"
+CONF_ALLOW_ANNOUNCEMENTS: Final = "allow_announcements"
+CONF_ALLOW_URGENT: Final = "allow_urgent"
+CONF_ALLOW_RECEIVE: Final = "allow_receive"
+CONF_SPEAKER_PLAYERS: Final = "speaker_players"
+CONF_SPEAKER_AREAS: Final = "speaker_areas"
+CONF_TTS_ENTITY: Final = "tts_entity"
+
+# Every option Intercom reads: a change to any of them reloads the entry.
+INTERCOM_OPTION_KEYS: Final = (
+    CONF_ALLOW_ANNOUNCEMENTS,
+    CONF_ALLOW_URGENT,
+    CONF_ALLOW_RECEIVE,
+    CONF_SPEAKER_PLAYERS,
+    CONF_SPEAKER_AREAS,
+    CONF_TTS_ENTITY,
+)
+
+# Carried by the re-consent flow (a reauth) from the options flow: the whole
+# option set to store once the person has approved the extra permission.
+CONF_INTERCOM_CONSENT: Final = "intercom_consent"
 
 # What either sign-in asks for: list the account's hubs, and read, create or
 # delete this installation's own connection. Never hubs:write, which the Free
 # plan cannot grant, so asking for it would fail the approval.
 LOGIN_SCOPES: Final = ("hubs:read", "clients:read", "clients:write")
+
+# What turning announcements on asks for, on top of LOGIN_SCOPES: read the
+# speakers and announcements, and send or cancel one. Urgent announcements
+# need their own. Never hubs:write: the integration changes no hub setting, and
+# the hub's owner switches Intercom on in the dashboard.
+INTERCOM_READ_SCOPE: Final = "intercom:read"
+INTERCOM_SEND_SCOPE: Final = "intercom:send"
+INTERCOM_SCOPES: Final = (INTERCOM_READ_SCOPE, INTERCOM_SEND_SCOPE)
+INTERCOM_URGENT_SCOPE: Final = "intercom:urgent"
 
 DASHBOARD_URL: Final = "https://dash.thalovant.com"
 # The control plane the SDK talks to by default (its DEFAULT_CONTROL_API_URL).
@@ -82,3 +112,57 @@ MAX_DEVICES_PER_HUB: Final = 50
 REMOVE_TIMEOUT: Final = 10.0
 
 MANUFACTURER: Final = "Thalovant"
+
+# Intercom: sending (the services and the notify entity).
+SERVICE_ANNOUNCE: Final = "announce"
+SERVICE_CANCEL_ANNOUNCEMENT: Final = "cancel_announcement"
+SERVICE_LIST_SPEAKERS: Final = "list_speakers"
+
+# Fired when an announcement's status is known to have changed. Its data is the
+# announcement's id and status: never the text.
+EVENT_ANNOUNCEMENT_UPDATED: Final = "thalovant_announcement_updated"
+
+# The platform's limits on a text. The text is the only thing this integration
+# never logs, stores, puts in an event or puts in an error.
+MAX_ANNOUNCEMENT_LENGTH: Final = 280
+MAX_TARGET_NAMES: Final = 50
+MAX_TARGET_NAME_LENGTH: Final = 64
+
+# Local limits per entry, kept below the platform's (20 normal a minute and 10
+# urgent an hour per hub) so a runaway automation is stopped here first.
+NORMAL_PER_MINUTE: Final = 20
+URGENT_PER_HOUR: Final = 5
+
+# An urgent announcement repeats at most this many times, this far apart.
+MAX_REPEAT_TIMES: Final = 10
+MIN_REPEAT_INTERVAL: Final = 5
+MAX_REPEAT_INTERVAL: Final = 120
+
+# Following an announcement that is still sending: how often to read it, how
+# long past its last repeat to keep reading (the platform fails a message that
+# is still sending a minute and a half after its last repeat), and the longest
+# a service call with wait set holds its caller.
+FOLLOW_INTERVAL: Final = 5.0
+FOLLOW_GRACE: Final = 100.0
+MAX_WAIT: Final = 300.0
+
+# The status that says an announcement is still repeating.
+STATUS_SENDING: Final = "sending"
+TERMINAL_STATUSES: Final = frozenset({"completed", "partial", "failed", "cancelled"})
+
+# How long a list of speakers is trusted when a service resolves a name.
+SPEAKERS_TTL: Final = 60.0
+
+# Intercom: receiving (Home Assistant as a speaker). The hub says an
+# announcement with an ordinary speak message whose dialog names it.
+SPEAK_MESSAGE_TYPE: Final = "speak"
+INTERCOM_DIALOG: Final = "intercom.announce"
+
+# At most this many new announcements are played a minute, and one announcement
+# is played at most as often as the platform lets it repeat (once when normal).
+RECEIVE_PER_MINUTE: Final = 6
+# Announcements remembered so a repeat of one is told from a new one.
+RECEIVE_REMEMBERED: Final = 64
+# Plays running at once, and the longest one may take.
+RECEIVE_MAX_IN_FLIGHT: Final = 4
+PLAY_TIMEOUT: Final = 60.0
