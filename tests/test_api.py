@@ -1,6 +1,6 @@
 """Tests for the adapter between the integration and the Thalovant SDK.
 
-These drive api.py with a fake SDK that has thalovant 0.10.0's names and shapes
+These drive api.py with a fake SDK that has thalovant 0.12.0's names and shapes
 (see api.SDK_NAMES), so they need no SDK installed. test_api_sdk.py runs the
 same adapter against the real SDK when it is installed.
 """
@@ -37,6 +37,7 @@ from custom_components.thalovant.api import (
     ThalovantError,
     ThalovantHubKeyChangedError,
     ThalovantPlanError,
+    ThalovantRateLimitedError,
     ThalovantUnsupportedError,
     Tokens,
     plain_speech,
@@ -108,6 +109,58 @@ class SdkUnsupportedError(SdkAPIError):
     pass
 
 
+class SdkIntercomDisabledError(SdkAPIError):
+    pass
+
+
+class SdkIntercomUnavailableError(SdkIntercomDisabledError):
+    pass
+
+
+class SdkIntercomPlatformDisabledError(SdkIntercomDisabledError):
+    pass
+
+
+class SdkIntercomNotConfiguredError(SdkAPIError):
+    pass
+
+
+class SdkUrgentScopeRequiredError(SdkAuthError):
+    pass
+
+
+class SdkHubUnreachableError(SdkAPIError):
+    pass
+
+
+class SdkRateLimitedError(SdkAPIError):
+    pass
+
+
+class SdkUrgentBusyError(SdkRateLimitedError):
+    pass
+
+
+class SdkSkillNotInstalledError(SdkAPIError):
+    pass
+
+
+class SdkNotASpeakerError(SdkAPIError):
+    pass
+
+
+class SdkTooManyTargetsError(SdkAPIError):
+    pass
+
+
+class SdkHubLockedError(SdkAPIError):
+    pass
+
+
+class SdkNotCancellableError(SdkAPIError):
+    pass
+
+
 class SdkPending(SdkAPIError):
     pass
 
@@ -132,7 +185,7 @@ class SdkDeviceAuthorization:
 
 @pytest.fixture
 def sdk() -> Generator[SimpleNamespace]:
-    """A fake thalovant 0.10.0, installed for one test."""
+    """A fake thalovant 0.12.0, installed for one test."""
     fake = SimpleNamespace(
         AsyncThalovantControlPlane=MagicMock(),
         AsyncHubSession=MagicMock(),
@@ -158,6 +211,19 @@ def sdk() -> Generator[SimpleNamespace]:
         ThalovantDeviceLoginPending=SdkPending,
         ThalovantDeviceLoginExpired=SdkExpired,
         ThalovantDeviceLoginDenied=SdkDenied,
+        ThalovantIntercomDisabledError=SdkIntercomDisabledError,
+        ThalovantIntercomUnavailableError=SdkIntercomUnavailableError,
+        ThalovantIntercomPlatformDisabledError=SdkIntercomPlatformDisabledError,
+        ThalovantIntercomNotConfiguredError=SdkIntercomNotConfiguredError,
+        ThalovantUrgentScopeRequiredError=SdkUrgentScopeRequiredError,
+        ThalovantUrgentBusyError=SdkUrgentBusyError,
+        ThalovantSkillNotInstalledError=SdkSkillNotInstalledError,
+        ThalovantNotASpeakerError=SdkNotASpeakerError,
+        ThalovantTooManyTargetsError=SdkTooManyTargetsError,
+        ThalovantHubLockedError=SdkHubLockedError,
+        ThalovantHubUnreachableError=SdkHubUnreachableError,
+        ThalovantRateLimitedError=SdkRateLimitedError,
+        ThalovantNotCancellableError=SdkNotCancellableError,
     )
     assert set(vars(fake)) == set(api.SDK_NAMES)
     with patch.object(api, "_sdk_module", fake):
@@ -549,9 +615,10 @@ async def test_list_hubs_stops_paging(sdk: SimpleNamespace) -> None:
         ),
         # A local refusal (no token, odd answer) is not a network failure.
         (SdkAPIError("Missing token"), ThalovantApiError, {"status": None}),
+        # A 429 is still a connection error (try later), now a kind of its own.
         (
             SdkAPIError("busy", status_code=429),
-            ThalovantConnectionError,
+            ThalovantRateLimitedError,
             {"status": 429},
         ),
         (
@@ -751,3 +818,549 @@ def test_credentials_bad_data(change: dict[str, Any]) -> None:
         ConnectionCredentials.from_dict({**_credentials().to_dict(), **change})
     with pytest.raises(ValueError):
         ConnectionCredentials.from_dict("not a mapping")  # type: ignore[arg-type]
+
+
+# --- Intercom ----------------------------------------------------------------
+
+
+def _sdk_announcement(status: str = "completed", **fields: Any) -> SimpleNamespace:
+    """What the SDK's Announcement looks like to the adapter."""
+    return SimpleNamespace(
+        id="ann-1",
+        status=status,
+        priority="normal",
+        deliveries=[
+            SimpleNamespace(status="delivered"),
+            SimpleNamespace(status="offline"),
+            SimpleNamespace(status="delivered"),
+        ],
+        acked_by=fields.get("acked_by"),
+        hub_confirmed=fields.get("hub_confirmed"),
+        replayed=fields.get("replayed", False),
+    )
+
+
+async def test_intercom_reads(sdk: SimpleNamespace) -> None:
+    """Settings and speakers become the integration's own types."""
+    plane = sdk.AsyncThalovantControlPlane.return_value
+    plane.get_intercom_settings = AsyncMock(
+        return_value=SimpleNamespace(
+            enabled=True, plan_allowed=True, unavailable_reason=" platform "
+        )
+    )
+    plane.list_intercom_speakers = AsyncMock(
+        return_value=SimpleNamespace(
+            items=[
+                SimpleNamespace(
+                    client_id="c1",
+                    slug="kitchen",
+                    name="Kitchen",
+                    online=True,
+                    kind="voice_satellite",
+                    can_play=True,
+                    intercom=SimpleNamespace(
+                        receive=True, room="kitchen", groups=("down",)
+                    ),
+                ),
+                SimpleNamespace(
+                    client_id="c2",
+                    slug=None,
+                    name=None,
+                    online=False,
+                    kind="home_assistant",
+                    can_play=False,
+                    intercom=SimpleNamespace(receive=False, room=None, groups=()),
+                ),
+                # An answer with neither: the platform's own default is "can play".
+                SimpleNamespace(
+                    client_id="c3",
+                    slug=None,
+                    name=None,
+                    online=False,
+                    kind="  ",
+                    intercom=SimpleNamespace(receive=False, room=None, groups=()),
+                ),
+            ],
+            policy_synced=False,
+            unavailable_reason="platform",
+        )
+    )
+    api_ = ThalovantApi(MagicMock(), _tokens())
+
+    settings = await api_.get_intercom_settings(HUB_ID)
+    assert (settings.enabled, settings.plan_allowed, settings.unavailable_reason) == (
+        True,
+        True,
+        "platform",
+    )
+    plane.get_intercom_settings.assert_awaited_once_with(HUB_ID)
+
+    speakers = await api_.list_intercom_speakers(HUB_ID)
+    assert [
+        (s.client_id, s.online, s.receive, s.room, s.groups, s.kind, s.can_play)
+        for s in speakers.items
+    ] == [
+        ("c1", True, True, "kitchen", ("down",), "voice_satellite", True),
+        ("c2", False, False, None, (), "home_assistant", False),
+        ("c3", False, False, None, (), "voice_satellite", True),
+    ]
+    assert (speakers.policy_synced, speakers.unavailable_reason) == (False, "platform")
+
+    # A listing that says neither says so.
+    plane.list_intercom_speakers = AsyncMock(return_value=SimpleNamespace(items=[]))
+    empty = await api_.list_intercom_speakers(HUB_ID)
+    assert (empty.items, empty.policy_synced, empty.unavailable_reason) == (
+        (),
+        None,
+        None,
+    )
+
+
+async def test_announce_passes_everything_and_keeps_no_text(
+    sdk: SimpleNamespace,
+) -> None:
+    """One call to the SDK, with the text, the key and the repeat; an answer with no text."""
+    plane = sdk.AsyncThalovantControlPlane.return_value
+    plane.announce = AsyncMock(
+        return_value=_sdk_announcement("sending", hub_confirmed=None)
+    )
+    api_ = ThalovantApi(MagicMock(), _tokens())
+
+    result = await api_.announce(
+        HUB_ID,
+        "Secret words",
+        targets={"rooms": ["kitchen"]},
+        priority="urgent",
+        repeat=(3, 30),
+        lang="fr",
+        idempotency_key="k-1",
+    )
+
+    plane.announce.assert_awaited_once_with(
+        HUB_ID,
+        "Secret words",
+        {"rooms": ["kitchen"]},
+        priority="urgent",
+        repeat={"times": 3, "interval_seconds": 30},
+        lang="fr",
+        idempotency_key="k-1",
+    )
+    assert result.id == "ann-1"
+    assert result.status == "sending"
+    assert result.delivery_counts == {"delivered": 2, "offline": 1}
+    assert result.hub_confirmed is None
+    assert result.replayed is False
+    assert "Secret words" not in repr(result)
+
+    plane.announce.reset_mock()
+    await api_.announce(
+        HUB_ID,
+        "x",
+        targets={"all": True},
+        priority="normal",
+        repeat=None,
+        lang=None,
+        idempotency_key="k-2",
+    )
+    assert plane.announce.await_args.kwargs["repeat"] is None
+
+
+async def test_announcement_reads_and_cancel(sdk: SimpleNamespace) -> None:
+    """Reading and cancelling map the same way; a cancel says whether the hub confirmed."""
+    plane = sdk.AsyncThalovantControlPlane.return_value
+    plane.get_announcement = AsyncMock(return_value=_sdk_announcement())
+    plane.cancel_announcement = AsyncMock(
+        return_value=_sdk_announcement(
+            "cancelled", hub_confirmed=False, acked_by=" Kitchen "
+        )
+    )
+    api_ = ThalovantApi(MagicMock(), _tokens())
+    assert (await api_.get_announcement(HUB_ID, "ann-1")).status == "completed"
+    plane.announce = AsyncMock(return_value=_sdk_announcement("failed", replayed=True))
+    replayed = await api_.announce(
+        HUB_ID,
+        "x",
+        targets={"all": True},
+        priority="normal",
+        repeat=None,
+        lang=None,
+        idempotency_key="k",
+    )
+    # An announcement the platform already had: nothing new was sent.
+    assert (replayed.status, replayed.replayed) == ("failed", True)
+    cancelled = await api_.cancel_announcement(HUB_ID, "ann-1")
+    assert (cancelled.status, cancelled.hub_confirmed, cancelled.acked_by) == (
+        "cancelled",
+        False,
+        "Kitchen",
+    )
+    plane.cancel_announcement.assert_awaited_once_with(HUB_ID, "ann-1")
+
+
+@pytest.mark.parametrize(
+    ("raised", "expected", "attrs"),
+    [
+        (
+            SdkRateLimitedError("slow down", status_code=429, retry_after_seconds=7),
+            api.ThalovantRateLimitedError,
+            {"retry_after": 7.0, "status": 429},
+        ),
+        (
+            SdkAPIError("slow down", status_code=429),
+            api.ThalovantRateLimitedError,
+            {"retry_after": None},
+        ),
+        (
+            SdkHubUnreachableError("gone", status_code=502, announcement_id="a-9"),
+            api.ThalovantHubUnreachableError,
+            {"announcement_id": "a-9", "status": 502},
+        ),
+        (
+            SdkAPIError("gone", status_code=502, code="hub_unreachable"),
+            api.ThalovantHubUnreachableError,
+            {"announcement_id": None},
+        ),
+        (
+            SdkNotCancellableError(
+                "done", status_code=409, problem={"announcement_status": "completed"}
+            ),
+            api.ThalovantNotCancellableError,
+            {"announcement_status": "completed"},
+        ),
+        (
+            SdkAPIError("done", status_code=409, code="not_cancellable"),
+            api.ThalovantNotCancellableError,
+            {"announcement_status": None},
+        ),
+        (
+            SdkIntercomDisabledError("off", status_code=403, code="intercom_disabled"),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "hub_off"},
+        ),
+        (
+            SdkIntercomDisabledError("off", status_code=403),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "hub_off"},
+        ),
+        (
+            SdkAPIError("dark", status_code=503, code="intercom_disabled_platform"),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "platform", "status": 503},
+        ),
+        (
+            SdkAPIError("no key", status_code=503, code="intercom_not_configured"),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "not_configured"},
+        ),
+        (
+            SdkHubUnreachableError("gone", status_code=502),
+            api.ThalovantHubUnreachableError,
+            {"announcement_id": None},
+        ),
+        (
+            SdkAPIError(
+                "gone",
+                status_code=502,
+                code="hub_unreachable",
+                problem={"announcement_id": " a-1 "},
+            ),
+            api.ThalovantHubUnreachableError,
+            {"announcement_id": "a-1"},
+        ),
+        (
+            SdkAPIError(
+                "done",
+                status_code=409,
+                code="not_cancellable",
+                problem={"detail": {"announcement_status": "failed"}},
+            ),
+            api.ThalovantNotCancellableError,
+            {"announcement_status": "failed"},
+        ),
+        (
+            SdkIntercomPlatformDisabledError(
+                "dark", status_code=503, code="intercom_disabled_platform"
+            ),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "platform"},
+        ),
+        (
+            SdkIntercomNotConfiguredError("no key", status_code=503),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "not_configured"},
+        ),
+        (
+            SdkIntercomUnavailableError(
+                "never", status_code=422, code="intercom_unavailable", reason="kid_hub"
+            ),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "kid_hub", "status": 422},
+        ),
+        (
+            SdkAPIError(
+                "never",
+                status_code=422,
+                code="intercom_unavailable",
+                problem={"reason": "public_hub"},
+            ),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "public_hub"},
+        ),
+        (
+            SdkAPIError(
+                "never",
+                status_code=422,
+                code="intercom_unavailable",
+                problem={"detail": {"reason": "kid_hub"}},
+            ),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "kid_hub"},
+        ),
+        # A reason nobody knows, or none, is still "Intercom is unavailable".
+        (
+            SdkAPIError(
+                "never",
+                status_code=422,
+                code="intercom_unavailable",
+                problem={"reason": "moon"},
+            ),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "unknown"},
+        ),
+        (
+            SdkIntercomUnavailableError("never", status_code=422),
+            api.ThalovantIntercomUnavailableError,
+            {"reason": "unknown"},
+        ),
+        # An urgent announcement without intercom:urgent is a missing scope, not
+        # a rejected sign-in, although the SDK's class is a kind of auth error.
+        (
+            SdkUrgentScopeRequiredError(
+                "scope", status_code=403, code="urgent_scope_required"
+            ),
+            api.ThalovantUrgentScopeRequiredError,
+            {"status": 403, "code": "urgent_scope_required"},
+        ),
+        (
+            SdkAuthError("scope", status_code=403, code="urgent_scope_required"),
+            api.ThalovantUrgentScopeRequiredError,
+            {},
+        ),
+        (
+            SdkUrgentBusyError(
+                "busy",
+                status_code=429,
+                code="intercom_urgent_busy",
+                retry_after_seconds=30,
+            ),
+            api.ThalovantUrgentBusyError,
+            {"retry_after": 30.0, "status": 429},
+        ),
+        (
+            SdkAPIError("busy", status_code=429, code="intercom_urgent_busy"),
+            api.ThalovantUrgentBusyError,
+            {"retry_after": None},
+        ),
+        (
+            SdkSkillNotInstalledError("no skill", status_code=409),
+            api.ThalovantSkillNotInstalledError,
+            {"status": 409},
+        ),
+        (
+            SdkAPIError("no skill", status_code=409, code="skill_not_installed"),
+            api.ThalovantSkillNotInstalledError,
+            {},
+        ),
+        (
+            SdkNotASpeakerError("no", status_code=422, code="not_a_speaker"),
+            api.ThalovantNotASpeakerError,
+            {"status": 422},
+        ),
+        (
+            SdkAPIError("no", status_code=422, code="not_a_speaker"),
+            api.ThalovantNotASpeakerError,
+            {},
+        ),
+        (
+            SdkTooManyTargetsError("many", status_code=422, code="too_many_targets"),
+            api.ThalovantTooManyTargetsError,
+            {},
+        ),
+        (
+            SdkAPIError("many", status_code=422, code="too_many_targets"),
+            api.ThalovantTooManyTargetsError,
+            {},
+        ),
+        (
+            SdkHubLockedError("locked", status_code=403, code="hub_locked"),
+            api.ThalovantHubLockedError,
+            {"status": 403},
+        ),
+        (
+            SdkAPIError("locked", status_code=403, code="hub_locked"),
+            api.ThalovantHubLockedError,
+            {},
+        ),
+        # Another 503 is still a service that is down, not Intercom's answer.
+        (
+            SdkAPIError("down", status_code=503, code="overloaded"),
+            ThalovantConnectionError,
+            {"status": 503},
+        ),
+        # And another 502 is the platform's own, not a hub that was not reached.
+        (
+            SdkAPIError("bad gateway", status_code=502, code="upstream"),
+            ThalovantConnectionError,
+            {"status": 502},
+        ),
+    ],
+)
+async def test_intercom_errors(
+    sdk: SimpleNamespace,
+    raised: Exception,
+    expected: type[ThalovantError],
+    attrs: dict[str, Any],
+) -> None:
+    """Each Intercom answer is its own error, by SDK class or by status and code."""
+    plane = sdk.AsyncThalovantControlPlane.return_value
+    plane.announce = AsyncMock(side_effect=raised)
+    with pytest.raises(ThalovantError) as caught:
+        await ThalovantApi(MagicMock(), _tokens()).announce(
+            HUB_ID,
+            "x",
+            targets={"all": True},
+            priority="normal",
+            repeat=None,
+            lang=None,
+            idempotency_key="k",
+        )
+    assert type(caught.value) is expected
+    for name, value in attrs.items():
+        assert getattr(caught.value, name) == value
+    assert plane.announce.await_count == 1
+
+
+def _connection_plane(
+    sdk: SimpleNamespace, client: Any, request: Any | None
+) -> SimpleNamespace:
+    plane = SimpleNamespace(get_client=AsyncMock(side_effect=client))
+    if request is not None:
+        plane._request = request
+    sdk.AsyncThalovantControlPlane.return_value = plane
+    return plane
+
+
+async def test_can_play_writes_the_whole_spec_with_the_etag(
+    sdk: SimpleNamespace,
+) -> None:
+    """The spec is read and written back under its etag with can_play as the only intercom key."""
+    spec = {
+        "connection_type": "home_assistant",
+        "allowedTypes": ["a"],
+        "intercom": {"receive": True, "room": "kitchen"},
+    }
+    request = AsyncMock()
+    plane = _connection_plane(sdk, [{"spec": spec, "etag": "e-1"}], request)
+    await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c/1", True)
+    plane.get_client.assert_awaited_once_with("c/1")
+    request.assert_awaited_once_with(
+        "PATCH",
+        "/v1/clients/c%2F1",
+        json={
+            "spec": {
+                "connection_type": "home_assistant",
+                "allowedTypes": ["a"],
+                # The platform owns the rest of spec.intercom: a caller may say
+                # only can_play, so nothing else of it is sent back.
+                "intercom": {"can_play": True},
+            }
+        },
+        headers={"If-Match": "e-1"},
+    )
+    # What was read is not changed in place.
+    assert spec["intercom"] == {"receive": True, "room": "kitchen"}
+
+
+async def test_can_play_already_set_writes_nothing(sdk: SimpleNamespace) -> None:
+    """A connection that already says so is left alone."""
+    request = AsyncMock()
+    _connection_plane(
+        sdk, [{"spec": {"intercom": {"can_play": False}}, "etag": "e"}], request
+    )
+    await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", False)
+    request.assert_not_awaited()
+
+
+async def test_can_play_without_an_intercom_key(sdk: SimpleNamespace) -> None:
+    """A connection with no intercom settings gets them."""
+    request = AsyncMock()
+    _connection_plane(sdk, [{"spec": {"intercom": "odd"}, "etag": "e"}], request)
+    await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)
+    assert request.await_args.kwargs["json"] == {
+        "spec": {"intercom": {"can_play": True}}
+    }
+
+
+async def test_can_play_retries_a_changed_connection_once(
+    sdk: SimpleNamespace,
+) -> None:
+    """A 412 means somebody else wrote first: read it again, then write."""
+    request = AsyncMock(side_effect=[SdkAPIError("stale", status_code=412), None])
+    plane = _connection_plane(
+        sdk,
+        [{"spec": {}, "etag": "e-1"}, {"spec": {}, "etag": "e-2"}],
+        request,
+    )
+    await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)
+    assert plane.get_client.await_count == 2
+    assert [call.kwargs["headers"] for call in request.await_args_list] == [
+        {"If-Match": "e-1"},
+        {"If-Match": "e-2"},
+    ]
+
+
+async def test_can_play_gives_up_after_one_retry(sdk: SimpleNamespace) -> None:
+    """A second 412 is the error; any other error is too, at once."""
+    request = AsyncMock(side_effect=SdkAPIError("stale", status_code=412))
+    _connection_plane(
+        sdk, [{"spec": {}, "etag": "e-1"}, {"spec": {}, "etag": "e-2"}], request
+    )
+    with pytest.raises(ThalovantApiError) as caught:
+        await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)
+    assert caught.value.status == 412
+    assert request.await_count == 2
+
+    request = AsyncMock(side_effect=SdkAPIError("no", status_code=403))
+    _connection_plane(sdk, [{"spec": {}, "etag": "e-1"}], request)
+    with pytest.raises(ThalovantApiError) as caught:
+        await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)
+    assert caught.value.status == 403
+    assert request.await_count == 1
+
+
+@pytest.mark.parametrize(
+    "client",
+    [
+        {"etag": "e"},
+        {"spec": {}, "etag": ""},
+        {"spec": [], "etag": "e"},
+        {"spec": {}},
+        "odd",
+    ],
+)
+async def test_can_play_needs_a_spec_and_an_etag(
+    sdk: SimpleNamespace, client: Any
+) -> None:
+    """A connection read without them cannot be written back safely."""
+    request = AsyncMock()
+    _connection_plane(sdk, [client], request)
+    with pytest.raises(ThalovantApiError, match="spec or an etag"):
+        await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)
+    request.assert_not_awaited()
+
+
+async def test_can_play_needs_an_sdk_that_can_write(sdk: SimpleNamespace) -> None:
+    """An SDK without the private call that writes is a clear error, not an AttributeError."""
+    _connection_plane(sdk, [], None)
+    with pytest.raises(ThalovantError, match="cannot update a connection"):
+        await ThalovantApi(MagicMock(), _tokens()).set_connection_can_play("c", True)

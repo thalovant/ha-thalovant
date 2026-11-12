@@ -56,6 +56,16 @@
           "home_client_id": "The numeric ID assigned by the hub to the dedicated Home Assistant connection.",
           "voice_client_id": "The numeric ID assigned by the hub to the Voice connection that may control Christmas lighting."
         }
+      },
+      "intercom_consent": {
+        "title": "Approve the announcement permission",
+        "description": "To send announcements from {name}, Thalovant needs your approval for an extra permission (`intercom:read` and `intercom:send`, and `intercom:urgent` for urgent announcements). Nothing is turned on until you approve it, and your options stay as they are if you decline. Your Thalovant plan must include Intercom.\n\nSelect **Submit** to approve. If Thalovant asks you to sign in, use the same account as before.",
+        "data": {
+          "link_method": "How to approve"
+        },
+        "data_description": {
+          "link_method": "Either way, approve from a phone or computer on the same network as this Home Assistant, with any VPN turned off. **Link account** opens Thalovant in your browser and comes back through My Home Assistant. **Link with a code instead** shows a one-time code."
+        }
       }
     },
     "progress": {
@@ -88,32 +98,64 @@
       "no_hubs": "This Thalovant account has no hub that Home Assistant can be linked to.",
       "reauth_successful": "Home Assistant is linked to the hub again.",
       "wrong_account": "You signed in with a different Thalovant account. Sign in with the account this link belongs to.",
-      "different_private_hub": "The renewed connection must be on the same private hub and keep the same authorized Voice ID."
+      "different_private_hub": "The renewed connection must be on the same private hub and keep the same authorized Voice ID.",
+      "consent_successful": "Done. Thalovant granted the permission and the options are saved. The integration reloads to apply them.",
+      "consent_scopes_missing": "Thalovant did not grant the announcement permission, so nothing was turned on. Your Thalovant plan may not include Intercom."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Conversation agent",
+        "title": "Thalovant options",
+        "description": "Intercom lets automations say a short text on your hub's speakers, and lets your hub play announcements on this Home Assistant's media players. Everything about it is off until you turn it on.\n\n**Intercom is rolling out.** It may not be switched on for your Thalovant account or hub yet. If it is not, the actions say so, nothing is sent, and a repair notice explains.\n\n**Intercom is a convenience, not a certified safety system.** It does not replace smoke or carbon monoxide alarms, medical alert devices or emergency services, and it can fail silently: a speaker offline, a hub restarting, Do Not Disturb, or a link that is down.",
         "data": {
-          "agent_id": "Conversation agent"
+          "agent_id": "Conversation agent",
+          "allow_announcements": "Send announcements",
+          "allow_urgent": "Allow urgent announcements",
+          "allow_receive": "Play announcements on this Home Assistant"
         },
         "data_description": {
-          "agent_id": "The agent that answers requests from the hub. Home Assistant's own agent only acts on entities exposed to Assist."
+          "agent_id": "The agent that answers requests from the hub. Home Assistant's own agent only acts on entities exposed to Assist.",
+          "allow_announcements": "Adds the actions `announce`, `cancel_announcement` and `list_speakers`, and an Intercom notify entity that is disabled until you enable it. Turning this on asks Thalovant for an extra permission first; if you decline, it stays off. Your Thalovant plan must include Intercom, and the hub's owner switches Intercom on for the hub in the Thalovant dashboard.",
+          "allow_urgent": "Lets an announcement be urgent: it ignores Do Not Disturb and can repeat until somebody acknowledges it. Asks for its own permission. Needs announcements turned on.",
+          "allow_receive": "Lets the hub play announcements on this Home Assistant, on the media players you choose next. Home Assistant tells Thalovant that this connection can play announcements, and the hub's owner must also switch receiving on for it in the Thalovant dashboard, on the Intercom tab."
+        }
+      },
+      "receive": {
+        "title": "Where to play announcements",
+        "description": "Announcements from your hub are played with text to speech on the media players you choose, at their current volume. Choose players, areas, or both. Nothing is played on a player that is unavailable.",
+        "data": {
+          "speaker_players": "Media players",
+          "speaker_areas": "Areas",
+          "tts_entity": "Text to speech"
+        },
+        "data_description": {
+          "speaker_players": "Announcements play on these media players.",
+          "speaker_areas": "Announcements also play on every media player in these areas.",
+          "tts_entity": "The text to speech to use. Leave it empty to use Home Assistant's default."
         }
       }
     },
     "error": {
-      "agent_not_found": "This conversation agent is not available."
+      "agent_not_found": "This conversation agent is not available.",
+      "urgent_needs_announcements": "Urgent announcements need announcements turned on.",
+      "receive_needs_players": "Choose at least one media player or area."
     },
     "abort": {
-      "private_agent_fixed": "Private Christmas lighting always uses Home Assistant’s built-in Assist agent."
+      "private_agent_fixed": "Private Christmas lighting always uses Home Assistant’s built-in Assist agent.",
+      "consent_required": "Thalovant needs your approval for an extra permission before announcements can be turned on. Open the re-authentication request (in the notification or under **Repairs**) and approve it. Nothing was changed: your options are saved only once you approve.",
+      "consent_pending": "A re-authentication is already waiting for this link. Finish it first, then change these options."
     }
   },
   "entity": {
     "binary_sensor": {
       "hub_connection": {
         "name": "Hub connection"
+      }
+    },
+    "notify": {
+      "intercom": {
+        "name": "Intercom"
       }
     }
   },
@@ -135,6 +177,147 @@
     },
     "not_admitted_yet": {
       "message": "The hub {hub} has not admitted this connection yet"
+    },
+    "announcements_disabled": {
+      "message": "Announcements are turned off for {hub}. Turn on **Send announcements** in the Thalovant integration's options."
+    },
+    "urgent_disabled": {
+      "message": "Urgent announcements are turned off for {hub}. Turn on **Allow urgent announcements** in the Thalovant integration's options."
+    },
+    "urgent_scope_required": {
+      "message": "Thalovant has not granted {hub} the permission for urgent announcements. Turn **Allow urgent announcements** off and on again in the options to approve it. Nothing was sent."
+    },
+    "scope_missing": {
+      "message": "Thalovant has not granted {hub} the permission to send announcements. Turn **Send announcements** off and on again in the options to approve it."
+    },
+    "token_rejected": {
+      "message": "Thalovant no longer accepts the sign-in for {hub}. Re-authenticate the integration, then try again. Nothing was sent."
+    },
+    "token_unreadable": {
+      "message": "The stored Thalovant sign-in for {hub} cannot be read. Re-authenticate the integration."
+    },
+    "rate_limited_normal": {
+      "message": "Too many announcements: at most {limit} a minute from this Home Assistant. Nothing was sent."
+    },
+    "rate_limited_urgent": {
+      "message": "Too many urgent announcements: at most {limit} an hour from this Home Assistant. Nothing was sent."
+    },
+    "rate_limited_remote": {
+      "message": "Thalovant's announcement limit was reached. Nothing was sent. Try again in {seconds} seconds."
+    },
+    "urgent_busy": {
+      "message": "Thalovant already has the most urgent announcements it allows repeating at once (2 on a hub). Nothing was sent. Stop one with the `cancel_announcement` action, or try again in {seconds} seconds."
+    },
+    "hub_unreachable": {
+      "message": "Thalovant could not reach the hub to make the announcement, so it may still have been spoken. Check the Thalovant dashboard (announcement {announcement}) before sending it again. Home Assistant does not retry."
+    },
+    "announce_outcome_unknown": {
+      "message": "Thalovant did not answer, so it is not known whether the announcement was made. It may still have been spoken: check before sending it again. Home Assistant does not retry."
+    },
+    "cancel_outcome_unknown": {
+      "message": "Thalovant did not answer, so it is not known whether the announcement was stopped. If it keeps repeating, stop it in the Thalovant dashboard or switch Intercom off for the hub."
+    },
+    "cannot_reach_thalovant": {
+      "message": "Could not reach Thalovant. Try again."
+    },
+    "plan_limit": {
+      "message": "Your Thalovant plan does not include Intercom. Nothing was sent."
+    },
+    "skill_not_installed": {
+      "message": "The Intercom skill is not installed on the hub {hub} yet, so an urgent announcement cannot be sent. Nothing was sent. Switch Intercom on for the hub in the Thalovant dashboard, wait for the skill to install, and try again."
+    },
+    "intercom_unavailable_hub_off": {
+      "message": "Intercom is switched off for the hub {hub}. Its owner can switch it on in the Thalovant dashboard. Nothing was sent."
+    },
+    "intercom_unavailable_platform": {
+      "message": "Intercom is rolling out on Thalovant and is not switched on yet. Nothing was sent. Nothing is wrong on your side."
+    },
+    "intercom_unavailable_kid_hub": {
+      "message": "Intercom is never available on the kid hub {hub}. Nothing was sent."
+    },
+    "intercom_unavailable_public_hub": {
+      "message": "Intercom is never available on the public hub {hub}. Nothing was sent."
+    },
+    "intercom_unavailable_unknown": {
+      "message": "Thalovant says Intercom cannot be used on the hub {hub}, for a reason this version of the integration does not know. Nothing was sent. Look at the hub in the Thalovant dashboard."
+    },
+    "intercom_unavailable_not_configured": {
+      "message": "Intercom is not available on Thalovant yet. Nothing was sent."
+    },
+    "not_a_speaker": {
+      "message": "A speaker you named cannot play speech, so nothing was sent. A Home Assistant link plays announcements only once it is set up to, and its owner has switched receiving on. The `list_speakers` action shows `can_play` for each speaker."
+    },
+    "too_many_targets": {
+      "message": "That announcement would reach more than 50 speakers, the most one announcement may reach. Nothing was sent. Name a room or a group, or name fewer speakers."
+    },
+    "hub_locked": {
+      "message": "The hub {hub} is locked on Thalovant, so nothing was changed or sent. Unlock it in the Thalovant dashboard."
+    },
+    "manager_required": {
+      "message": "Thalovant only lets an owner or a manager of the account announce, and the account that linked {hub} is neither. Nothing was sent."
+    },
+    "not_cancellable": {
+      "message": "That announcement can no longer be stopped: its status is {status}. Only an announcement that is still repeating can be cancelled."
+    },
+    "announcement_not_found": {
+      "message": "Thalovant has no such announcement on {hub}."
+    },
+    "request_refused": {
+      "message": "Thalovant refused the request (HTTP {status}, code {code})."
+    },
+    "invalid_request": {
+      "message": "The request was refused as invalid. Check the target and the repeat settings."
+    },
+    "unexpected": {
+      "message": "Something unexpected went wrong while talking to Thalovant for {hub}. It is not known whether the request went through: check the Thalovant dashboard before trying again. The Home Assistant log has the error type."
+    },
+    "text_empty": {
+      "message": "The message is empty."
+    },
+    "text_too_long": {
+      "message": "The message is longer than 280 characters."
+    },
+    "text_markup": {
+      "message": "The message holds `<` or `>`, which an announcement cannot carry: a speaker's text to speech could read them as markup."
+    },
+    "text_bad_characters": {
+      "message": "The message holds a control, text-direction or other invisible formatting character, or a private-use character, which an announcement cannot carry."
+    },
+    "invalid_names": {
+      "message": "A speaker, room or group name is empty, longer than 64 characters or holds a control character, or there are more than 50 of them."
+    },
+    "names_not_allowed": {
+      "message": "Names go with the speakers, rooms or groups targets only. To speak on every speaker, leave the names empty."
+    },
+    "names_required": {
+      "message": "Give at least one name to announce to {target}."
+    },
+    "repeat_urgent_only": {
+      "message": "Repeating is for urgent announcements only."
+    },
+    "repeat_incomplete": {
+      "message": "Give both how many times to repeat and the seconds between repeats."
+    },
+    "invalid_language": {
+      "message": "The language must be a tag such as `en-US` or `fr`."
+    },
+    "invalid_announcement_id": {
+      "message": "That is not an announcement id."
+    },
+    "ambiguous_speaker": {
+      "message": "More than one speaker of {hub} has that name. Use the speaker's slug from the `list_speakers` action."
+    },
+    "entry_not_found": {
+      "message": "That Thalovant entry does not exist."
+    },
+    "no_entries": {
+      "message": "No hub is linked to Thalovant."
+    },
+    "entry_required": {
+      "message": "More than one linked hub can do this. Choose which one with `config_entry_id`."
+    },
+    "entry_not_loaded": {
+      "message": "The link to {hub} is not running right now."
     }
   },
   "issues": {
@@ -149,6 +332,34 @@
     "hub_key_changed": {
       "title": "{hub} answered with a different security key",
       "description": "Home Assistant stopped talking to the hub {hub}: it answered with a different security key than the one it had when you linked it. That happens when a hub is replaced or reset, and also when something sits between Home Assistant and the hub.\n\nIf you know the hub was replaced or reset, re-link it: open the Thalovant integration and follow its request to re-authenticate. Re-linking trusts the key the hub presents now. If you did not expect this, check the hub in the Thalovant dashboard before you re-link."
+    },
+    "intercom_unavailable_plan": {
+      "title": "Intercom is not part of the plan for {hub}",
+      "description": "Announcements are turned on in Home Assistant for {hub}, but the Thalovant plan of the account that linked it does not include Intercom, so nothing can be announced or played. Upgrade the plan in the Thalovant dashboard, or turn off **Send announcements** and **Play announcements on this Home Assistant** in the integration's options."
+    },
+    "intercom_unavailable_kid_hub": {
+      "title": "Intercom is not available on {hub}",
+      "description": "{hub} is a kid hub, and Intercom is never available on a kid hub. Turn off **Send announcements** and **Play announcements on this Home Assistant** in the integration's options."
+    },
+    "intercom_unavailable_public_hub": {
+      "title": "Intercom is not available on {hub}",
+      "description": "{hub} is a public hub, and Intercom is never available on a public hub. Turn off **Send announcements** and **Play announcements on this Home Assistant** in the integration's options."
+    },
+    "intercom_unavailable_platform": {
+      "title": "Intercom is not switched on on Thalovant yet",
+      "description": "Intercom is rolling out on Thalovant and is not switched on yet, so {hub} can neither announce nor play announcements. Nothing is wrong on your side and nothing needs fixing: Home Assistant checks again the next time it starts, or when you try to announce."
+    },
+    "intercom_unavailable_hub_off": {
+      "title": "Intercom is off for {hub}",
+      "description": "Announcements are turned on in Home Assistant, but Intercom is switched off for the hub {hub}. Its owner can switch it on in the Thalovant dashboard, on the hub's Intercom tab."
+    },
+    "intercom_unavailable_unknown": {
+      "title": "Intercom cannot be used on {hub}",
+      "description": "Thalovant says Intercom is not available for {hub}, for a reason this version of the integration does not know. Look at the hub in the Thalovant dashboard."
+    },
+    "intercom_can_play": {
+      "title": "Thalovant was not told that {hub} can play announcements",
+      "description": "Playing announcements is turned on for {hub}, but Home Assistant could not tell Thalovant that this connection can play them, so the hub's owner cannot switch receiving on for it yet. Home Assistant tries again when it restarts or when you save the options. Check that Thalovant is reachable, and that your Thalovant account's API supports Intercom."
     }
   },
   "selector": {
@@ -156,6 +367,20 @@
       "options": {
         "link_account": "Link account",
         "code": "Link with a code instead"
+      }
+    },
+    "announce_target": {
+      "options": {
+        "all": "Every speaker",
+        "speakers": "Named speakers",
+        "rooms": "Rooms",
+        "groups": "Groups"
+      }
+    },
+    "announce_priority": {
+      "options": {
+        "normal": "Normal",
+        "urgent": "Urgent"
       }
     }
   },
@@ -167,5 +392,73 @@
     "reply_timeout": "Sorry, Home Assistant took too long to answer.",
     "reply_unknown": "Sorry, something went wrong in Home Assistant.",
     "hub_not_ready": "{hub} (can't link Home Assistant yet)"
+  },
+  "services": {
+    "announce": {
+      "name": "Announce",
+      "description": "Say a short text aloud on your hub's speakers. A convenience, not a certified safety system: it does not replace smoke or carbon monoxide alarms, medical alert devices or emergency services. The text is spoken aloud in your home. This integration never logs or stores it; Home Assistant's own automation traces may keep it. Intercom is rolling out: if it is not switched on for your account or hub yet, the action says so and sends nothing.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Linked hub",
+          "description": "Which linked hub to announce on. Needed only when more than one hub has announcements turned on."
+        },
+        "message": {
+          "name": "Message",
+          "description": "What to say: 1 to 280 characters. Line breaks become spaces. Control, text-direction and other invisible characters, private-use characters, and `<` and `>` are refused."
+        },
+        "target": {
+          "name": "Who hears it",
+          "description": "Every speaker that receives, or only the named speakers, rooms or groups."
+        },
+        "names": {
+          "name": "Names",
+          "description": "The speakers, rooms or groups to speak to when the target is not every speaker. A speaker is matched by its name, slug or id. The `list_speakers` action shows them."
+        },
+        "priority": {
+          "name": "Priority",
+          "description": "An urgent announcement ignores Do Not Disturb. It needs urgent announcements turned on in the options."
+        },
+        "repeat_times": {
+          "name": "Repeat times",
+          "description": "Urgent only: how many times to say it, from 1 to 10. It repeats until somebody acknowledges it or it is cancelled."
+        },
+        "repeat_interval": {
+          "name": "Seconds between repeats",
+          "description": "Urgent only: from 5 to 120 seconds. Needed with the repeat times."
+        },
+        "language": {
+          "name": "Language",
+          "description": "A tag such as en-US or fr. Leave empty for the hub's default."
+        },
+        "wait": {
+          "name": "Wait for the result",
+          "description": "For an urgent announcement that repeats: wait until it ends, for five minutes at most, before the action returns. Otherwise the action returns at once, and the `thalovant_announcement_updated` event reports each change of status."
+        }
+      }
+    },
+    "cancel_announcement": {
+      "name": "Cancel an announcement",
+      "description": "Stop an urgent announcement that is still repeating. The hub also stops it when Intercom is switched off or a speaker stops receiving, and a spoken acknowledgement at a speaker ends it. It works even if announcements are turned off in the options.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Linked hub",
+          "description": "Which linked hub the announcement was made on. Needed only when more than one hub is linked."
+        },
+        "announcement_id": {
+          "name": "Announcement id",
+          "description": "The id the announce action returned."
+        }
+      }
+    },
+    "list_speakers": {
+      "name": "List speakers",
+      "description": "Return the hub's speakers, rooms and groups, with each one's kind, whether it can play speech (`can_play`), who is online and who receives announcements. Use it to find the names the announce action accepts. `unavailable_reason` says why Intercom cannot run on the hub, when it cannot, and `policy_synced` is false while a change may take a moment to reach the home.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Linked hub",
+          "description": "Which linked hub to list. Needed only when more than one hub has announcements turned on."
+        }
+      }
+    }
   }
 }

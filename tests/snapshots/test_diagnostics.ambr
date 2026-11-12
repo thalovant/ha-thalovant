@@ -24,6 +24,20 @@
       'title': '**REDACTED**',
       'unique_id': '**REDACTED**',
     }),
+    'intercom': dict({
+      'announcements_enabled': False,
+      'last_received_at': None,
+      'last_sent_at': None,
+      'players_chosen': 0,
+      'receive_enabled': False,
+      'received': dict({
+      }),
+      'send_outcomes': dict({
+      }),
+      'sent': dict({
+      }),
+      'urgent_enabled': False,
+    }),
     'requests': dict({
       'handled': 1,
       'last_outcome': 'no_valid_targets',

@@ -20,8 +20,12 @@ from homeassistant.helpers import issue_registry as ir, translation
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.config_entry_oauth2_flow import AbstractOAuth2FlowHandler
 from homeassistant.helpers.selector import (
+    AreaSelector,
+    AreaSelectorConfig,
     BooleanSelector,
     ConversationAgentSelector,
+    EntitySelector,
+    EntitySelectorConfig,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -56,13 +60,20 @@ from .const import (
     ADMISSION_TIMEOUT,
     CONF_ACCOUNT_ID,
     CONF_AGENT_ID,
+    CONF_ALLOW_ANNOUNCEMENTS,
+    CONF_ALLOW_RECEIVE,
+    CONF_ALLOW_URGENT,
     CONF_CREDENTIALS,
     CONF_HOME_CLIENT_ID,
     CONF_HUB_ID,
     CONF_HUB_NAME,
+    CONF_INTERCOM_CONSENT,
     CONF_LINKED_AT,
     CONF_SELF_HOSTED,
+    CONF_SPEAKER_AREAS,
+    CONF_SPEAKER_PLAYERS,
     CONF_TOKENS,
+    CONF_TTS_ENTITY,
     CONF_VOICE_CLIENT_ID,
     CONNECTION_KIND,
     DOMAIN,
@@ -72,6 +83,7 @@ from .const import (
     LOGIN_SCOPES,
 )
 from .handler import agent_issue_id
+from .intercom import scopes_for_options
 from .oauth import LinkRejectedError, ThalovantOAuth2Implementation, tokens_from_answer
 from .self_hosted import (
     connection_client_ids,
@@ -122,6 +134,12 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """Initialize the flow."""
         super().__init__()
         self._method: str = LINK_ACCOUNT
+        # What the sign-in asks for: LOGIN_SCOPES, and Intercom's for any entry
+        # that has announcements on (so signing in again never drops them).
+        self._scopes: tuple[str, ...] = LOGIN_SCOPES
+        # The whole option set to store once the person has approved the extra
+        # permission, when this reauth was started by the options flow.
+        self._consent: dict[str, Any] | None = None
         self._login: DeviceLogin | None = None
         self._login_task: asyncio.Task[Tokens] | None = None
         self._tokens: Tokens | None = None
@@ -176,6 +194,13 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """
         if entry_data.get(CONF_SELF_HOSTED) is True:
             return await self.async_step_self_hosted()
+        if (consent := entry_data.get(CONF_INTERCOM_CONSENT)) is not None:
+            # The stored token lacks the permission being asked for, so it is
+            # not tried: only a new approval can carry it.
+            self._consent = dict(consent)
+            self._tokens = None
+            self._reusing_tokens = False
+            return await self.async_step_intercom_consent()
         try:
             self._tokens = Tokens.from_dict(entry_data[CONF_TOKENS])
         except KeyError, TypeError, ValueError:
@@ -187,6 +212,19 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Ask before signing in again, the way the user chooses."""
+        if user_input is None:
+            return self._async_show_start_form()
+        self._method = user_input.get(_CONF_LINK_METHOD, LINK_ACCOUNT)
+        return await self._async_start_login()
+
+    async def async_step_intercom_consent(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask before signing in for the extra Intercom permission.
+
+        Nothing has changed yet: the options that asked for it are stored only
+        once Thalovant has granted it, and stay as they were otherwise.
+        """
         if user_input is None:
             return self._async_show_start_form()
         self._method = user_input.get(_CONF_LINK_METHOD, LINK_ACCOUNT)
@@ -371,6 +409,9 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         if TYPE_CHECKING:
             assert self._tokens is not None
 
+        if self._consent is not None:
+            return await self._async_finish_consent()
+
         api = self._api
         try:
             self._account = await api.get_account()
@@ -417,6 +458,45 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         if all(f"{self._account.id}:{hub_id}" in linked for hub_id in self._hubs):
             return self.async_abort(reason="all_hubs_linked")
         return await self.async_step_hub()
+
+    async def _async_finish_consent(self) -> ConfigFlowResult:
+        """Store the approved token and the options that asked for it.
+
+        The new token replaces the account's old one for every entry (as any
+        sign-in does). The options are stored only when the token carries every
+        scope they need: a plan without Intercom is not granted it, and then
+        nothing is turned on.
+        """
+        if TYPE_CHECKING:
+            assert self._tokens is not None
+            assert self._consent is not None
+
+        try:
+            self._account = await self._api.get_account()
+        except ThalovantAuthError:
+            self._tokens = self._minted = None
+            self._errors = {"base": "invalid_auth"}
+        except ThalovantConnectionError:
+            self._errors = {"base": "cannot_connect"}
+        except Exception:
+            LOGGER.exception("Unexpected error while reading the account")
+            self._errors = {"base": "unknown"}
+        if self._errors:
+            return self._async_show_start_form()
+        if TYPE_CHECKING:
+            assert self._account is not None
+
+        entry = self._get_reauth_entry()
+        await self.async_set_unique_id(f"{self._account.id}:{entry.data[CONF_HUB_ID]}")
+        self._abort_if_unique_id_mismatch(reason="wrong_account")
+        if TYPE_CHECKING:
+            assert self._tokens is not None
+        tokens = self._tokens
+        self._async_share_token(self._account.id, tokens)
+        if not set(scopes_for_options(self._consent)) <= set(tokens.scopes):
+            return self.async_abort(reason="consent_scopes_missing")
+        self.hass.config_entries.async_update_entry(entry, options=self._consent)
+        return self.async_abort(reason="consent_successful")
 
     async def async_step_hub(
         self, user_input: dict[str, Any] | None = None
@@ -583,6 +663,8 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     @property
     def _start_step_id(self) -> str:
         """The step a failed sign-in goes back to."""
+        if self._consent is not None:
+            return "intercom_consent"
         return "reauth_confirm" if self.source == SOURCE_REAUTH else "user"
 
     @callback
@@ -668,13 +750,14 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """
         if self._tokens is not None:
             return await self.async_step_account()
+        self._scopes = self._wanted_scopes()
         if self._method == LINK_ACCOUNT:
             return await self._async_start_link_account()
 
         auth = ThalovantAuth(async_get_clientsession(self.hass))
         try:
             self._login = await auth.start_device_login(
-                client_name=self._client_name, scopes=LOGIN_SCOPES
+                client_name=self._client_name, scopes=self._scopes
             )
         except ThalovantConnectionError:
             self._errors = {"base": "cannot_connect"}
@@ -694,7 +777,7 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         without it the user is offered a code instead.
         """
         implementation = ThalovantOAuth2Implementation(
-            self.hass, device_name=self._client_name
+            self.hass, device_name=self._client_name, scopes=self._scopes
         )
         if not implementation.through_my_home_assistant:
             return await self.async_step_no_my_home_assistant()
@@ -785,6 +868,25 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         label = strings.get(f"component.{DOMAIN}.common.hub_not_ready", "")
         return label if "{hub}" in label else NOT_READY_LABEL
 
+    def _wanted_scopes(self) -> tuple[str, ...]:
+        """LOGIN_SCOPES, plus Intercom's for anything that has them turned on.
+
+        A new token replaces the account's old one for every entry, so it must
+        carry what each entry's options still need, and what this flow's
+        consent asks for. With nothing turned on this is LOGIN_SCOPES.
+        """
+        wanted = dict.fromkeys(LOGIN_SCOPES)
+        option_sets: list[Mapping[str, Any]] = [
+            entry.options
+            for entry in self._async_current_entries(include_ignore=False)
+            if entry.data.get(CONF_SELF_HOSTED) is not True
+        ]
+        if self._consent is not None:
+            option_sets.append(self._consent)
+        for options in option_sets:
+            wanted.update(dict.fromkeys(scopes_for_options(options)))
+        return tuple(wanted)
+
     @property
     def _api(self) -> ThalovantApi:
         """The control plane, as the signed-in account."""
@@ -826,7 +928,16 @@ def _refusal_error(err: ThalovantError) -> str:
 
 
 class ThalovantOptionsFlow(OptionsFlow):
-    """Choose the conversation agent that answers the hub."""
+    """Choose the conversation agent, and whether Intercom announces or plays.
+
+    Everything about Intercom is off until it is turned on here. Turning
+    announcements on asks Thalovant for the extra permission first, and stays
+    off if it is refused.
+    """
+
+    def __init__(self) -> None:
+        """Start with no options chosen."""
+        self._options: dict[str, Any] = {}
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
@@ -834,6 +945,7 @@ class ThalovantOptionsFlow(OptionsFlow):
         """Manage the options."""
         if self.config_entry.data.get(CONF_SELF_HOSTED) is True:
             return self.async_abort(reason="private_agent_fixed")
+        options = self.config_entry.options
         errors: dict[str, str] = {}
         if user_input is not None:
             if (
@@ -841,23 +953,113 @@ class ThalovantOptionsFlow(OptionsFlow):
                 is None
             ):
                 errors[CONF_AGENT_ID] = "agent_not_found"
+            elif (
+                user_input.get(CONF_ALLOW_URGENT) is True
+                and user_input.get(CONF_ALLOW_ANNOUNCEMENTS) is not True
+            ):
+                errors[CONF_ALLOW_URGENT] = "urgent_needs_announcements"
             else:
                 ir.async_delete_issue(
                     self.hass, DOMAIN, agent_issue_id(self.config_entry.entry_id)
                 )
-                return self.async_create_entry(data=user_input)
+                # Only what is on is stored: an entry that never used Intercom
+                # is stored exactly as it was before it existed.
+                self._options = {CONF_AGENT_ID: user_input[CONF_AGENT_ID]} | {
+                    key: True
+                    for key in (
+                        CONF_ALLOW_ANNOUNCEMENTS,
+                        CONF_ALLOW_URGENT,
+                        CONF_ALLOW_RECEIVE,
+                    )
+                    if user_input.get(key) is True
+                }
+                if self._options.get(CONF_ALLOW_RECEIVE) is True:
+                    return await self.async_step_receive()
+                return self._async_finish()
 
-        current = self.config_entry.options.get(
-            CONF_AGENT_ID, conversation.HOME_ASSISTANT_AGENT
-        )
+        current = options.get(CONF_AGENT_ID, conversation.HOME_ASSISTANT_AGENT)
         return self.async_show_form(
             step_id="init",
             data_schema=_schema(
                 {
                     probatio.Required(
                         CONF_AGENT_ID, default=current
-                    ): ConversationAgentSelector()
+                    ): ConversationAgentSelector(),
+                    probatio.Optional(
+                        CONF_ALLOW_ANNOUNCEMENTS,
+                        default=options.get(CONF_ALLOW_ANNOUNCEMENTS) is True,
+                    ): BooleanSelector(),
+                    probatio.Optional(
+                        CONF_ALLOW_URGENT,
+                        default=options.get(CONF_ALLOW_URGENT) is True,
+                    ): BooleanSelector(),
+                    probatio.Optional(
+                        CONF_ALLOW_RECEIVE,
+                        default=options.get(CONF_ALLOW_RECEIVE) is True,
+                    ): BooleanSelector(),
                 }
             ),
             errors=errors,
         )
+
+    async def async_step_receive(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose where announcements from the hub are played."""
+        options = self.config_entry.options
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            players = list(user_input.get(CONF_SPEAKER_PLAYERS, []))
+            areas = list(user_input.get(CONF_SPEAKER_AREAS, []))
+            if not players and not areas:
+                errors["base"] = "receive_needs_players"
+            else:
+                self._options[CONF_SPEAKER_PLAYERS] = players
+                self._options[CONF_SPEAKER_AREAS] = areas
+                if tts_entity := user_input.get(CONF_TTS_ENTITY):
+                    self._options[CONF_TTS_ENTITY] = tts_entity
+                return self._async_finish()
+
+        return self.async_show_form(
+            step_id="receive",
+            data_schema=_schema(
+                {
+                    probatio.Optional(
+                        CONF_SPEAKER_PLAYERS,
+                        default=options.get(CONF_SPEAKER_PLAYERS, []),
+                    ): EntitySelector(
+                        EntitySelectorConfig(domain="media_player", multiple=True)
+                    ),
+                    probatio.Optional(
+                        CONF_SPEAKER_AREAS,
+                        default=options.get(CONF_SPEAKER_AREAS, []),
+                    ): AreaSelector(AreaSelectorConfig(multiple=True)),
+                    probatio.Optional(
+                        CONF_TTS_ENTITY,
+                        description={"suggested_value": options.get(CONF_TTS_ENTITY)},
+                    ): EntitySelector(EntitySelectorConfig(domain="tts")),
+                }
+            ),
+            errors=errors,
+        )
+
+    @callback
+    def _async_finish(self) -> ConfigFlowResult:
+        """Store the options, or first ask for the permission they need.
+
+        When the token lacks a scope the options need, nothing is stored: a
+        re-consent flow (a reauth) carries the whole option set and stores it
+        only once Thalovant has granted the permission.
+        """
+        entry = self.config_entry
+        needed = set(scopes_for_options(self._options)) - set(LOGIN_SCOPES)
+        try:
+            granted = set(Tokens.from_dict(entry.data[CONF_TOKENS]).scopes)
+        except KeyError, TypeError, ValueError:
+            granted = set()
+        if not needed - granted:
+            return self.async_create_entry(data=self._options)
+        if any(entry.async_get_active_flows(self.hass, {SOURCE_REAUTH})):
+            return self.async_abort(reason="consent_pending")
+        entry.async_start_reauth(self.hass, data={CONF_INTERCOM_CONSENT: self._options})
+        return self.async_abort(reason="consent_required")

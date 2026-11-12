@@ -1,0 +1,84 @@
+announce:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: thalovant
+    message:
+      required: true
+      example: "The front door has been open for five minutes"
+      selector:
+        text:
+          multiline: true
+    target:
+      required: false
+      default: all
+      selector:
+        select:
+          translation_key: announce_target
+          options:
+            - all
+            - speakers
+            - rooms
+            - groups
+    names:
+      required: false
+      example: '["kitchen", "downstairs"]'
+      selector:
+        text:
+          multiple: true
+    priority:
+      required: false
+      default: normal
+      selector:
+        select:
+          translation_key: announce_priority
+          options:
+            - normal
+            - urgent
+    repeat_times:
+      required: false
+      selector:
+        number:
+          min: 1
+          max: 10
+          mode: box
+    repeat_interval:
+      required: false
+      selector:
+        number:
+          min: 5
+          max: 120
+          unit_of_measurement: s
+          mode: box
+    language:
+      required: false
+      example: "fr-FR"
+      selector:
+        text:
+    wait:
+      required: false
+      default: false
+      selector:
+        boolean:
+
+cancel_announcement:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: thalovant
+    announcement_id:
+      required: true
+      selector:
+        text:
+
+list_speakers:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: thalovant

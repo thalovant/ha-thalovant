@@ -1,6 +1,93 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Link account is accepted only from Home Assistant's network; no relay claims.
+Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom questions: turning it on, errors, receiving, privacy and safety; Intercom is rolling out and may not be enabled yet; the released SDK's problem codes.
 
 # FAQ
+
+**Is Intercom a safety system?** No. It is a convenience: it is not a certified
+safety system and does not replace smoke or carbon monoxide alarms, medical alert
+devices or emergency services. It can fail silently (Home Assistant, the internet,
+Thalovant, the hub or a speaker down; Do Not Disturb; a speaker not set to receive;
+nobody home). See [the guide](docs/announcements.md).
+
+**Is Intercom available to me yet?** Not necessarily. It is rolling out: Thalovant
+ships it switched off for the whole platform and turns it on deliberately, so it
+may not be enabled on your hub or account yet. While it is off the announce
+actions answer "Intercom is rolling out on Thalovant and is not switched on yet.
+Nothing was sent", Repairs shows the same, `thalovant.list_speakers` still answers
+(`unavailable_reason: platform`) and `thalovant.cancel_announcement` still works.
+Nothing is wrong on your side and nothing is retried; you can leave the options on.
+
+**What changed in 0.4.0?** Intercom: `thalovant.announce`,
+`thalovant.cancel_announcement`, `thalovant.list_speakers`, an Intercom notify
+entity, and playing the hub's announcements on media players. All off by default;
+an entry that never turns them on behaves as in 0.3.0. See
+[`IntercomController`](custom_components/thalovant/intercom.py) and
+[`IntercomSpeakerHandler`](custom_components/thalovant/speaker.py).
+
+**Why does turning on announcements open a re-authentication request?** Sending
+needs the `intercom:read` and `intercom:send` permissions (and `intercom:urgent`
+for urgent), which the sign-in did not ask for. The request asks only for those;
+nothing is saved until you approve, and the option stays off if you decline. See
+[`ThalovantConfigFlow.async_step_intercom_consent()`](custom_components/thalovant/config_flow.py).
+
+**The service says Intercom "is rolling out" or "is not available yet".** That is
+`intercom_disabled_platform` (503) or `intercom_not_configured` (503): the platform
+switch is off, or Thalovant has not finished setting Intercom up. See the first
+question. It is not a failure of this Home Assistant, and nothing was sent.
+
+**An urgent announcement says it needs a permission, is busy, or needs a skill.**
+`urgent_scope_required`: the token lacks `intercom:urgent` (turn **Allow urgent
+announcements** off and on again; the plan must allow it). `intercom_urgent_busy`:
+2 urgent announcements are already repeating on the hub; cancel one or wait the
+seconds it says. `skill_not_installed`: the hub has no Intercom skill yet. Nothing
+was sent in any of these.
+
+**It says a speaker "cannot play speech".** `not_a_speaker`: that connection has
+`can_play: false`. `thalovant.list_speakers` shows `kind` and `can_play`. A Home
+Assistant link is a speaker only once Home Assistant told Thalovant it can play
+(`spec.intercom.can_play`, done when **Play announcements on this Home Assistant**
+is on), and the owner switched receiving on.
+
+**Why is my message refused locally?** The platform's own text rule, checked first
+so a refusal costs no request: 1 to 280 characters after NFC normalisation and
+trimming; no `<` or `>`; no control, bidirectional or other invisible characters
+(zero-width joiner and non-joiner are fine); no private-use characters. Line breaks
+and tabs become spaces.
+
+**The service says "Announcements are turned off".** Turn on **Send announcements**
+in the integration's options. With several hubs, name one with `config_entry_id`.
+
+**The service says it "may still have been spoken". Should I send it again?** Look
+in the Thalovant dashboard first. The integration never retries: a 502 means the
+hub did not confirm, and it can have spoken anyway. Each call is a new announcement
+with its own idempotency key; the same key is never reused.
+
+**Can I stop an urgent announcement that repeats?** Yes: `thalovant.cancel_announcement`
+with the id the announce action returned (it works even if announcements were turned
+off since). Also the hub's Intercom switch in the dashboard, a speaker's receive
+switch, Thalovant's platform switch, and saying an acknowledgement at a speaker.
+
+**How do I find the names to announce to?** Call `thalovant.list_speakers` in
+**Developer tools** > **Actions**. Home Assistant cannot fill a field from a live
+list, so `names` is typed; a speaker can be named by its name, slug or id.
+
+**Why is the Intercom notify entity missing?** It exists once **Send announcements**
+is on, and it is disabled by default: enable it under the hub's device.
+
+**Is the text stored or logged?** Not by this integration (no log, event, repair,
+error or diagnostics holds it) and not by Thalovant (it keeps a keyed hash and the
+length). Home Assistant's automation traces keep what an automation was told to say,
+and a speaker's text to speech may cache or log what it says.
+
+**The hub's announcements are not played on my speakers.** Check **Play announcements
+on this Home Assistant** has an available media player or area and a text to speech;
+that the hub's owner switched **receive** on for this connection in the Thalovant
+dashboard; and that Repairs shows no "was not told that ... can play" notice.
+Diagnostics list what was ignored and why.
+
+**Does an urgent announcement play louder?** No. Playing never changes a volume.
+
+**Why 20 a minute and 5 an hour?** This integration's own limits, below the
+platform's, so a runaway automation is stopped before it reaches the household.
 
 **What changed in 0.3.0?** The first step offers **Link account** (the
 default) and **Link with a code instead**. Link account approves in the

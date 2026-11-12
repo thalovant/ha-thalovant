@@ -1,6 +1,59 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: Propose moving the Link account exchange into the SDK.
+Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: the SDK is released and the platform ships Intercom off; what remains (release timing, a public client update, confirming receiving on a real hub) and follow-ups.
 
 # Suggestions
+
+## Intercom (0.4.0)
+
+**Cut the 0.4.0 release when the platform is ready to switch Intercom on.** Problem:
+the SDK (`thalovant` 0.12.0) is released and `manifest.json` pins it, but the
+platform ships Intercom switched off, so a user who turns the options on today gets
+"Intercom is rolling out on Thalovant and is not switched on yet" and a Repairs
+notice. Nothing breaks, but the feature does nothing yet. Proposed: release 0.4.0
+(it is safe off) and say in the release notes that Intercom is rolling out; or hold
+the release until the platform operator turns the switch on. Impact: a release now
+costs support questions ("why does announce say not switched on?") answered by the
+README, the FAQ and the notice itself; holding costs users the other 0.4.0 changes
+(none besides Intercom).
+
+**Give the SDK a public way to update a connection.** Problem:
+[`ThalovantApi.set_connection_can_play()`](custom_components/thalovant/api.py) reads a
+connection with the public `get_client()` and writes it with the SDK's private
+`_request()` (marked "SDK GAP"; SDK 0.12.0 has no public client update, checked on the
+released package). Proposed: an `update_client()` (whole spec with `If-Match`, or a
+merge of `spec.intercom`) in the SDKs, called from `api.py`; the guard
+[`test_the_private_write_is_in_one_place`](tests/test_api_intercom_sdk.py) fails when
+one exists. Impact: one place for the etag and 412 handling, no private call; small.
+
+**Confirm the hub delivers `speak` to a Home Assistant link.** Problem: the platform now
+accepts `spec.intercom.can_play` on a Home Assistant connection (the one key a caller
+may write) and lists it as a speaker only with it, which the integration declares. The
+remaining question is the hub skill: it learns a speaker's peer from the messages it
+hears, and Home Assistant sends none that the skill reads as an utterance. Proposed:
+check, on a real hub, that an announcement to a `home_assistant` speaker arrives as a
+`speak` with `data.meta.dialog == "intercom.announce"` and
+`data.meta.intercom.{id, priority}` (what `parse_announcement()` accepts), and if the
+skill needs a hello from the connection, tell the integration the message to send
+once. Impact: it is what makes **Play announcements on this Home Assistant** work end
+to end.
+
+**Use `policy_synced` and the `kind` of the speaker list.** Problem: `thalovant.list_speakers`
+returns `policy_synced` and each speaker's `kind` and `can_play`, but nothing acts on
+them. Proposed: when the per-speaker entity model below exists, grey out the speakers
+that cannot play, and show "changes may take a moment to reach the home" while
+`policy_synced` is false. Impact: friendlier, no new request.
+
+**Follow announcements from the platform's stream instead of polling.** Problem: an
+urgent announcement that is sending is read every 5 seconds. Proposed: consume
+`intercom.announcement.updated` from the SSE stream when an SDK offers it. Impact:
+fewer requests, faster events.
+
+**One entity per speaker.** Problem: a service field cannot be filled from a live list,
+so `names` is typed. Proposed: a `notify` entity (or a device) per speaker and room,
+created from `thalovant.list_speakers`, so a speaker is picked from a list and gets an
+area. Impact: friendlier targeting; needs a stale-device policy.
+
+
+## Earlier suggestions
 
 **Take the code exchange from the SDK once it has one.** Problem: Link
 account's exchange (`ThalovantOAuth2Implementation.async_resolve_external_data()`

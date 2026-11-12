@@ -15,7 +15,7 @@ registered app: the config flow goes on with it exactly as it does after a
 device login. There is no refresh token.
 """
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from contextlib import suppress
 from datetime import datetime
 from typing import Any, override
@@ -59,12 +59,23 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
     is a JSON body, not the form Home Assistant's own implementation posts.
     """
 
-    def __init__(self, hass: HomeAssistant, *, device_name: str) -> None:
-        """Prepare a link for this installation, named as the consent page shows it."""
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        *,
+        device_name: str,
+        scopes: Sequence[str] = LOGIN_SCOPES,
+    ) -> None:
+        """Prepare a link for this installation, named as the consent page shows it.
+
+        scopes is what the consent page asks for: LOGIN_SCOPES, and Intercom's
+        when announcements are on.
+        """
         super().__init__(
             hass, DOMAIN, LINK_CLIENT_ID, LINK_AUTHORIZE_URL, LINK_TOKEN_URL
         )
         self._device_name = device_name[:LINK_DEVICE_NAME_MAX]
+        self._scopes = tuple(scopes)
 
     @property
     @override
@@ -92,7 +103,7 @@ class ThalovantOAuth2Implementation(LocalOAuth2ImplementationWithPkce):
         """The PKCE challenge, the scopes, and how the consent page names us."""
         return {
             **super().extra_authorize_data,
-            "scope": " ".join(LOGIN_SCOPES),
+            "scope": " ".join(self._scopes),
             "device_name": self._device_name,
         }
 

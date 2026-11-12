@@ -1,6 +1,156 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: 0.3.0, Link account is accepted only from Home Assistant's network; no relay claims.
+Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements from Home Assistant and playing the hub's announcements, all off by default; aligned with the released thalovant 0.12.0 and the platform's final API, which ships Intercom switched off.
 
 # Maintenance report
+
+## 2026-11-12 · 0.4.0 (not released)
+
+**Intercom**, all off by default: an entry that never turns it on is stored, set up
+and answered exactly as in 0.3.0 (no request, no platform, no Repairs notice;
+[`test_nothing_on_changes_nothing`](tests/test_intercom_setup.py)).
+
+**Intercom is rolling out, and may not be enabled for a user's hub or account yet.**
+The platform's API is live with its final shape but ships Intercom switched off
+(`GET .../intercom/settings` and `/speakers` say `unavailable_reason: platform`, every
+write answers 503 `intercom_disabled_platform`; only cancel still works). The
+integration treats that as a normal state: a translated error ("Intercom is rolling
+out on Thalovant and is not switched on yet. Nothing was sent."), a Repairs notice,
+nothing retried, nothing crashing
+([`test_the_platform_switch_is_off`](tests/test_services.py)). The README, the guide,
+the FAQ, the options text and the action descriptions say so plainly, next to the
+safety notice (a convenience, not a certified safety system).
+
+**The SDK is released.** `manifest.json` requires `thalovant==0.12.0`, which is on
+PyPI; this revision was rebased on `origin/main` (77650c6, no conflicts) and made to
+match the released API rather than the earlier SDK branch it was first written against
+(375b822). `pyproject.toml`'s `version` (0.1.0 since the first commit) is not the
+integration's version and was left alone; the version is `manifest.json`'s.
+
+Changed since the first revision of this branch (the released SDK and the final API):
+
+- **Speakers** carry `kind` and `can_play`
+  ([`IntercomSpeaker`](custom_components/thalovant/api.py)); the list carries
+  `policy_synced` and `unavailable_reason`
+  ([`IntercomSpeakers`](custom_components/thalovant/api.py)); `thalovant.list_speakers`
+  returns them. A `home_assistant` connection is a speaker only with
+  `intercom.can_play: true`, which the integration declares when playing is on
+  (`ThalovantApi.set_connection_can_play()`).
+- **Urgent** needs `intercom:urgent` in addition to `intercom:send`; it is asked for
+  only while **Allow urgent announcements** is on (`scopes_for_options()`), and a
+  platform `urgent_scope_required` is its own message and never a re-authentication
+  (the SDK's class is a kind of auth error, so it is translated first).
+- **Problem codes**, each a translated `HomeAssistantError` or
+  `ServiceValidationError`, by SDK class and by code
+  ([`_translate_intercom()`](custom_components/thalovant/api.py),
+  [`IntercomController._error()`](custom_components/thalovant/intercom.py)):
+  `urgent_scope_required`, `intercom_urgent_busy` and every 429 (with `Retry-After`),
+  `skill_not_installed`, `not_a_speaker`, `too_many_targets`, `intercom_unavailable`
+  (`kid_hub` or `public_hub`), `intercom_disabled`, `intercom_disabled_platform`,
+  `intercom_not_configured`, `hub_unreachable` (with `announcement_id`), `hub_locked`,
+  `not_cancellable` and a 403 "role required" (`manager_required`). New Repairs
+  strings and exception messages in English and Canadian French; the platform wording
+  is "rolling out".
+- **The text rule is the platform's own** ([`validate_text()`](custom_components/thalovant/intercom.py)):
+  NFC, trimmed, 1 to 280, no `<` `>`, no control, bidirectional or other invisible
+  format characters (ZWJ and ZWNJ allowed), no lone surrogates, private-use characters
+  or separators; a line break or a tab is a space. It is checked against the SDK's
+  `announcement_text()` over every character
+  ([`test_the_text_rule_is_the_platforms`](tests/test_api_intercom_sdk.py)). Received
+  text drops the same characters. (First revision: white space collapsed, `<` `>` allowed.)
+- **`Announcement.replayed`** and `hub_confirmed` are carried; the announce response
+  gains `replayed`. The integration still never reuses a key.
+- **`set_connection_can_play()`** sends `can_play` as the only key under
+  `spec.intercom` (the one the platform lets a caller write; it keeps the rest). SDK
+  0.12.0 has no public client update (checked on the released package), so it remains
+  the single marked use of the SDK's private `_request()`, isolated in that function and
+  guarded by [`test_the_private_write_is_in_one_place`](tests/test_api_intercom_sdk.py)
+  (it fails when a release adds a public method). Every other call is public.
+- One existing test was made deterministic: the Intercom event recorder in
+  `tests/test_intercom.py` listened with `events.append`, which Home Assistant runs in
+  the executor, so the order of two events could flip (`test_cancel` failed once in a
+  group run); it is now a `@callback`.
+
+- **Options** ([`ThalovantOptionsFlow`](custom_components/thalovant/config_flow.py)):
+  **Send announcements**, **Allow urgent announcements** (a separate choice, a
+  separate permission) and **Play announcements on this Home Assistant** (media
+  players, areas, text to speech). Only what is on is stored.
+- **Re-consent** (`async_step_intercom_consent()`): turning sending on when the token
+  lacks `intercom:read` and `intercom:send` (and `intercom:urgent` for urgent) aborts
+  the options with `consent_required` and starts a reauth that asks for the base
+  scopes plus those, never `hubs:write`, the same two ways as linking. The whole option
+  set is stored only once the new token carries the scopes; a refusal, a plan that is
+  not granted them or a different account leaves everything off. Any sign-in now asks
+  for the scopes the account's entries still need (`_wanted_scopes()`), so signing in
+  again does not drop them; with nothing on it asks for exactly the 0.3.0 scopes.
+- **Actions** ([`services.py`](custom_components/thalovant/services.py), `services.yaml`,
+  English and French strings, icons): `thalovant.announce`, `thalovant.cancel_announcement`
+  and `thalovant.list_speakers`, registered in `async_setup()` and refusing with a clear
+  error when the option is off. `list_speakers` is an addition to what was asked: a
+  service field cannot be filled from a live list, so it is how a person finds the
+  names.
+- **Sending** ([`IntercomController`](custom_components/thalovant/intercom.py)): a fresh
+  `uuid4` idempotency key per call, no retry after any error, an error after a 502 or
+  no answer that says it may still have been spoken (with the announcement id when
+  given), local limits (20 normal a minute, 5 urgent an hour), the
+  `thalovant_announcement_updated` event (id and status only), following an urgent
+  announcement that is sending by reading it every 5 seconds, `wait` (at most 300 s),
+  cancel (allowed with the option off), speaker names resolved to slugs, repair issues
+  for each reason Intercom is unavailable, and an Intercom notify entity
+  ([`notify.py`](custom_components/thalovant/notify.py)) disabled by default.
+- **Receiving** ([`speaker.py`](custom_components/thalovant/speaker.py)): accepts only
+  a `speak` message with `meta.dialog == "intercom.announce"` on the hub's link,
+  cleans the text, bounds it (6 new a minute, once when normal, 10 times when urgent,
+  4 at once) and plays it with `tts.speak` on the chosen players and areas at their
+  current volume, in background tasks. A private link never plays. On enabling it
+  tells the platform `intercom.can_play` (and false on disabling) through
+  `ThalovantApi.set_connection_can_play()`, which is marked as an SDK gap (it uses the
+  SDK's private `_request()` because SDK 0.12.0 has no call that updates a connection).
+  Whether the hub's skill delivers a `speak` to a Home Assistant link is unverified.
+- **Adapter** ([`api.py`](custom_components/thalovant/api.py)): the released SDK
+  0.12.0's Intercom calls and errors, every problem code its own error by SDK class or
+  by code. A 429 is now `ThalovantRateLimitedError`, still a
+  `ThalovantConnectionError` (one existing test now expects the subclass).
+- **Diagnostics** redact the players, areas and text to speech and add counters only.
+- **Repairs**: `intercom_unavailable_{plan,kid_hub,public_hub,platform,hub_off,unknown}`
+  and `intercom_can_play`, never raised for an entry that has the feature off.
+- `manifest.json`: version 0.4.0, `thalovant==0.12.0`, `after_dependencies`
+  `media_player` and `tts` (neither is imported: `tts.speak` is called as a service and
+  the default engine is read from the registry, because `tts` has requirements of its
+  own). `quality_scale.yaml`: `action-setup`, `docs-actions`, `action-exceptions` and
+  `entity-disabled-by-default` are now `done`.
+- Docs: README (Announcements section, options, privacy, troubleshooting),
+  [docs/announcements.md](docs/announcements.md) (the guide, with the safety notice and
+  automation examples), docs/index.md, QUICK_FACTS, FAQ, AUDIT, SUGGESTIONS.
+
+Verification, local, Python 3.14.10, Home Assistant 2026.10.4
+(`pytest-homeassistant-custom-component==0.13.375`), `thalovant` 0.12.0 as released on
+PyPI, installed under Home Assistant's package constraints as CI does:
+`pytest --cov --cov-report=term-missing` passed **722 tests** (381 on `main`; 640 in
+the first revision of this branch; 82 added since) with 100% statement and branch
+coverage (2217 statements, 590 branches); `ruff check .`, `ruff format --check .` and
+`mypy` passed; hassfest (`ghcr.io/home-assistant/hassfest:latest` with podman)
+reported 0 invalid integrations. Tests by file: `test_intercom.py` 139,
+`test_api.py` 102, `test_speaker.py` 40, `test_api_intercom_sdk.py` 33 (the adapter
+against the real SDK and a local control plane that answers the final problem bodies,
+the replay header, `Retry-After`, and the text-rule parity with the SDK),
+`test_services.py` 33 (with the platform-switch-off scenario), `test_intercom_options.py`
+22, `test_intercom_setup.py` 10, `test_translations.py` 10 (en/fr parity, placeholders,
+every problem code has a message, "rolling out" is said), `test_notify.py` 7,
+`test_diagnostics.py` 2. Not verified: the live API (it has Intercom off), a hub, real
+media players and text to speech, the live consent page with the new scopes, the HACS
+check (it reads the public repository), and Home Assistant 2026.9.
+
+Transparency Report: AI Model: Claude Sonnet 5.5. Actions Taken: read the Intercom
+contract, the API and SDK Intercom sources and the repository's conventions; designed
+and wrote the options and re-consent flow, the actions, the notify entity, the sender,
+the receiver, the adapter, the strings (English and Canadian French), the tests and
+the documentation; then, after the SDK was released, read the released SDK (its code,
+changelog and Intercom guide) and the platform's final API notes, and adapted the
+adapter, the controller, the text rule, the error messages and the documents to them
+(2026-11-12); ran the suite, lint, type check and hassfest. Oversight: the
+coordinator's brief for the Intercom release train, which named the released API; the
+work is a branch that is pushed with a pull request for review, nothing was merged,
+tagged or released, and no live Thalovant API, hub or Home Assistant instance was
+used.
 
 ## 2026-11-08 · 0.3.0
 

@@ -1,11 +1,207 @@
-Last Edit: Claude Opus 5.5 - 2026-11-08 - Motive: link_wrong_network follows the API's exchange_network_mismatch code only.
+Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom audit against the released thalovant 0.12.0 and the platform's final API: what the code guarantees, how it is tested, and the known limits; Intercom ships off on the platform.
 
 # Audit
+
+## Intercom (0.4.0)
+
+Intercom is safety-adjacent (a text is spoken aloud in a home, an urgent one can
+repeat), so the integration keeps it off by default, in three separate switches
+([`ThalovantOptionsFlow.async_step_init()`](custom_components/thalovant/config_flow.py#L942)),
+and stores nothing about it until it is on
+([`test_options_without_intercom_are_stored_as_before`](tests/test_intercom_options.py#L96),
+[`test_nothing_on_changes_nothing`](tests/test_intercom_setup.py#L47): no request, no
+platform, no Repairs notice for an entry that never turned it on).
+
+Intercom is also **rolling out on the platform**: Thalovant ships it switched off
+(`unavailable_reason: platform`, every write 503 `intercom_disabled_platform`), so it
+may not be enabled on a user's hub or account yet. That state is first-class here: a
+clear translated error, a Repairs notice, nothing retried, nothing crashing, reads
+and cancel still working
+([`test_the_platform_switch_is_off`](tests/test_services.py)).
+
+Evidence: local run on Python 3.14.10, Home Assistant 2026.10.4, `thalovant` 0.12.0
+as released on PyPI, installed under Home Assistant's package constraints: `pytest
+--cov` passed with 100% statement and branch coverage, `ruff check`, `ruff format
+--check` and `mypy` are clean, and hassfest (`ghcr.io/home-assistant/hassfest:latest`,
+podman) reported 0 invalid integrations. Counts are in
+[MAINTENANCE_REPORT.md](MAINTENANCE_REPORT.md).
+
+### What is guaranteed, and where it is tested
+
+- **The text is never logged, stored, evented or put in an error.** It is validated
+  by [`validate_text()`](custom_components/thalovant/intercom.py#L140), passed only to
+  [`ThalovantApi.announce()`](custom_components/thalovant/api.py#L1006) (which returns an
+  [`Announcement`](custom_components/thalovant/api.py) with no text field), and
+  every error is a translation key with ids and counts as placeholders
+  ([`IntercomController._error()`](custom_components/thalovant/intercom.py#L344)).
+  Unknown exceptions are logged by type only
+  ([`_unexpected()`](custom_components/thalovant/intercom.py#L427)). Tests assert the
+  secret text is absent from the log, the event, the error, its cause, the stats and
+  diagnostics:
+  [`test_announce`](tests/test_intercom.py#L267),
+  [`test_announce_errors`](tests/test_intercom.py#L646),
+  [`test_value_error_and_surprises`](tests/test_intercom.py#L778),
+  [`test_diagnostics_hold_counts_of_announcements_never_text`](tests/test_diagnostics.py#L80),
+  [`test_announce`](tests/test_api_intercom_sdk.py#L249) (real SDK: no text in the
+  answer or in any error, for ten kinds of answer).
+- **The text rule is the platform's own.** NFC, trimmed, 1 to 280, no `<` `>`, no
+  control, bidirectional or other invisible format characters (ZWJ and ZWNJ allowed),
+  no lone surrogates, private-use characters or separators; the one difference is
+  that a line break or a tab becomes a space here (the SDK refuses them). Checked
+  character by character against the SDK's `announcement_text()`
+  ([`test_the_text_rule_is_the_platforms`](tests/test_api_intercom_sdk.py)) and by
+  [`test_validate_text_refuses`](tests/test_intercom.py).
+- **Every problem code the platform can answer is a clear message, and none crashes
+  the service.** `urgent_scope_required` (a missing scope, not a dead sign-in: no
+  reauth), `intercom_urgent_busy` and any 429 (with `Retry-After`),
+  `skill_not_installed`, `not_a_speaker`, `too_many_targets`, `intercom_unavailable`
+  (kid or public hub), `intercom_disabled`, `intercom_disabled_platform`,
+  `intercom_not_configured`, `hub_unreachable` (with `announcement_id`), `hub_locked`
+  and a 403 "role required" are mapped by SDK class **and** by code
+  ([`_translate_intercom()`](custom_components/thalovant/api.py),
+  [`IntercomController._error()`](custom_components/thalovant/intercom.py)); an
+  unknown answer is a `request_refused` with its status and code. Tests:
+  [`test_intercom_errors`](tests/test_api.py) (fake SDK, by class and by code),
+  [`test_announce_errors`](tests/test_api_intercom_sdk.py) (real SDK and the final
+  problem bodies) and [`test_announce_errors`](tests/test_intercom.py).
+- **A fresh idempotency key per announcement, and no retry.** The key is
+  `str(uuid4())` built inside the one call
+  ([`async_announce()`](custom_components/thalovant/intercom.py#L451)); two calls with
+  the same words send two keys
+  ([`test_every_announcement_has_its_own_key`](tests/test_intercom.py#L302)). Every
+  error path leaves exactly one request
+  ([`test_announce_errors`](tests/test_intercom.py#L646) and, against the real SDK,
+  [`test_announce_errors`](tests/test_api_intercom_sdk.py#L452): the plane saw one
+  POST whatever it answered). After a 502 or no answer the error says the
+  announcement may still have been spoken, and carries the announcement id when the
+  platform gave one.
+- **Local rate limits** (20 normal a minute, 5 urgent an hour per entry, below the
+  platform's) in [`SlidingWindowLimiter`](custom_components/thalovant/intercom.py#L233):
+  [`test_local_rate_limit`](tests/test_intercom.py#L512).
+- **Urgent is its own option and its own scope**
+  ([`urgent_allowed`](custom_components/thalovant/intercom.py#L312)):
+  [`test_urgent_needs_its_option_and_its_scope`](tests/test_intercom.py#L494).
+- **Re-consent asks only for the extra scopes, stores nothing until granted, and
+  keeps the option off if refused or not granted**
+  ([`async_step_intercom_consent()`](custom_components/thalovant/config_flow.py#L220),
+  [`_async_finish_consent()`](custom_components/thalovant/config_flow.py#L462)):
+  [`test_turning_announcements_on_asks_for_the_permission`](tests/test_intercom_options.py#L223),
+  [`test_refused_consent_leaves_everything_off`](tests/test_intercom_options.py#L305),
+  [`test_a_plan_without_intercom_is_not_granted_the_scope`](tests/test_intercom_options.py#L332),
+  [`test_consent_with_another_account`](tests/test_intercom_options.py#L352) (the new
+  token is revoked). With nothing on, a sign-in asks for exactly the 0.3.0 scopes
+  ([`test_sign_ins_with_nothing_on_ask_for_what_they_always_did`](tests/test_intercom_options.py#L507)).
+- **Receiving admits one message shape and bounds it**
+  ([`parse_announcement()`](custom_components/thalovant/speaker.py#L82),
+  [`IntercomSpeakerHandler._admit()`](custom_components/thalovant/speaker.py#L184)):
+  6 new announcements a minute, a normal one once, an urgent one at most 10 times, 4
+  plays at once ([`test_per_minute_limit`](tests/test_speaker.py#L254),
+  [`test_repeats_of_an_urgent_announcement`](tests/test_speaker.py#L264),
+  [`test_too_many_plays_at_once`](tests/test_speaker.py#L512),
+  [`test_invalid_announcements_are_ignored`](tests/test_speaker.py#L244)); control,
+  bidirectional and angle-bracket characters are removed
+  ([`clean_received_text()`](custom_components/thalovant/intercom.py#L166),
+  [`test_the_text_is_cleaned`](tests/test_speaker.py#L148)); no volume is touched
+  ([`test_urgent_does_not_touch_the_volume`](tests/test_speaker.py#L138)); the loop is
+  never blocked ([`test_it_never_blocks_the_loop`](tests/test_speaker.py#L154)); a
+  private link never plays
+  ([`test_a_private_link_never_plays`](tests/test_speaker.py#L552)).
+- **Cancel is not gated by the option**
+  ([`async_cancel()`](custom_components/thalovant/intercom.py#L572)):
+  [`test_cancel_works_with_announcements_off`](tests/test_intercom.py#L974).
+
+### Known limits and findings
+
+1. **Not run against a live API, hub or media player, and the platform has Intercom
+   switched off.** The released API ships it dark
+   (`[thalovant-api: docs/intercom.md]`, "Platform switch"), so nothing here has
+   spoken through a real hub. The adapter is tested against the real, released SDK
+   and a local control plane that answers the final shapes (speaker `kind`,
+   `can_play`, `policy_synced`; `Idempotency-Replayed`; the problem codes with their
+   `Retry-After`, `announcement_id`, `reason`, `announcement_status`). Not verified:
+   the live consent page with the new scopes, the platform's live answers, a hub
+   delivering `speak` to this connection, real text to speech and media players, and
+   Home Assistant 2026.9 (the suite ran on 2026.10.4).
+2. **Receiving is not proven end to end.** The platform now takes
+   `spec.intercom.can_play` from a caller on a connection (the one key it allows;
+   `carry_platform_owned_client_keys` keeps the rest), and a Home Assistant connection
+   is a speaker only with `can_play: true`: this integration declares it. What is
+   unverified is the hub side: whether the Intercom skill addresses a `speak` message
+   of the shape `parse_announcement()` accepts to a Home Assistant link (the skill
+   learns a speaker's peer from the messages it hears; Home Assistant sends none of
+   the kind). See [SUGGESTIONS.md](SUGGESTIONS.md).
+3. **SDK gap.** SDK 0.12.0 has no public call that updates a connection (checked on
+   the released package), so
+   [`ThalovantApi.set_connection_can_play()`](custom_components/thalovant/api.py#L1057)
+   reads it with the public `get_client()` and writes the whole spec back with the
+   SDK's private `_request()` (`If-Match`, one retry on 412), with `can_play` as the
+   only key under `spec.intercom` (the one the platform lets a caller write). It is
+   the only private use, isolated in that one function
+   ([`test_the_private_write_is_in_one_place`](tests/test_api_intercom_sdk.py) fails
+   when a release adds a public method, or a second private use appears). A private
+   call can break in any SDK release; the real-SDK test
+   ([`test_can_play`](tests/test_api_intercom_sdk.py#L517)) would catch it. Every
+   other call (announce, cancel, get, list, settings, speakers) is the SDK's public
+   API.
+4. **`intercom:urgent` is in the final API.** An urgent announcement needs it in
+   addition to `intercom:send`; the registered app may ask for it by name
+   (Link account and the device flow); Free plans cannot mint it. It is asked for
+   only when **Allow urgent announcements** is on
+   ([`scopes_for_options()`](custom_components/thalovant/intercom.py)); without it the
+   platform answers `urgent_scope_required` before spending anything, which is a
+   message, not a re-authentication. A plan that is not granted it leaves the
+   option off (fails closed).
+5. **The re-consent replaces the account's token for every entry.** Signing in again
+   revokes the previous token, so the new one carries the base scopes plus every
+   Intercom scope an entry's options need
+   ([`_wanted_scopes()`](custom_components/thalovant/config_flow.py#L871),
+   [`test_new_sign_ins_ask_for_what_stays_on`](tests/test_intercom_options.py#L476)).
+   With two Thalovant accounts, linking one asks for the other's Intercom scopes too,
+   which its plan may not grant. Known, not handled.
+6. **Receiving trusts the hub link.** Like the existing request handler for account
+   links, it checks the message, not its `context.source`; only the hub's
+   authenticated connection can deliver it. A compromised hub could make this Home
+   Assistant speak up to 6 new announcements a minute on the chosen players. The
+   hub's `speak` messages carry no signature the integration can check.
+7. **What the media player and the text to speech do is outside.** `tts.speak` plays
+   as an announcement (a player that does not support that may interrupt what it is
+   playing), at the player's volume (a muted or very quiet player may not be heard),
+   and an engine may log or cache audio despite `cache: False`
+   ([`_async_play()`](custom_components/thalovant/speaker.py#L279)).
+8. **Home Assistant keeps what an automation was told to say** (traces, the
+   automation's YAML, the `call_service` event on the bus). The integration cannot
+   prevent that; the docs say so.
+9. **Counters are in memory.** The local rate limits and the receive limits restart
+   with the entry. The platform's own limits still apply to announcements.
+10. **Following is polling.** An urgent announcement that is sending is read every 5
+    seconds for as long as it can last
+    ([`_async_follow()`](custom_components/thalovant/intercom.py#L542)); the platform
+    emits a stream event the integration does not consume. `wait` holds a service call
+    for 300 seconds at most.
+11. **Names are typed.** A service field cannot be filled from a live list, so
+    `names` is free text, checked by the platform; `thalovant.list_speakers` shows the
+    valid ones. A speaker named by its display name is resolved to its slug
+    ([`_async_resolve()`](custom_components/thalovant/intercom.py#L619)); two speakers
+    with one name are refused.
+12. **The "role required" refusal is recognised by its sentence.** A plain tenant
+    member's 403 has no code ("Manager role required for this tenant resource
+    change"), so `manager_required` is chosen when a 403's detail says "role
+    required". If the sentence changes, the person gets the generic `request_refused`
+    with HTTP 403: still a clear refusal, never a crash.
+13. **`policy_synced: false` is informational.** The platform says a consent change
+    may take a moment to reach the hub; `thalovant.list_speakers` passes it on, and
+    nothing else is gated by it.
+14. **Household-typed labels** (speaker names, rooms, groups, `acked_by`) are made
+    safe before the action returns them
+    ([`sanitize_label()`](custom_components/thalovant/intercom.py#L216),
+    [`test_list_speakers`](tests/test_services.py)): control characters removed and 80
+    characters at most, so a name cannot carry instructions into an automation or a
+    language model that reads the response.
 
 ## Link account (0.3.0)
 
 Link account
-([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L689),
+([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L772),
 [`ThalovantOAuth2Implementation`](custom_components/thalovant/oauth.py)) uses Home Assistant's own OAuth 2
 machinery. The `state` is a JWT signed with this installation's secret, and
 Home Assistant's `OAuth2AuthorizeCallbackView` refuses any other with a 400
@@ -18,7 +214,7 @@ and never through the browser, and each attempt makes a new one
 ([`test_each_link_has_its_own_verifier`](tests/test_oauth.py#L153),
 [`test_link_account_invalid_grant`](tests/test_link_account.py#L259)). The redirect must be
 exactly My Home Assistant's
-([`through_my_home_assistant`](custom_components/thalovant/oauth.py#L76)); otherwise the flow offers
+([`through_my_home_assistant`](custom_components/thalovant/oauth.py#L87)); otherwise the flow offers
 the device login instead
 ([`test_without_my_home_assistant_a_code_is_offered`](tests/test_link_account.py#L355),
 [`test_own_address_is_not_enough`](tests/test_link_account.py#L379)).
@@ -41,7 +237,7 @@ Only that code maps to `link_wrong_network`
 other `invalid_grant`, including one with no code from an API before #502, is
 `link_failed` (expired or already used), so the flow never names a network it
 was not told about. The detail and code are read by
-[`_problem()`](custom_components/thalovant/oauth.py#L150). The network check
+[`_problem()`](custom_components/thalovant/oauth.py#L161). The network check
 itself is the API's and is not tested here.
 
 Secrets: the exchange posts JSON
