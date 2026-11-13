@@ -512,7 +512,9 @@ async def _transfer(
             or []
         )
         playing = [
-            s for s in exposed if s.state == "playing" and s.entity_id != player.entity_id
+            s
+            for s in exposed
+            if s.state == "playing" and s.entity_id != player.entity_id
         ]
         if len(playing) != 1:
             return None
