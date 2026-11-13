@@ -1,6 +1,55 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep entry (structured actions, options, diagnostics redaction, music cross-check, version check) with its Transparency Report.
 
 # Maintenance report
+
+## 2026-11-13 · documentation sweep (docs only, nothing released)
+
+Scope: the code on `main` e28f73d (structured actions PR #30, security PR #32, music PR #31, all after the `v0.4.0` tag).
+No code, test or manifest was changed.
+
+Changed:
+
+- `README.md`: release state (0.4.0 is the last release; structured actions and music are on `main`, unreleased);
+  "How it works" notes the structured branch; the **Options** table now lists every option with its key, default and
+  effect (read from `ThalovantOptionsFlow` and `strings.json`; the old table lacked the structured options and the
+  second form); **Structured actions** rewritten (31 capabilities with the service each calls, how a target is
+  resolved, when it does nothing, the outcomes and spoken answers, **Sensitive actions** with what they require,
+  what is not done, verification limits); new **Diagnostics** section with the redaction list; Privacy, "What it
+  cannot do" and Troubleshooting corrected. Contradictions with the code that were fixed: "if Assist cannot do it by
+  voice ... it cannot do it from Thalovant either" (false since structured actions), "What leaves your home: only
+  Assist's answers" (also the integration's own sentences), "SDK 0.12.0 or later" (the manifest pins `==0.12.0`).
+- `docs/music.md`, `docs/music.fr.md`: cross-checked against `music.py` and the installed Home Assistant 2026.10.4
+  Music Assistant services. Corrected: a class name (`MusicRequest`) that does not exist; the claim that a
+  Chromecast of the same name is "never reached" (true for the music capabilities, not for volume, mute, unmute and
+  playback with a named target); the conditions on the two player fallbacks (only for the target `here`);
+  shuffle/repeat values; the answers for nothing playing and no favorites; `unmute`; `media.album` is not read; a
+  missing Music Assistant integration leaves the request to the words; timeouts; and the claim that the standalone
+  bridge's tests read this repository's `tests/music_vectors.json` (they read the connector spec's copy; the two
+  agree case for case). Both pages now say they are on `main` and not released. The French was edited by an AI
+  and needs a human French pass.
+- `QUICK_FACTS.md`, `FAQ.md`, `docs/index.md`, `docs/announcements.md`: structured facts, all options, redaction,
+  release state, test counts; announcements.md only gained two pointers.
+- `AUDIT.md`: line anchors that had drifted corrected (17 of 68); new "Documentation sweep" section with four
+  findings and evidence; the router reference updated for router 0.5.0 (open PR).
+- `SUGGESTIONS.md`: release plan, off-lamp dim, CI guard for the sensitive verbs, one copy of the music vectors,
+  `DEFAULT_STEP`, shared controls by name.
+
+Verification (Python 3.14.10, Home Assistant 2026.10.4, `thalovant` 0.12.0 under Home Assistant's constraints):
+`pytest --cov`: 881 passed, 1 skipped, coverage 100 percent; 882 passed with `thalovant-connector-spec` 0.3.0
+installed (the skipped test then passes); `ruff check`, `ruff format --check`, `mypy` clean. Behaviours stated in the
+docs that were not covered by a test were called directly: dimming an off light, the arm and disarm builders, the
+colour temperature names. Anchors were checked by script against the symbols they name. The HACS default-list claim
+was checked against `hacs/default`. **Not verified**: a live hub, router and this integration together; the router
+0.5.0 pull request; a real Music Assistant server (the author's check in the entry below was not repeated).
+
+### Transparency Report
+
+- **AI model:** Claude Sonnet 5.5.
+- **Actions taken:** read `actions.py`, `handler.py`, `music.py`, `diagnostics.py`, `config_flow.py` (options),
+  `const.py`, the strings and the tests; ran the test suite, ruff and mypy; probed builders directly; compared the
+  two music vector files; rewrote the documents listed above. No code changed.
+- **Oversight:** no human review of this sweep yet; verified by reading the code at e28f73d and by running the
+  repository's tests and linters.
 
 ## 2026-11-13 · music actions, review round 2 (not released)
 

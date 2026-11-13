@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements from Home Assistant and playing the hub's announcements, both off by default; aligned with the released `thalovant` 0.12.0 SDK and the final platform API; says plainly that Intercom is rolling out and may not be enabled yet.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: structured actions (capabilities, registry resolution, sensitive actions, alarm code, one at a time), every option with its default, diagnostics redaction, music pointer, release state (0.4.0 released; structured actions and music are on main, unreleased).
 
 <p align="center">
   <picture>
@@ -30,6 +30,12 @@ answer on the device that asked.
 Since 0.4.0 it can also, **only if you turn it on**, say a short text on your
 hub's speakers (`thalovant.announce`) and play the hub's announcements on your
 Home Assistant media players: see [Announcements](#announcements-intercom).
+
+**Release state.** The last release is 0.4.0 (tag `v0.4.0`, 2026-11-12). The
+structured actions and the music actions below are merged on `main` after that
+release and are **not in a release yet**: `manifest.json` still says 0.4.0, and the
+next release is expected to be 0.5.0 (not cut). Installing 0.4.0 from HACS does
+not include them.
 **Intercom is rolling out on Thalovant and may not be enabled for your account
 or hub yet.** Until it is, the announcement actions say so and send nothing.
 
@@ -139,14 +145,28 @@ against your plan's API tokens.
 
 ### Options
 
-Open the integration and select **Configure**.
+Open the integration and select **Configure**. One form holds every option; the
+second form (**Where to play announcements**) appears only when **Play
+announcements on this Home Assistant** is on. The source is
+`ThalovantOptionsFlow` in `custom_components/thalovant/config_flow.py`; only what
+is on (or not the default) is stored, so an entry that never changed an option is
+stored as before. A private Christmas link has no options form: its agent is fixed
+to Home Assistant's built-in Assist agent (`private_agent_fixed`).
 
-| Option | What it means |
-| --- | --- |
-| Conversation agent | The agent that answers requests from the hub. The default is Home Assistant's own agent, which only acts on entities exposed to Assist. |
-| Send announcements | Off by default. Adds the `thalovant.announce`, `thalovant.cancel_announcement` and `thalovant.list_speakers` actions and a disabled-by-default Intercom notify entity. Asks Thalovant for the Intercom permission first; stays off if you decline. |
-| Allow urgent announcements | Off by default, separate. Lets an announcement be urgent (it ignores Do Not Disturb and can repeat until acknowledged). Asks for its own permission. |
-| Play announcements on this Home Assistant | Off by default. Lets the hub play announcements on the media players and areas you choose, with the text to speech you choose (default: Home Assistant's), at each player's current volume. |
+| Option (label in the form) | Key | Default | Effect |
+| --- | --- | --- | --- |
+| Conversation agent | `agent_id` | Home Assistant's own agent | The agent that answers requests from the hub. It only acts on entities exposed to Assist. A missing agent is refused with `agent_not_found`; a later disappearance raises a Repairs notice. |
+| Send announcements | `allow_announcements` | off | Adds `thalovant.announce`, `thalovant.cancel_announcement` and `thalovant.list_speakers` and a disabled-by-default Intercom notify entity. Asks Thalovant for the Intercom permission first; stays off if you decline. |
+| Allow urgent announcements | `allow_urgent` | off | Lets an announcement be urgent (it ignores Do Not Disturb and can repeat until acknowledged). Needs **Send announcements** (`urgent_needs_announcements` otherwise) and its own permission. |
+| Play announcements on this Home Assistant | `allow_receive` | off | Lets the hub play announcements on the players and areas of the second form, with the text to speech you choose (default: Home Assistant's), at each player's current volume. The second form needs at least one player or area (`receive_needs_players`). |
+| Carry out structured requests | `structured_actions` | on | Off: every request goes to Assist as words, as in 0.4.0. Only the off value is stored. |
+| Allow locks, alarms, garage doors, gates, valves and sirens | `structured_sensitive` | off | Lets a structured action lock or unlock a lock, arm or disarm an alarm panel, open a garage, gate, door or window cover, open a valve or set its position, and switch a siren. Off: those actions are not carried out structurally and go to Assist as words. Details in [Sensitive actions](#sensitive-actions). |
+| Alarm code (to disarm) | `alarm_code` | empty | A password field. Kept in the entry's options, never sent by the hub; passed to the alarm panel's arm and disarm services. An alarm panel is disarmed by a structured action only with it. Redacted from diagnostics. |
+| Media players, Areas, Text to speech (second form) | `speaker_players`, `speaker_areas`, `tts_entity` | none | Where the hub's announcements are played, and with which text to speech. Redacted from diagnostics. |
+
+Changing an Intercom option reloads the entry; the structured-request options are
+read on every request and need no reload (`_async_options_updated` in
+`__init__.py` compares only the Intercom keys).
 
 ### Private Christmas hubs
 
@@ -186,8 +206,8 @@ the [Christmas Protocol receiver](https://github.com/thalovant/thalovant-skill-c
 - **Hub connection**, a connectivity sensor on that device. It is on while the
   hub can reach this Home Assistant, and off while the link is down.
 - **Diagnostics** you can download from the integration page. They hold
-  counts and timings, never a token, a key, or anything that was said or
-  announced.
+  counts and timings, never a token, a key, the alarm code, or anything that was
+  said or announced. See [Diagnostics](#diagnostics).
 - **Repair notices** when the conversation agent chosen in the options no
   longer exists, when the hub answers with a different security key, and, if
   announcements are on, when Intercom cannot run on the hub (plan, kid or public
@@ -210,6 +230,12 @@ connection does. Nothing is polled.
    Home Assistant device that stands for the one that asked.
 4. Assist acts and answers. The integration sends the answer back within 10
    seconds, and the hub speaks it.
+
+On `main` (not in 0.4.0), step 3 has a first branch: when the request also carries
+a structured `action` and the options leave structured requests on, the
+integration resolves it against Home Assistant's registries and calls the
+entities' own services, and only goes on to Assist with the sentence when it
+cannot resolve it exactly. See [Structured actions](#structured-actions).
 
 If Assist does not understand, cannot find the device, or takes too long, the
 hub still gets an answer with a short sentence it can say, in the language of
@@ -366,28 +392,207 @@ announcement repeats, the hub only checks whether a reply is an acknowledgement.
 
 ## Structured actions
 
-A hub request can carry, next to the sentence, an `action`: a capability (power, brightness, color, color temperature, position, fan speed, temperature, HVAC mode, humidity, lock, volume, mute, playback, activate, start/stop/dock, arm/disarm, state), a target (name, area, floor, domain, or the speaking device's own room) and a value, absolute or relative. The integration resolves it among the entities **exposed to Assist** (names, aliases, areas, floors, domains) and calls the entity's own services: "dim the kitchen lamp" lowers its brightness by a step from its real state, "toggle", "make it warmer" (setpoint plus one), "turn the fan up" (the fan's own step), scenes, scripts, vacuums, media players by name; music (below).
+> **Not in a release yet.** This section describes `main` after `v0.4.0` (pull
+> requests #30 and #32, and the music actions of #31). `manifest.json` still says
+> 0.4.0; the next release is expected to be 0.5.0.
 
-It never guesses. If the action names no exposed entity, two entities share the name, the domain lacks the capability, or a service fails, the request goes on as the sentence it carries, through Assist, exactly as before. A follow-up to Assist's own question is always the sentence.
+A hub request can carry, next to its sentence, an `action`: a **capability** (what
+is wanted), a **target** (which entity or entities) and a **value**, absolute or
+relative. The integration resolves the target among the entities **exposed to
+Assist** and calls those entities' own Home Assistant services, the way a smart
+home skill does, instead of leaving a sentence to Assist's parser. The home skill
+sends one for the sentences Assist cannot parse ("dim the lamp", "toggle the
+lights", "make it warmer": [thalovant-skill-home: README.md]); the music skill
+sends them for Music Assistant. The router checks every action against the
+connector spec before it reaches Home Assistant ([hivemind-home-router:
+README.md], [thalovant-connector-spec: docs/design.md]); this integration does
+its own checks on top and trusts nothing but the closed set of capabilities below.
 
-Options (Settings, Devices & services, Thalovant, Configure):
+Source: `custom_components/thalovant/actions.py` (`resolve()`, `async_execute()`,
+`CAPABILITY_DOMAINS`, `BUILDERS`) and `HomeRequestHandler._async_structured()` in
+`handler.py`.
 
-| Option | Default | Meaning |
-|---|---|---|
-| Carry out structured requests | on | Off sends every request to Assist as words, as before 0.5. |
-| Allow locks, alarms, garage doors, gates, valves and sirens | off | Sensitive actions are only done structurally when on; otherwise they go to Assist as words, where Home Assistant's own exposure rules decide (locks are not exposed by default). |
-| Alarm code | empty | Kept in the options, never sent by the hub; an alarm panel is disarmed by voice only with it. |
+### What it can do
 
-Not done structurally: timers, to-do and shopping lists (their own Thalovant skills), cameras, `input_*`, `number`/`select`/`text` values, remotes, sirens' tones, water heater modes.
+| Capability | Domains | Service called, and how the value is read |
+| --- | --- | --- |
+| `power_on`, `power_off` | light, switch, fan, input_boolean, humidifier, media_player, remote, climate, water_heater, automation, cover, valve, siren | `turn_on` / `turn_off`; a cover uses `open_cover` / `close_cover`, a valve `open_valve` / `close_valve` |
+| `toggle` | light, switch, fan, input_boolean, cover | the domain's own `toggle` |
+| `brightness` | light | `turn_on` with `brightness_pct`. Relative: the light's real brightness (0 when it is off) plus the value, clamped to 1 to 100. Absolute: 0 turns it off |
+| `color` | light | `turn_on` with `rgb_color` from a colour name in `value` (a name Home Assistant's colour table does not know is not done) |
+| `color_temperature` | light | `turn_on` with `color_temp_kelvin`: a number, or a name: candle light 1900, warm white / warm / soft white 2700, neutral white 3500, cool white / cold white / cool 4000, daylight 6500 |
+| `position` | cover, valve | `set_cover_position` / `set_valve_position`, 0 to 100. Relative needs the entity's `current_position` |
+| `fan_speed` | fan | `set_percentage`. Relative: the fan's real percentage plus or minus the larger of its own `percentage_step` (25 when it has none) and the value; "slower" never switches a running fan off |
+| `temperature` | climate, water_heater | `set_temperature`, rounded to 0.5. Relative: the setpoint plus the value (the measured temperature only when there is no setpoint) |
+| `hvac_mode` | climate | `set_hvac_mode` |
+| `humidity` | humidifier | `set_humidity`, 0 to 100 |
+| `lock`, `unlock` | lock | `lock.lock`, `lock.unlock` (sensitive) |
+| `volume` | media_player | `volume_set`. Relative: the real `volume_level` plus value / 100 |
+| `mute`, `unmute` | media_player | `volume_mute` |
+| `playback` | media_player | `value` is `play`, `pause`, `stop`, `next` or `previous`: `media_play`, `media_pause`, `media_stop`, `media_next_track`, `media_previous_track` |
+| `activate` | scene, script, automation, button, input_button | `turn_on` (scene, script), `trigger` (automation), `press` (buttons) |
+| `start`, `stop`, `dock` | vacuum (`start`, `stop`, `return_to_base`), lawn_mower (`start_mowing`, `dock`; no `stop`) | the matching service |
+| `arm`, `disarm` | alarm_control_panel | `alarm_arm_away` (default), `alarm_arm_home` or `alarm_arm_night` from `value` (`away`, `home`, `night`); `alarm_disarm` (sensitive; needs the alarm code) |
+| `state` | any domain named by the target | reads one entity and answers "{name} is {state} {unit}." Several entities are not answered (the first would be said and the rest dropped) |
+| `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` | media_player (Music Assistant players) | see [Music](#music) |
+
+A relative value is a change from the entity's real state (the skill's "dim" is
+-20 points, "warmer" is +1 degree); an absolute one is the end state. A relative
+change that needs a state the entity does not report (a cover with no
+`current_position`, a fan with no `percentage`) is not done.
+
+### How a target is resolved
+
+Only entities exposed to Assist (`async_should_expose(hass, "conversation", ...)`)
+and only the domains the capability allows (a `domain` in the target narrows them
+further). Then, in this order:
+
+- `name`: matched, ignoring case, accents and punctuation, against the entity's
+  name, its registry name and its aliases. One match is the target; **two
+  entities with the name are not guessed** (the request goes on as words so
+  Assist can ask which).
+- A `name` that is no entity's, with no area, floor or `here`, is read as an
+  **area name**, then as a **floor name** ("make the living room warmer"), when it
+  names exactly one.
+- `area` and `floor`: matched by name or alias; **a name two areas share ("guest")
+  is not a room** and resolves to nothing.
+- `here`: the area of the Thalovant device that spoke. That device exists in
+  Home Assistant after its first request (see [Rooms](#rooms)); one with no area
+  resolves to nothing ("Which room?" is Assist's to ask).
+- `all` or a bare area/floor: every matching entity, at most **50**. With no
+  `domain`, a bare area for `power_on`, `power_off` or `toggle` means the area's
+  **lights** only ("turn off the kitchen").
+- Anything else (no name, area, floor, `here` or `all`; no match; more than 50)
+  resolves to nothing.
+
+### What happens when it cannot, or fails
+
+The integration never guesses. It does **nothing structurally** and the request
+goes on as the sentence it carries, through the configured conversation agent,
+when: the capability is unknown; the target resolves to nothing, to two entities,
+or to an entity the domain cannot do; a service the action needs is not
+registered; a relative value needs a state that is missing; the option is off; or
+the action is sensitive and sensitive actions are off. If one of several entities
+cannot be done, none is touched.
+
+A request is **never** structured, whatever it carries, when it is a follow-up to
+Assist's own question (it has a `conversation_id`), or when the link is a private
+Christmas link.
+
+| Outcome | What the hub is told | Spoken (English; French has its own, other languages hear English) |
+| --- | --- | --- |
+| Done | `action_done` | "Done." (the entity's name is available as a placeholder; the shipped line does not use it) |
+| A state read | `query_answer` | "{name} is {state}." |
+| A service failed before anything changed | none: the sentence goes on to Assist | Assist's own answer |
+| A service failed after part was done | `error`, `failed_to_handle` | "Sorry, I could only do part of that." The sentence is **not** sent to Assist, because that would run the intent again on everything, doubling a relative step and undoing a toggle |
+| Out of time (the request's budget is shared with Assist; at most 8.5 s of the hub's 10) with nothing changed | `error`, `timeout` | "Sorry, Home Assistant took too long to answer." |
+| Out of time after part was done | `error`, `failed_to_handle` | "Sorry, I could only do part of that." |
+| The resolver crashed | none: the sentence goes on to Assist (a warning with the exception type is logged) | Assist's own answer |
+
+Services are called with a fresh Home Assistant `Context`, no user, one call per
+entity, waiting for each. Nothing is retried.
+
+### Sensitive actions
+
+A **sensitive** action is one a person should not trigger by voice without the
+household having decided so. The hub-side contract flags the four verbs `lock`,
+`unlock`, `arm` and `disarm` `sensitive` in the connector spec
+([thalovant-connector-spec: thalovant_connector_spec/connectors/home_assistant.json];
+the router also limits sensitive requests per household per minute, with its own
+bucket; the numbers live in the spec and may change); this integration keeps the same four in
+`SENSITIVE_VERBS`, and `tests/test_sensitive_verbs.py` fails if the two differ
+(it skips when the private spec package is not installed, which is the case in
+this repository's CI: see AUDIT.md). The integration also treats as sensitive,
+whatever the verb:
+
+| Entity | Sensitive when the action is |
+| --- | --- |
+| any entity | `lock`, `unlock`, `arm`, `disarm` |
+| siren | `power_on`, `power_off`, `toggle` (both directions) |
+| valve | `power_on` (open), `position` |
+| cover with device class `garage`, `gate`, `door` or `window` | `power_on` (open), `position`, `toggle` (closing a garage is **not** sensitive) |
+
+What a sensitive action requires, all together:
+
+1. **The option is on**: *Allow locks, alarms, garage doors, gates, valves and
+   sirens* (`structured_sensitive`, off by default). Off, nothing structural is
+   done and the sentence goes to Assist, where Home Assistant's own exposure rules
+   decide (locks are not exposed to Assist by default).
+2. **The entity is exposed to Assist**, like every other target.
+3. **Exactly one entity.** "Unlock the kitchen", `all` on locks, or a floor name
+   never spreads over several: it goes to Assist as words. The same rule applies
+   to **runnable** domains (scene, script, automation, button, input_button):
+   "turn off all the automations" or "run all the scripts" is never done
+   structurally, one named entity at a time.
+4. **For `disarm`, the alarm code** set in the options. Without it, no `disarm`
+   is built and the sentence goes to Assist. `arm` works without a code (it passes
+   the code when one is set); the mode is `away` unless the value says `home` or
+   `night`.
+
+The alarm code is stored **in clear** in the config entry's options, like any
+integration's secret in Home Assistant's `.storage`; it is never sent by the hub
+(the request has no field for it), it travels in the `alarm_control_panel`
+service data (which Home Assistant's event bus shows to administrators), and it
+is **redacted from diagnostics** (see [Diagnostics](#diagnostics)). The home
+skill never builds `lock`, `unlock`, `arm` or `disarm` today
+([thalovant-skill-home: README.md]), so these paths are reached only by other
+clients of the router.
+
+### What is not done structurally
+
+Timers, to-do and shopping lists (their own Thalovant skills); cameras, sensors
+(other than a `state` read), `person`, `device_tracker`; `input_number`,
+`input_select`, `number`, `select` and `text` values; a siren's tone or volume;
+water heater operation modes; remote commands (only power). `input_boolean`
+(power, toggle), `remote` (power) and `input_button` (press) **are** carried out.
+
+### Verification
+
+`tests/test_actions.py`, `test_actions_edges.py` and `test_structured_handler.py`
+run the resolver and the handler on Home Assistant 2026.10.4's test harness with
+registry fixtures (areas, floors, aliases, exposed and unexposed entities, mocked
+services). The README of the home skill records a demo-integration check of the
+resolver. **Not verified**: a live hub, the router and this integration together
+on real entities, and any device other than the fixtures.
 
 ### Music
 
 The same link plays and steers your **Music Assistant** players (the *Music Assistant* integration of Home Assistant): play a track, album, artist, playlist or radio by name, queue next or last, favorites, more like this, shuffle, repeat, move or group rooms, what is playing, plus volume and playback. The players must be exposed to Assist; nothing new is opened and no Music Assistant token leaves your Home Assistant. See [docs/music.md](docs/music.md) ([en francais](docs/music.fr.md)); limits (genre play, adding to favorites) are listed there.
 
+## Diagnostics
+
+**Download diagnostics** on the integration page
+(`async_get_config_entry_diagnostics()` in `diagnostics.py`). The file is meant to
+be pasted into a public issue, so the entry's `data` and `options` go through
+Home Assistant's `async_redact_data()` with this list (`TO_REDACT`):
+
+| Redacted (shown as `**REDACTED**`) | Why |
+| --- | --- |
+| `tokens`, `credentials` | the Thalovant API token and the connection's keys |
+| `account_id`, `home_client_id`, `voice_client_id`, `unique_id` | identify the account or the connection |
+| `hub_name`, `title` | can be personal |
+| `alarm_code` | it disarms the alarm panel (added by PR #32; before that it was in the options dump) |
+| `speaker_players`, `speaker_areas`, `tts_entity` | where announcements are played |
+
+Not redacted, by design: the option flags (`structured_actions`,
+`structured_sensitive`, `allow_*`, the agent id), the connection state, the
+endpoint of a normal link (**redacted** for a private Christmas link), whether a
+secret exists (`has_secret`), the token's scopes, request counts by outcome with
+the last duration, and Intercom counters. `structured_sensitive: true` therefore
+shows in a pasted file; that is the household's own setting, not a secret. No
+sentence, answer or announcement text is ever recorded: the counters hold
+outcomes only. Tested by `tests/test_diagnostics.py`
+(`test_diagnostics`, `test_diagnostics_hold_counts_of_announcements_never_text`,
+`test_diagnostics_never_hold_the_alarm_code`) and the snapshot
+`tests/snapshots/test_diagnostics.ambr`.
+
 ## What it cannot do
 
-- It only controls what you have exposed to Assist. If Assist cannot do it by
-  voice from Home Assistant's own dialog, it cannot do it from Thalovant either.
+- It only controls what you have exposed to Assist. Since `main` after 0.4.0 it
+  can also do what Assist's sentences cannot express ("dim", "toggle", "make it
+  warmer": see [Structured actions](#structured-actions)), but still only on
+  exposed entities, and a lock, alarm panel, garage door, gate, window, valve or
+  siren only if you turned the sensitive option on.
 - It does not turn Home Assistant into a Thalovant satellite. Home Assistant
   never sends what it hears to the hub; it only answers. With announcements on it
   also sends the text you tell it to announce, and with playing on it says the
@@ -406,21 +611,27 @@ The same link plays and steers your **Music Assistant** players (the *Music Assi
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
   year, one per account, the same whichever way you linked) and the
   connection's keys, in Home Assistant's config
-  entry storage, like any other integration's credentials. The key the hub
+  entry storage, like any other integration's credentials. The alarm code, if you
+  set one, is stored in the same place, in clear, in the entry's options. The key the hub
   recognises this Home Assistant by, and the hub's own key, live in
   `.storage/thalovant/`, one folder per link, so they survive updates and are
   part of your backups.
-- **What leaves your home.** Only Assist's answers, sent to your hub, and,
-  only if you turn announcements on, the text of each announcement you send
-  (see [Announcements](#announcements-intercom)). No Home Assistant token, and no
-  entity list.
+- **What leaves your home.** Only the answer to each request, sent to your hub:
+  Assist's own sentence, or this integration's short sentence for a structured
+  action ("Done.", "Kitchen Lamp is on.", the title of the track that is
+  playing), and, only if you turn announcements on, the text of each
+  announcement you send (see [Announcements](#announcements-intercom)). No Home
+  Assistant token, no alarm code, and no entity list. The hub's request carries
+  the sentence, an optional structured action and the speaking device's id and
+  name; nothing more is read from it.
 - **Logs.** This integration never logs what was said, what Assist answered or
   what was announced, even at debug level; it logs request ids, outcomes,
   announcement ids, error types and timings. Home
   Assistant's own `conversation` integration does log the sentence when *its*
   debug logging is turned on.
 - **Diagnostics** redact the tokens, the connection keys, the account id, the
-  hub's name and the players, areas and text to speech chosen for announcements.
+  hub's name, the alarm code and the players, areas and text to speech chosen for
+  announcements. See [Diagnostics](#diagnostics).
 
 ## Troubleshooting
 
@@ -495,6 +706,33 @@ makes a new connection with a new key.
 **The hub says Home Assistant didn't understand.** Try the same sentence in
 Assist in Home Assistant. If it fails there too, the entity is probably not
 exposed to Assist, or its name differs from what you said.
+
+**A lock, alarm, garage door, gate, window, valve or siren is not done.** These
+are sensitive: structured actions on them need **Allow locks, alarms, garage
+doors, gates, valves and sirens** in the options (off by default). Off, the
+sentence goes to Assist, which only acts on what is exposed to it, and locks are
+not exposed by default. See [Sensitive actions](#sensitive-actions).
+
+**The alarm will arm but not disarm.** A structured disarm needs the **Alarm
+code** option; without it nothing is built and the sentence goes to Assist.
+
+**"Sorry, I could only do part of that."** A structured action changed some of
+the entities it resolved and then a service failed (or time ran out). The
+sentence is deliberately not sent to Assist as well, because that would repeat
+the part that already ran (a toggle would flip back). Look at the entities and
+say it again for the rest.
+
+**"Dim" turned a light on.** A relative change starts from the light's real
+state, and an off light counts as 0: dimming it by 20 gives the minimum, 1
+percent, so the light comes on. `actions._brightness` does this
+(see AUDIT.md).
+
+**Structured requests are ignored.** Check that **Carry out structured
+requests** is on, that the entity is exposed to Assist, that no two entities
+share the name (it then asks which), and that the request is not an answer to a
+question Assist asked (those are always words). Debug logs (`custom_components.thalovant`) say
+so when a sensitive action was left to Assist, when one needed exactly one
+entity, or when a service failed; a target that resolves to nothing logs nothing.
 
 **A device says "I'm not connected to your home yet".** The hub has no Home
 Assistant link for the account that device is signed in to. Link it here with
@@ -579,7 +817,7 @@ constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib
 ```
 
 The integration talks to Thalovant through the async API of the `thalovant`
-Python SDK (0.12.0 or later, the first with Intercom), and only through
+Python SDK (pinned to 0.12.0 in `manifest.json`, the first release with Intercom), and only through
 `custom_components/thalovant/api.py` (`oauth.py` keeps its own token exchange).
 `tests/test_api.py` drives that adapter with a fake SDK, and
 `tests/test_api_sdk.py` drives it with the real one against a local control

@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: security review follow-ups (replay cache, redirect refusal, source check).
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: release plan for structured actions and music, dim of an off light, CI guard for the sensitive verbs, one copy of the music vectors, drop or use DEFAULT_STEP.
 
 # Suggestions
 
@@ -94,3 +94,40 @@ link's session with a trace config that rejects redirects, as `self_hosted.async
 ## Music
 
 **Standalone bridge for households without Home Assistant.** Problem: this path needs Home Assistant. Proposed: `thalovant-music-bridge`, an outbound-only LAN client that executes the same actions (same `tests/music_vectors.json`) directly against Music Assistant. Impact: Music Assistant-only homes get the same voice control.
+
+## Structured actions and music: release, guards, small fixes (2026-11-13 sweep)
+
+**Cut 0.5.0 with the structured actions and the music actions, and say what is unproven.**
+Problem: PRs #30, #32 and #31 are on `main` after the `v0.4.0` tag; `manifest.json` still says 0.4.0, so
+nobody on HACS has them, and the home skill's CHANGELOG already names ha-thalovant 0.5.0. Proposed: bump
+`manifest.json` to 0.5.0, tag, and write the release notes from [README.md](README.md#structured-actions): sensitive
+actions off by default, the alarm code is stored in clear in the options, and nothing was run through a live hub
+and router together (`[hivemind-home-router: CHANGELOG.md]` 0.5.0 is an open pull request). Impact: users get the
+feature; the risk is the combination, which only a real hub exercises.
+
+**Do not light an off lamp for "dim".** Problem: `actions._brightness` dims from 0 when the light is off and
+turns it on at 1 percent ([AUDIT.md](AUDIT.md)). Proposed: for a relative negative step on an off light, do
+nothing structural and answer "{name} is already off." (or leave the light off), keeping "brighter" as is.
+Impact: removes a surprising result of the most common relative sentence; about 10 lines and one test.
+
+**Run the sensitive-verb guard in CI.** Problem: `tests/test_sensitive_verbs.py` skips without the private spec,
+and CI does not install it, so drift between `SENSITIVE_VERBS` and the spec's flags would not fail a build.
+Proposed: install `thalovant-connector-spec` in `ci.yml` through its composite action (pinned by commit, as the
+router's CI does) so the test runs. Impact: the one cross-repository safety invariant of this integration is
+tested on every pull request; one workflow step.
+
+**Keep one copy of the music vectors.** Problem: `tests/music_vectors.json` and the spec's
+`vectors/music_assistant.json` are two copies in two shapes (`action` and `verb`/`args`); they agree today and
+nothing checks it. Proposed: read the spec's copy from this repository's tests (as the bridge does) and delete
+the local one, or add a test that compares them when the spec is installed. Impact: one source of truth for the
+action contract of the two executors; small.
+
+**Remove or use `actions.DEFAULT_STEP`.** Problem: the constant says a relative step defaults to 20 when the hub
+gave none; no code reads it, and a relative action with no value is simply not done. Proposed: delete it, or
+make `_brightness`, `_position` and `_volume` use it. Impact: the code stops promising a default it does not have.
+
+**Say "music" in the shared controls.** Problem: "turn the volume up on the kitchen" and "pause the kitchen"
+resolve among every exposed media player, which can include a Chromecast of the same name, while "play X on the
+kitchen" is limited to Music Assistant players ([docs/music.md](docs/music.md)). Proposed: when the music
+skill sends a shared control, add a `platform` hint to the action (the spec has none today) or send it as a
+music capability. Impact: a named volume or pause reaches the player the person means; needs a spec change.

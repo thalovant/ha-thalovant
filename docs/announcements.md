@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0 guide for Intercom, aligned with the released thalovant 0.12.0 SDK and the final platform API (urgent scope, speaker kind and can_play, new problem codes, the platform switch); says plainly that Intercom is rolling out and may not be enabled yet.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: pointer to the other options in the same form and to the diagnostics page; Intercom content unchanged (reviewed against the options code, no disagreement).
 
 # Announcements (Intercom)
 
@@ -43,7 +43,7 @@ entry that never turned them on behaves exactly as it did before 0.4.0.
 
 ## Turn it on
 
-Open the integration and select **Configure**.
+Open the integration and select **Configure**. The same form also holds the conversation agent and the structured-action options (carry out structured requests, allow sensitive actions, alarm code): [README: Options](../README.md#options).
 
 | Option | What it does |
 | --- | --- |
@@ -210,7 +210,7 @@ When the hub sends an announcement, Home Assistant:
 5. does all of that in background tasks, so a slow player never holds up the
    link to the hub.
 
-Diagnostics hold only counters (played, failed, ignored and why).
+Diagnostics hold only counters (played, failed, ignored and why), and redact the players, areas and text to speech you chose ([README: Diagnostics](../README.md#diagnostics)).
 
 ## Automation examples
 

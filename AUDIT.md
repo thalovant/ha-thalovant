@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: line anchors corrected, structured-action and music findings with state, new findings (dim of an off light, an unused constant, the sensitive-verb guard skipped in CI, shared controls by name), evidence re-run on main e28f73d.
 
 # Audit
 
@@ -6,9 +6,9 @@ Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the m
 
 Intercom is safety-adjacent (a text is spoken aloud in a home, an urgent one can
 repeat), so the integration keeps it off by default, in three separate switches
-([`ThalovantOptionsFlow.async_step_init()`](custom_components/thalovant/config_flow.py#L942)),
+([`ThalovantOptionsFlow.async_step_init()`](custom_components/thalovant/config_flow.py#L945)),
 and stores nothing about it until it is on
-([`test_options_without_intercom_are_stored_as_before`](tests/test_intercom_options.py#L96),
+([`test_options_without_intercom_are_stored_as_before`](tests/test_intercom_options.py#L100),
 [`test_nothing_on_changes_nothing`](tests/test_intercom_setup.py#L47): no request, no
 platform, no Repairs notice for an entry that never turned it on).
 
@@ -83,14 +83,14 @@ podman) reported 0 invalid integrations. Counts are in
   [`test_urgent_needs_its_option_and_its_scope`](tests/test_intercom.py#L494).
 - **Re-consent asks only for the extra scopes, stores nothing until granted, and
   keeps the option off if refused or not granted**
-  ([`async_step_intercom_consent()`](custom_components/thalovant/config_flow.py#L220),
-  [`_async_finish_consent()`](custom_components/thalovant/config_flow.py#L462)):
-  [`test_turning_announcements_on_asks_for_the_permission`](tests/test_intercom_options.py#L223),
-  [`test_refused_consent_leaves_everything_off`](tests/test_intercom_options.py#L305),
-  [`test_a_plan_without_intercom_is_not_granted_the_scope`](tests/test_intercom_options.py#L332),
-  [`test_consent_with_another_account`](tests/test_intercom_options.py#L352) (the new
+  ([`async_step_intercom_consent()`](custom_components/thalovant/config_flow.py#L223),
+  [`_async_finish_consent()`](custom_components/thalovant/config_flow.py#L465)):
+  [`test_turning_announcements_on_asks_for_the_permission`](tests/test_intercom_options.py#L227),
+  [`test_refused_consent_leaves_everything_off`](tests/test_intercom_options.py#L309),
+  [`test_a_plan_without_intercom_is_not_granted_the_scope`](tests/test_intercom_options.py#L336),
+  [`test_consent_with_another_account`](tests/test_intercom_options.py#L356) (the new
   token is revoked). With nothing on, a sign-in asks for exactly the 0.3.0 scopes
-  ([`test_sign_ins_with_nothing_on_ask_for_what_they_always_did`](tests/test_intercom_options.py#L507)).
+  ([`test_sign_ins_with_nothing_on_ask_for_what_they_always_did`](tests/test_intercom_options.py#L511)).
 - **Receiving admits one message shape and bounds it**
   ([`parse_announcement()`](custom_components/thalovant/speaker.py#L82),
   [`IntercomSpeakerHandler._admit()`](custom_components/thalovant/speaker.py#L184)):
@@ -154,8 +154,8 @@ podman) reported 0 invalid integrations. Counts are in
 5. **The re-consent replaces the account's token for every entry.** Signing in again
    revokes the previous token, so the new one carries the base scopes plus every
    Intercom scope an entry's options need
-   ([`_wanted_scopes()`](custom_components/thalovant/config_flow.py#L871),
-   [`test_new_sign_ins_ask_for_what_stays_on`](tests/test_intercom_options.py#L476)).
+   ([`_wanted_scopes()`](custom_components/thalovant/config_flow.py#L874),
+   [`test_new_sign_ins_ask_for_what_stays_on`](tests/test_intercom_options.py#L480)).
    With two Thalovant accounts, linking one asks for the other's Intercom scopes too,
    which its plan may not grant. Known, not handled.
 6. **Receiving trusts the hub link.** Like the existing request handler for account
@@ -201,7 +201,7 @@ podman) reported 0 invalid integrations. Counts are in
 ## Link account (0.3.0)
 
 Link account
-([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L772),
+([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L775),
 [`ThalovantOAuth2Implementation`](custom_components/thalovant/oauth.py)) uses Home Assistant's own OAuth 2
 machinery. The `state` is a JWT signed with this installation's secret, and
 Home Assistant's `OAuth2AuthorizeCallbackView` refuses any other with a 400
@@ -231,7 +231,7 @@ that approved it; from another network it answers 400 with detail
 them nothing. The copy says to approve from a phone or computer on Home
 Assistant's network, and to approve only requests you started.
 Only that code maps to `link_wrong_network`
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L232),
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L274),
 [`test_link_account_invalid_grant`](tests/test_link_account.py#L259),
 [`test_reauth_link_failure_returns_to_confirm`](tests/test_link_account.py#L484)). Any
 other `invalid_grant`, including one with no code from an API before #502, is
@@ -247,16 +247,16 @@ No error message carries the code or the verifier
 ([`test_exchange_errors`](tests/test_oauth.py#L253)). A refused code logs the HTTP
 status and the problem's detail and code only. `async_step_creation()`
 drops the code before the exchange
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L215)). It also replaces Home Assistant's own
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L256)). It also replaces Home Assistant's own
 creation step, which would log a token without `expires_in` in full and store
 it as an OAuth entry. The token is held like a device login's: `_tokens` and
-`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L254)), revoked when unused
+`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L295)), revoked when unused
 ([`test_link_account_no_hubs_revokes_the_token`](tests/test_link_account.py#L401)).
 
 Fixed in review (CodeRabbit on #26): closing the dialog while the exchange
 was in flight let the token arrive after `async_remove` had run, so nothing
 revoked it. `async_step_creation()` now revokes such a token and aborts
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L247),
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L289),
 [`test_closed_while_thalovant_answers`](tests/test_link_account.py#L544)). The same window
 exists, from before 0.3.0, for a connection whose creation is in flight when
 the dialog closes; it is left as it was.
@@ -318,7 +318,7 @@ Evidence: `pytest` 833 passed, `ruff`, `ruff format --check` and `mypy` clean on
 | Low | Only the self-hosted path checks that a request came from `thalovant.home.router` and that the session is `home-<request_id>`; the normal path trusts the link. | [`self_hosted.py`](custom_components/thalovant/self_hosted.py) `permits_lighting_request` | Open |
 | Low | The normal link runs on Home Assistant's shared aiohttp session, which follows redirects on the SDK's `ws_connect` (measured with aiohttp 3.14.5: a 307 from the upgrade URL is followed). TLS is verified (`ssl=True`, certifi/system store) and the Noise key pin makes a redirected hub fail with `ThalovantHubKeyChangedError`, so no credential is given away, but the self-hosted path rejects redirects explicitly and this one does not. | [`__init__.py`](custom_components/thalovant/__init__.py) `async_setup_entry` (`async_get_clientsession`), `thalovant._hive._WSSCarrier.open` | Open |
 | Low | The alarm code is stored in clear in the config entry options (Home Assistant's own `.storage/core.config_entries`, as every integration's secrets are) and travels in the `alarm_control_panel` service data, which Home Assistant fires on its event bus to administrators. | `ThalovantOptionsFlow`, `_arm` and `_disarm` in `actions.py` | Accepted, documented |
-| Low | A voice-only disarm: anyone the speaker hears can ask for what the skill builds. The 0.5.0 skill never builds `disarm`, `unlock` or `arm`; the router would carry one. | `ACTION_CAPABILITIES` in hivemind-home-router | Owner decision before any skill builds it |
+| Low | A voice-only disarm: anyone the speaker hears can ask for what the skill builds. The 0.5.0 skill never builds `disarm`, `unlock` or `arm`; the router would carry one. | `ACTION_CAPABILITIES` in hivemind-home-router 0.4.1 (`action.py`; router 0.5.0, an open pull request when this was written, drops that file and reads the connector spec, where `lock`, `unlock`, `arm` and `disarm` are flagged `sensitive` with their own rate bucket: `[hivemind-home-router: CHANGELOG.md]`) | Owner decision before any skill builds it |
 
 Checked and found sound: services are called only from the closed `BUILDERS` set with data built
 from validated fields (no entity id, service or domain comes from the hub); only entities exposed
@@ -327,7 +327,36 @@ nothing; a failure after part of an action is reported as partial and never retr
 (`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`); the logs carry request ids and
 exception type names only; the announcement receiver is off by default, closed and rate limited.
 
-## Music actions (unreleased)
+## Documentation sweep (2026-11-13), `main` e28f73d
+
+Evidence, run on Python 3.14.10, Home Assistant 2026.10.4 (`pytest-homeassistant-custom-component==0.13.375`),
+`thalovant` 0.12.0 under Home Assistant's package constraints: `pytest --cov` 881 passed and 1 skipped, coverage
+100 percent; with the private `thalovant-connector-spec` 0.3.0 installed from its clone, 882 passed and the skipped
+test passes (the sensitive verbs equal the spec's flags: `lock`, `unlock`, `arm`, `disarm`); `ruff check`,
+`ruff format --check` and `mypy` clean. Code was read at that revision; the behaviours below marked "measured" were
+called directly.
+
+| Severity | Finding | Where | State |
+| --- | --- | --- | --- |
+| Low | **A relative "dim" turns an off light on.** An off light counts as brightness 0, so dimming by 20 asks for `brightness_pct` 1 and the light comes on at 1 percent (measured: `_calls({"capability": "brightness", "value": -20, "mode": "relative"}, off_light)` gives `("light", "turn_on", {"brightness_pct": 1})`). "Brighter" on an off light gives 20. A person who says "dim the lamp" at a lamp that is off gets a lit lamp. | [`actions._brightness`](custom_components/thalovant/actions.py#L400) | Open; see SUGGESTIONS |
+| Low | **`DEFAULT_STEP` is dead.** The constant (comment: "a relative brightness, position or volume step when the hub gave none") is defined and read nowhere (`grep -rn DEFAULT_STEP custom_components`: one hit). A relative action with no `value` is not done (`_num(None)` is None), it does not default to 20. | [`actions.DEFAULT_STEP`](custom_components/thalovant/actions.py#L43) | Open; remove the constant or implement the default |
+| Low | **The guard that keeps `SENSITIVE_VERBS` equal to the connector spec does not run in this repository's CI.** `test_the_sensitive_verbs_are_exactly_the_specs_flags` uses `pytest.importorskip("thalovant_connector_spec")`, and `.github/workflows/ci.yml` does not install the private spec, so the test is skipped there (1 skipped in the run above). It passed locally with the spec installed. Drift between the integration's list and the spec's flags would not fail CI. | [`tests/test_sensitive_verbs.py`](tests/test_sensitive_verbs.py#L12), [`ci.yml`](.github/workflows/ci.yml) | Open; install the spec through its composite action as the router's CI does |
+| Low | **Shared media controls with a named target are not limited to Music Assistant players.** `volume`, `mute`, `unmute` and `playback` use a Music Assistant player only when the target is `here`; a named target takes the generic path, which resolves any exposed `media_player` (a Chromecast or a TV of the same name; two with the name resolve to nothing). | [`music.async_execute_action`](custom_components/thalovant/music.py#L543) | Documented in docs/music.md and README; by design |
+| Info | **Two copies of the music vectors.** `tests/music_vectors.json` (23 cases) and the spec's `vectors/music_assistant.json` (`behavior`, 23 cases, one extra `request_valid` field) agree case for case after normalising `action` to `verb`/`args` (compared on 2026-11-13); nothing in either repository checks they stay equal. docs/music.md said the bridge reads this repository's file; it reads the spec's. | [`tests/test_music.py::test_the_shared_vectors`](tests/test_music.py#L244) | Docs corrected; copies open |
+| Info | **A line-anchored link in this file had drifted** (17 of 68 pointed a few lines off after later edits, 3 or 4 in most cases). Corrected here; the other documents' anchors were checked and are right. | this file | Fixed |
+
+Checked, no finding: the Music Assistant integration's `search` takes `limit` and `library_only` as flat fields with
+`library_only` defaulting to false (Home Assistant 2026.10.4, `components/music_assistant/services.py`), as
+`music.py` calls it, so a search spans the household's providers; `diagnostics.TO_REDACT` holds
+`alarm_code`, `speaker_players`, `speaker_areas`, `tts_entity` and the ids and tokens
+([`diagnostics.py`](custom_components/thalovant/diagnostics.py#L30), `tests/test_diagnostics.py`); the options flow stores
+only what is on (structured actions: only the off value); the README's claim that Thalovant is in the HACS
+default list is true (`hacs/default`, file `integration`, contains the repository).
+
+Not verified here: structured actions and music against a live hub and router together; the router
+0.5.0 envelope (open pull request); the music pages' French (needs a human pass).
+
+## Music actions (merged in PR #31 after v0.4.0, unreleased)
 
 - [`music_player()`](custom_components/thalovant/music.py) never reaches a player that is not a Music Assistant entity or not exposed to Assist ([`test_a_chromecast_with_the_same_name_is_not_a_music_player`](tests/test_music.py), [`test_an_unexposed_player_is_never_reached`](tests/test_music.py)).
 - No raw URL is ever played: media is a name searched in Music Assistant ([`best_match()`](custom_components/thalovant/music.py)).
