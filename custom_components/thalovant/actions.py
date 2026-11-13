@@ -320,9 +320,15 @@ def resolve(
     return found
 
 
+#: The verbs the connector spec flags ``sensitive`` for ``home_assistant`` (thalovant-connector-spec,
+#: ``connectors/home_assistant.json``): always carried out only for a household that switched sensitive actions
+#: on. ``tests/test_sensitive_verbs.py`` keeps this equal to the spec's flags when the spec is installed.
+SENSITIVE_VERBS = frozenset({"lock", "unlock", "arm", "disarm"})
+
+
 def _is_sensitive(capability: str, state: State) -> bool:
     domain = state.entity_id.split(".", 1)[0]
-    if capability in ("lock", "unlock", "arm", "disarm"):
+    if capability in SENSITIVE_VERBS:
         return True
     if domain == "siren":
         return capability in ("power_on", "power_off", "toggle")
