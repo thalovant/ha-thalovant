@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements and playing, with the guide and where it lives in the code; Intercom is rolling out (the platform switch ships off) and the integration is aligned with the released thalovant 0.12.0 SDK.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: structured actions, options, diagnostics redaction and music added to the map (on main after v0.4.0, not released); where each lives in the code and its tests.
 
 # Thalovant for Home Assistant
 
@@ -18,6 +18,12 @@ send nothing. Intercom is a convenience, not a certified safety system.
 | SDK transport | [`HubConnection`](../custom_components/thalovant/api.py) and [`async_create_session()`](../custom_components/thalovant/self_hosted.py) |
 | Private request validation | [`permits_lighting_request()`](../custom_components/thalovant/self_hosted.py) |
 | Assist handoff | [`HomeRequestHandler.async_answer()` and `_async_converse()`](../custom_components/thalovant/handler.py) |
+| Structured actions (on `main` after 0.4.0, unreleased): resolution against the registries, capabilities, builders | [`resolve()`, `async_execute()`, `CAPABILITY_DOMAINS`, `BUILDERS`](../custom_components/thalovant/actions.py); [`HomeRequestHandler._async_structured()`](../custom_components/thalovant/handler.py); guide: [README: Structured actions](../README.md#structured-actions) |
+| Sensitive actions, one entity at a time, the alarm code | [`SENSITIVE_VERBS`, `_is_sensitive()`, `_one_at_a_time()`, `_arm()`, `_disarm()`](../custom_components/thalovant/actions.py); options in [`ThalovantOptionsFlow.async_step_init()`](../custom_components/thalovant/config_flow.py); guide: [README: Sensitive actions](../README.md#sensitive-actions) |
+| Every option, with key and default | [README: Options](../README.md#options), [QUICK_FACTS.md](../QUICK_FACTS.md#options-all-of-them), [`ThalovantOptionsFlow`](../custom_components/thalovant/config_flow.py), [`const.py`](../custom_components/thalovant/const.py) |
+| Diagnostics and what is redacted | [`async_get_config_entry_diagnostics()` and `TO_REDACT`](../custom_components/thalovant/diagnostics.py); [README: Diagnostics](../README.md#diagnostics) |
+| Structured action checks | [resolver and builders](../tests/test_actions.py), [edges](../tests/test_actions_edges.py), [handler](../tests/test_structured_handler.py), [sensitive verbs equal the spec](../tests/test_sensitive_verbs.py), [diagnostics](../tests/test_diagnostics.py) |
+| Music actions (on `main` after 0.4.0, unreleased) | [`async_execute_action()`, `music_player()`, `best_match()`](../custom_components/thalovant/music.py); [music.md](music.md) ([fr](music.fr.md)); [tests](../tests/test_music.py) |
 | Entry lifecycle | [`async_setup_entry()` and `async_remove_entry()`](../custom_components/thalovant/__init__.py) |
 | Announcements: options, re-consent | [`ThalovantOptionsFlow`](../custom_components/thalovant/config_flow.py), [`ThalovantConfigFlow.async_step_intercom_consent()` and `_async_finish_consent()`](../custom_components/thalovant/config_flow.py), [`scopes_for_options()`](../custom_components/thalovant/intercom.py) |
 | Announcements: sending | [`IntercomController`](../custom_components/thalovant/intercom.py), [`async_setup_services()`](../custom_components/thalovant/services.py), [`IntercomNotifyEntity`](../custom_components/thalovant/notify.py) |
@@ -75,5 +81,15 @@ Intercom switched off for the whole platform (reads answer
 the integration treats "not switched on yet" as a normal state: a clear error, a
 Repairs notice, no crash and no retry
 (`ThalovantApi._translate_intercom()`, `IntercomController._error()`).
+
+## Structured actions and music
+
+Both are merged on `main` after the `v0.4.0` release and are not in a release (`manifest.json` says 0.4.0).
+[README: Structured actions](../README.md#structured-actions) is the guide: the capabilities, how a target is
+resolved among the entities exposed to Assist, what happens when it cannot be (the sentence goes on to Assist),
+sensitive actions and the alarm code, and what is not done. The hub side is documented in
+`[hivemind-home-router: README.md]` ("What Home Assistant receives"), the closed verb set in
+`[thalovant-connector-spec: docs/design.md]`, and the home skill that sends the actions in
+`[thalovant-skill-home: README.md]`.
 
 - [Music through Home Assistant](music.md) ([fr](music.fr.md)): `custom_components/thalovant/music.py`, `async_execute_action()`, Music Assistant players as media players.

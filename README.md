@@ -817,7 +817,7 @@ constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib
 ```
 
 The integration talks to Thalovant through the async API of the `thalovant`
-Python SDK (0.12.0 or later, the first with Intercom), and only through
+Python SDK (pinned to 0.12.0 in `manifest.json`, the first release with Intercom), and only through
 `custom_components/thalovant/api.py` (`oauth.py` keeps its own token exchange).
 `tests/test_api.py` drives that adapter with a fake SDK, and
 `tests/test_api_sdk.py` drives it with the real one against a local control

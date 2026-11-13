@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: line anchors corrected, structured-action and music findings with state, new findings (dim of an off light, an unused constant, the sensitive-verb guard skipped in CI, shared controls by name), evidence re-run on main e28f73d.
 
 # Audit
 
@@ -318,7 +318,7 @@ Evidence: `pytest` 833 passed, `ruff`, `ruff format --check` and `mypy` clean on
 | Low | Only the self-hosted path checks that a request came from `thalovant.home.router` and that the session is `home-<request_id>`; the normal path trusts the link. | [`self_hosted.py`](custom_components/thalovant/self_hosted.py) `permits_lighting_request` | Open |
 | Low | The normal link runs on Home Assistant's shared aiohttp session, which follows redirects on the SDK's `ws_connect` (measured with aiohttp 3.14.5: a 307 from the upgrade URL is followed). TLS is verified (`ssl=True`, certifi/system store) and the Noise key pin makes a redirected hub fail with `ThalovantHubKeyChangedError`, so no credential is given away, but the self-hosted path rejects redirects explicitly and this one does not. | [`__init__.py`](custom_components/thalovant/__init__.py) `async_setup_entry` (`async_get_clientsession`), `thalovant._hive._WSSCarrier.open` | Open |
 | Low | The alarm code is stored in clear in the config entry options (Home Assistant's own `.storage/core.config_entries`, as every integration's secrets are) and travels in the `alarm_control_panel` service data, which Home Assistant fires on its event bus to administrators. | `ThalovantOptionsFlow`, `_arm` and `_disarm` in `actions.py` | Accepted, documented |
-| Low | A voice-only disarm: anyone the speaker hears can ask for what the skill builds. The 0.5.0 skill never builds `disarm`, `unlock` or `arm`; the router would carry one. | `ACTION_CAPABILITIES` in hivemind-home-router | Owner decision before any skill builds it |
+| Low | A voice-only disarm: anyone the speaker hears can ask for what the skill builds. The 0.5.0 skill never builds `disarm`, `unlock` or `arm`; the router would carry one. | `ACTION_CAPABILITIES` in hivemind-home-router 0.4.1 (`action.py`; router 0.5.0, an open pull request when this was written, drops that file and reads the connector spec, where `lock`, `unlock`, `arm` and `disarm` are flagged `sensitive` with their own rate bucket: `[hivemind-home-router: CHANGELOG.md]`) | Owner decision before any skill builds it |
 
 Checked and found sound: services are called only from the closed `BUILDERS` set with data built
 from validated fields (no entity id, service or domain comes from the hub); only entities exposed
@@ -327,7 +327,36 @@ nothing; a failure after part of an action is reported as partial and never retr
 (`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`); the logs carry request ids and
 exception type names only; the announcement receiver is off by default, closed and rate limited.
 
-## Music actions (unreleased)
+## Documentation sweep (2026-11-13), `main` e28f73d
+
+Evidence, run on Python 3.14.10, Home Assistant 2026.10.4 (`pytest-homeassistant-custom-component==0.13.375`),
+`thalovant` 0.12.0 under Home Assistant's package constraints: `pytest --cov` 881 passed and 1 skipped, coverage
+100 percent; with the private `thalovant-connector-spec` 0.3.0 installed from its clone, 882 passed and the skipped
+test passes (the sensitive verbs equal the spec's flags: `lock`, `unlock`, `arm`, `disarm`); `ruff check`,
+`ruff format --check` and `mypy` clean. Code was read at that revision; the behaviours below marked "measured" were
+called directly.
+
+| Severity | Finding | Where | State |
+| --- | --- | --- | --- |
+| Low | **A relative "dim" turns an off light on.** An off light counts as brightness 0, so dimming by 20 asks for `brightness_pct` 1 and the light comes on at 1 percent (measured: `_calls({"capability": "brightness", "value": -20, "mode": "relative"}, off_light)` gives `("light", "turn_on", {"brightness_pct": 1})`). "Brighter" on an off light gives 20. A person who says "dim the lamp" at a lamp that is off gets a lit lamp. | [`actions._brightness`](custom_components/thalovant/actions.py#L400) | Open; see SUGGESTIONS |
+| Low | **`DEFAULT_STEP` is dead.** The constant (comment: "a relative brightness, position or volume step when the hub gave none") is defined and read nowhere (`grep -rn DEFAULT_STEP custom_components`: one hit). A relative action with no `value` is not done (`_num(None)` is None), it does not default to 20. | [`actions.DEFAULT_STEP`](custom_components/thalovant/actions.py#L43) | Open; remove the constant or implement the default |
+| Low | **The guard that keeps `SENSITIVE_VERBS` equal to the connector spec does not run in this repository's CI.** `test_the_sensitive_verbs_are_exactly_the_specs_flags` uses `pytest.importorskip("thalovant_connector_spec")`, and `.github/workflows/ci.yml` does not install the private spec, so the test is skipped there (1 skipped in the run above). It passed locally with the spec installed. Drift between the integration's list and the spec's flags would not fail CI. | [`tests/test_sensitive_verbs.py`](tests/test_sensitive_verbs.py#L12), [`ci.yml`](.github/workflows/ci.yml) | Open; install the spec through its composite action as the router's CI does |
+| Low | **Shared media controls with a named target are not limited to Music Assistant players.** `volume`, `mute`, `unmute` and `playback` use a Music Assistant player only when the target is `here`; a named target takes the generic path, which resolves any exposed `media_player` (a Chromecast or a TV of the same name; two with the name resolve to nothing). | [`music.async_execute_action`](custom_components/thalovant/music.py#L543) | Documented in docs/music.md and README; by design |
+| Info | **Two copies of the music vectors.** `tests/music_vectors.json` (23 cases) and the spec's `vectors/music_assistant.json` (`behavior`, 23 cases, one extra `request_valid` field) agree case for case after normalising `action` to `verb`/`args` (compared on 2026-11-13); nothing in either repository checks they stay equal. docs/music.md said the bridge reads this repository's file; it reads the spec's. | [`tests/test_music.py::test_the_shared_vectors`](tests/test_music.py#L244) | Docs corrected; copies open |
+| Info | **A line-anchored link in this file had drifted** (17 of 68 pointed a few lines off after later edits, 3 or 4 in most cases). Corrected here; the other documents' anchors were checked and are right. | this file | Fixed |
+
+Checked, no finding: the Music Assistant integration's `search` takes `limit` and `library_only` as flat fields with
+`library_only` defaulting to false (Home Assistant 2026.10.4, `components/music_assistant/services.py`), as
+`music.py` calls it, so a search spans the household's providers; `diagnostics.TO_REDACT` holds
+`alarm_code`, `speaker_players`, `speaker_areas`, `tts_entity` and the ids and tokens
+([`diagnostics.py`](custom_components/thalovant/diagnostics.py#L30), `tests/test_diagnostics.py`); the options flow stores
+only what is on (structured actions: only the off value); the README's claim that Thalovant is in the HACS
+default list is true (`hacs/default`, file `integration`, contains the repository).
+
+Not verified here: structured actions and music against a live hub and router together; the router
+0.5.0 envelope (open pull request); the music pages' French (needs a human pass).
+
+## Music actions (merged in PR #31 after v0.4.0, unreleased)
 
 - [`music_player()`](custom_components/thalovant/music.py) never reaches a player that is not a Music Assistant entity or not exposed to Assist ([`test_a_chromecast_with_the_same_name_is_not_a_music_player`](tests/test_music.py), [`test_an_unexposed_player_is_never_reached`](tests/test_music.py)).
 - No raw URL is ever played: media is a name searched in Music Assistant ([`best_match()`](custom_components/thalovant/music.py)).

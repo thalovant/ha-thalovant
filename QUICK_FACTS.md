@@ -1,11 +1,14 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: release state (0.4.0 released, structured actions and music on main), structured action facts, every option with key and default, diagnostics redaction list, test counts, the unused DEFAULT_STEP.
 
 # Quick facts
 
 | Fact | Value |
 | --- | --- |
 | Project | `ha-thalovant` |
-| Home Assistant integration domain and version | `thalovant`, `0.4.0` |
+| Home Assistant integration domain and version | `thalovant`, `0.4.0` (`manifest.json`; tag `v0.4.0`, released 2026-11-12). `pyproject.toml` says `0.1.0`: it is not the integration's version |
+| On `main`, not released | Structured actions (PR #30), their security fixes (PR #32) and music actions (PR #31). `manifest.json` still says 0.4.0; the intended next number is 0.5.0 (named in the home skill's code comments and CHANGELOG), not cut |
+| Minimum Home Assistant, Python | `2026.9.0` (`hacs.json`), Python `>=3.14.2` (`pyproject.toml`); tests run on Home Assistant 2026.10.4 (`requirements_test.txt`) |
+| Tests and checks (2026-11-13, `main` e28f73d) | `pytest --cov`: 882 passed with the private `thalovant-connector-spec` installed, 881 passed and 1 skipped without it (`tests/test_sensitive_verbs.py::test_the_sensitive_verbs_are_exactly_the_specs_flags`); coverage 100 percent (required by `pyproject.toml`); `ruff check`, `ruff format --check` and `mypy` clean |
 | SDK requirement | `thalovant==0.12.0` (released on PyPI; the first with Intercom; `manifest.json`, enforced by `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin`) |
 | Config entry points | `ThalovantConfigFlow.async_step_user()`, `async_step_self_hosted()`, `async_step_reauth()` |
 | Sign-in methods | Link account (default): `AbstractOAuth2FlowHandler` steps `auth` and `creation` with `ThalovantOAuth2Implementation`; Link with a code instead: `async_step_login()` (device login) |
@@ -21,6 +24,43 @@ Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Ho
 | Private transport | TLS-verified WSS and persistent per-link Noise state |
 | Platforms | `binary_sensor` always; `notify` only while **Send announcements** is on |
 | Manifest | `dependencies: [conversation]`, `after_dependencies: [media_player, tts]`, `iot_class: cloud_push` |
+
+## Options (all of them)
+
+Stored in the entry's options (`ThalovantOptionsFlow`, `config_flow.py`; constants in `const.py`). Only what is on, or not the default, is stored. A private Christmas link has no options form (`private_agent_fixed`).
+
+| Key | Label | Default | Effect | In diagnostics |
+| --- | --- | --- | --- | --- |
+| `agent_id` | Conversation agent | Home Assistant's agent | who answers sentences; missing agent: Repairs notice | shown |
+| `allow_announcements` | Send announcements | off | the three `thalovant.*` announce actions, notify entity; needs `intercom:read`, `intercom:send` | shown (flag) |
+| `allow_urgent` | Allow urgent announcements | off | urgent priority; needs `allow_announcements` and `intercom:urgent` | shown (flag) |
+| `allow_receive` | Play announcements on this Home Assistant | off | plays hub announcements; opens the second form | shown (flag) |
+| `structured_actions` | Carry out structured requests | on (only `false` is stored) | off: every request is words for the agent | shown |
+| `structured_sensitive` | Allow locks, alarms, garage doors, gates, valves and sirens | off | on: sensitive structured actions are carried out (exactly one entity at a time) | shown |
+| `alarm_code` | Alarm code (to disarm) | none | needed for a structured `disarm`; passed to arm and disarm | **redacted** |
+| `speaker_players`, `speaker_areas`, `tts_entity` | Media players, Areas, Text to speech | none | where announcements play (second form, at least one player or area) | **redacted** |
+
+Only the Intercom keys reload the entry when changed (`INTERCOM_OPTION_KEYS`); the structured keys and the agent are read on each request.
+
+## Structured actions (on `main`, not released)
+
+| Fact | Value |
+| --- | --- |
+| Request field | `action` in `thalovant.home.request`: `{"v": 1, "capability", "target": {name, area, floor, domain, all, here}, "value", "mode" (absolute or relative), "media", "other"}`; the hub's router checks it against the connector spec first (`[hivemind-home-router: README.md]`, `[thalovant-connector-spec: docs/design.md]`) |
+| Code | `actions.py`: `resolve()`, `async_execute()`, `CAPABILITY_DOMAINS`, `BUILDERS`, `SENSITIVE_VERBS`; `handler.py`: `HomeRequestHandler._async_structured()` |
+| Capabilities (31) | `power_on`, `power_off`, `toggle`, `brightness`, `color`, `color_temperature`, `position`, `fan_speed`, `temperature`, `hvac_mode`, `humidity`, `lock`, `unlock`, `volume`, `mute`, `unmute`, `playback`, `activate`, `start`, `stop`, `dock`, `arm`, `disarm`, `state`, `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` (the last seven are music, `music.py`) |
+| Entities reachable | only those exposed to Assist (`async_should_expose(hass, "conversation", ...)`), only the capability's domains; at most `MAX_TARGETS` = 50 per action |
+| Never guessed | no match, two entities with a name, two areas with a name, a missing state for a relative change, a missing service, a failing builder: nothing is done and the sentence goes to the agent. A follow-up to a question (`conversation_id`) and a private link are never structured |
+| Sensitive | verbs `lock`, `unlock`, `arm`, `disarm` (equal to the connector spec's `sensitive` flags, `tests/test_sensitive_verbs.py`); also siren on/off/toggle, valve open and position, cover of class garage, gate, door or window opened, positioned or toggled. Needs `structured_sensitive`; `disarm` also needs `alarm_code` |
+| One at a time | a sensitive action, and any action on scene, script, automation, button or input_button, is refused structurally when it resolves to more than one entity (`_one_at_a_time()`) |
+| Partial failure | one service fails after another changed an entity: answer `error` / `failed_to_handle` with "Sorry, I could only do part of that." (`action_partial`); the sentence is not sent to Assist |
+| Timeouts | hub gives up at `HUB_TIMEOUT` 10 s; the request's budget is `min(CONVERSE_TIMEOUT` 8.5 s`, time left - 2 * REPLY_RESERVE` 0.5 s`)`, shared by the structured attempt and Assist; `MAX_CONCURRENT_REQUESTS` 8; `MAX_DEVICES_PER_HUB` 50 |
+| Spoken answers | `common.action_done`, `action_state`, `action_partial`, `music_*` in `strings.json`, `translations/en.json`, `translations/fr.json`; fixed English fallback "Done." if a string cannot be made |
+| Dead constant | `actions.DEFAULT_STEP` = 20 is defined and never read (AUDIT.md) |
+
+## Diagnostics redaction
+
+`diagnostics.py` `TO_REDACT`: `account_id`, `alarm_code`, `credentials`, `home_client_id`, `hub_name`, `speaker_areas`, `speaker_players`, `tokens`, `tts_entity`, `voice_client_id`, `title`, `unique_id` (as `**REDACTED**`); the endpoint of a private link is redacted separately. Tests: `tests/test_diagnostics.py`, `tests/snapshots/test_diagnostics.ambr`.
 
 ## Intercom (0.4.0), all off by default
 
@@ -53,7 +93,7 @@ services.
 Implementation links and tests are indexed in [documentation](docs/index.md) and
 [the announcements guide](docs/announcements.md).
 
-## Music (0.5.0, unreleased)
+## Music (on `main` since PR #31, not released)
 
 | Fact | Value |
 | --- | --- |
@@ -62,4 +102,5 @@ Implementation links and tests are indexed in [documentation](docs/index.md) and
 | Home Assistant actions used | `music_assistant.search`, `get_library`, `get_queue`, `play_media`, `transfer_queue`; `media_player.shuffle_set`, `repeat_set`, `join`, `unjoin` |
 | Players | Music Assistant entities (registry platform `music_assistant`) exposed to Assist |
 | Spoken answers | `common.music_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
-| Shared vectors | `tests/music_vectors.json` (also used by thalovant-music-bridge) |
+| Vectors | `tests/music_vectors.json` (23 cases, run by `test_the_shared_vectors`). The standalone bridge reads the spec's copy, `thalovant_connector_spec/vectors/music_assistant.json` (same 23 case names; one extra `request_valid` field); nothing checks they stay equal |
+| Docs | `docs/music.md`, `docs/music.fr.md` (the French needs a human pass) |

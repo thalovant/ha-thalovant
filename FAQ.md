@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: documentation sweep: structured actions, sensitive actions and the alarm code, every option, diagnostics redaction, release state, music corrections.
 
 # FAQ
 
@@ -147,4 +147,77 @@ removes the local entry and its Noise state. See the [setup guide](README.md).
 
 **Can I play music from a Thalovant device through Home Assistant?** Yes, if Home Assistant has the Music Assistant integration and its players are exposed to Assist: "play Adam's Song on the kitchen speaker". See [docs/music.md](docs/music.md).
 
-**Why did it say it could not find a song that is in Music Assistant?** The name is searched with `music_assistant.search` and must be close to the title (60 percent similar); say the artist too.
+**Why did it say it could not find a song that is in Music Assistant?** The name is searched with `music_assistant.search` and must be close to the title (60 percent similar, `MIN_MATCH` in `music.py`, or every word of your request must be in the title); say the artist too. Music is on `main` after 0.4.0 and not released.
+
+## Structured actions, options and diagnostics (on `main` after 0.4.0, not released)
+
+**Which version has structured actions and music?** Neither is in 0.4.0, the last
+release (2026-11-12). They are merged on `main` (PRs #30, #32 and #31);
+`manifest.json` still says 0.4.0. See [README.md](README.md#structured-actions).
+
+**What is a structured action?** Next to the sentence, a hub request can carry a
+capability (what), a target (which entity, area, floor or the speaker's room) and
+a value. The integration resolves it among the entities exposed to Assist and
+calls their services, instead of leaving the sentence to Assist's parser.
+`actions.resolve()`, `actions.async_execute()`.
+
+**What does "safe defaults" mean?** Structured requests are **on**; sensitive
+ones (locks, alarm panels, garage doors, gates, windows, valves, sirens) are
+**off**; the alarm code is empty so nothing disarms; only entities exposed to
+Assist are ever reached; and when the integration cannot resolve exactly what
+was asked it does nothing structural and lets Assist have the sentence.
+(`CONF_STRUCTURED_ACTIONS`, `CONF_STRUCTURED_SENSITIVE`, `CONF_ALARM_CODE` in `const.py`.)
+
+**Why did "dim the lamp" turn the lamp on?** A relative change starts from the
+real state. An off light counts as brightness 0, so dimming it by 20 asks for 1
+percent, and the light comes on at 1 percent (`actions._brightness`, called
+directly with an off light on 2026-11-13). "Brighter" on an off light gives 20
+percent. Not fixed; see AUDIT.md.
+
+**Which verbs are sensitive, and what do they need?** `lock`, `unlock`, `arm`,
+`disarm` always; a siren on, off or toggled; a valve opened or positioned; a
+garage, gate, door or window cover opened, positioned or toggled. They need the
+option **Allow locks, alarms, garage doors, gates, valves and sirens**, an entity
+exposed to Assist, and exactly one entity (never a room, a floor or "all"). A
+disarm also needs the **Alarm code**. Off, they go to Assist as words.
+(`SENSITIVE_VERBS`, `_is_sensitive()`, `_one_at_a_time()`.)
+
+**Why will it not "unlock the kitchen" or "run all the scripts"?** A sensitive
+action and any action on a scene, script, automation or button is only carried
+out structurally for one named entity; "all the automations" must not switch off
+the household's automations (`_one_at_a_time()`, fixed by PR #32,
+`test_scripts_and_automations_are_run_or_switched_one_at_a_time`).
+
+**Where is the alarm code kept, and does a diagnostics file show it?** In the
+entry's options, in clear, in Home Assistant's `.storage` like every
+integration's secrets; never sent by the hub. Diagnostics redact it since PR #32
+(`TO_REDACT`; `test_diagnostics_never_hold_the_alarm_code`). No release carried the
+option without the fix (both are unreleased), but a diagnostics file made from `main`
+between PRs #30 and #32 may hold the code: if you pasted one, change the code.
+
+**What does a diagnostics file hold?** The entry's data and options with the
+tokens, credentials, ids, hub name, title, alarm code and announcement players,
+areas and text to speech redacted; the connection state; counters of requests by
+outcome; Intercom counters. No sentence, answer or announcement.
+[README.md](README.md#diagnostics).
+
+**What are all the options?** See the table in [README.md](README.md#options) and
+[QUICK_FACTS.md](QUICK_FACTS.md#options-all-of-them): conversation agent, send
+announcements, allow urgent announcements, play announcements (with players, areas
+and text to speech), carry out structured requests, allow sensitive actions, alarm
+code.
+
+**It said "Sorry, I could only do part of that." Why did it not just try again?**
+A service failed after another had already changed an entity. Asking Assist as
+well would run the intent again on everything, doubling a relative step and
+undoing a toggle, so the integration reports it as partial and stops
+(`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`).
+
+**Does the volume of "the kitchen" go to Music Assistant?** Only for the speaker's
+own room. A named target for volume, mute or playback is resolved among all
+exposed media players, which can include a Chromecast of the same name
+([docs/music.md](docs/music.md)).
+
+**Does the bridge use `tests/music_vectors.json`?** No. The bridge's tests read
+the connector spec's copy; the two agree case for case today and nothing checks
+they stay equal.
