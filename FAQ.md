@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom questions: turning it on, errors, receiving, privacy and safety; Intercom is rolling out and may not be enabled yet; the released SDK's problem codes.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
 
 # FAQ
 
@@ -144,3 +144,7 @@ keeps its credentials and Voice ID when the integration is updated.
 **Who revokes private credentials?** The hub operator revokes the dedicated
 client. [`async_remove_entry()`](custom_components/thalovant/__init__.py)
 removes the local entry and its Noise state. See the [setup guide](README.md).
+
+**Can I play music from a Thalovant device through Home Assistant?** Yes, if Home Assistant has the Music Assistant integration and its players are exposed to Assist: "play Adam's Song on the kitchen speaker". See [docs/music.md](docs/music.md).
+
+**Why did it say it could not find a song that is in Music Assistant?** The name is searched with `music_assistant.search` and must be close to the title (60 percent similar); say the artist too.

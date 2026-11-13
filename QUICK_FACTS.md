@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: services, options, scopes, limits, the receive message, the released SDK (0.12.0) and the platform's final problem codes; Intercom is rolling out (platform switch off).
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
 
 # Quick facts
 
@@ -52,3 +52,14 @@ services.
 
 Implementation links and tests are indexed in [documentation](docs/index.md) and
 [the announcements guide](docs/announcements.md).
+
+## Music (0.5.0, unreleased)
+
+| Fact | Value |
+| --- | --- |
+| Module | `custom_components/thalovant/music.py`: `async_execute_action()`, `async_execute_music()`, `music_player()`, `best_match()` |
+| Capabilities | `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` (plus shared `volume`, `mute`, `playback`) |
+| Home Assistant actions used | `music_assistant.search`, `get_library`, `get_queue`, `play_media`, `transfer_queue`; `media_player.shuffle_set`, `repeat_set`, `join`, `unjoin` |
+| Players | Music Assistant entities (registry platform `music_assistant`) exposed to Assist |
+| Spoken answers | `common.music_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
+| Shared vectors | `tests/music_vectors.json` (also used by thalovant-music-bridge) |

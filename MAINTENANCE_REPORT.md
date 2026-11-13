@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements from Home Assistant and playing the hub's announcements, all off by default; aligned with the released thalovant 0.12.0 and the platform's final API, which ships Intercom switched off.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
 
 # Maintenance report
 
@@ -294,3 +294,15 @@ Assist and used an in-memory hub connection.
 - **Oversight:** Separate agent review of the transport boundary and a root
   review before any release or deployment. The user authorized pairing their
   private Christmas hub and testing the strip.
+
+## 2026-11-13 - Music actions (unreleased)
+
+Added `custom_components/thalovant/music.py` and its speech strings (en, fr); `handler.py` now calls `async_execute_action()`, which sends music capabilities to `music.py` and everything else to `actions.async_execute()` unchanged. `actions.resolve()` gained `platform` and `key` parameters.
+
+Verification: `pytest --cov`: 867 passed, coverage 100 percent; ruff and mypy clean. Real: Home Assistant 2026.10.4 core with the real Music Assistant integration against the owner's server, the request handler driven with real actions (`tests/real_ma_verify.py`, not part of the suite): play Adam's Song on `mark2`, what's playing, volume, pause, resume, shuffle, next, stop; volume restored.
+
+### Transparency Report
+
+- AI model: Claude Sonnet 5.5.
+- Actions: designed and wrote `music.py`, tests and vectors, translations and docs; ran the real-server check.
+- Oversight: owner-directed design; the pull request awaits human review.

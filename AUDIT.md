@@ -326,3 +326,10 @@ to Assist are resolved (`async_should_expose`); two entities or two areas with o
 nothing; a failure after part of an action is reported as partial and never retried as words
 (`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`); the logs carry request ids and
 exception type names only; the announcement receiver is off by default, closed and rate limited.
+
+## Music actions (unreleased)
+
+- [`music_player()`](custom_components/thalovant/music.py) never reaches a player that is not a Music Assistant entity or not exposed to Assist ([`test_a_chromecast_with_the_same_name_is_not_a_music_player`](tests/test_music.py), [`test_an_unexposed_player_is_never_reached`](tests/test_music.py)).
+- No raw URL is ever played: media is a name searched in Music Assistant ([`best_match()`](custom_components/thalovant/music.py)).
+- A failure after music started answers "partial" and never repeats the sentence through Assist ([`test_a_failure_after_the_music_started_keeps_what_was_done`](tests/test_music.py)).
+- Known limit: name matching is a 0.6 similarity threshold (`MIN_MATCH`); a very different title spelling is "not found".
