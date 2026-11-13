@@ -19,9 +19,13 @@ from homeassistant.helpers import (
 from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util, language as language_util
 
+from .actions import ActionResult, async_execute
 from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
+    CONF_ALARM_CODE,
+    CONF_STRUCTURED_ACTIONS,
+    CONF_STRUCTURED_SENSITIVE,
     CONF_HUB_ID,
     CONF_SELF_HOSTED,
     CONF_VOICE_CLIENT_ID,
@@ -138,6 +142,20 @@ async def async_fallback_speech(hass: HomeAssistant, lang: Any, error_code: str)
     )
     prefix = f"component.{DOMAIN}.common.reply_"
     return strings.get(f"{prefix}{error_code}") or strings.get(f"{prefix}unknown", "")
+
+
+async def async_action_speech(hass: HomeAssistant, lang: Any, result: ActionResult) -> str:
+    """The spoken answer for a structured action, in the request's language (English when untranslated)."""
+    language = hass.config.language
+    if isinstance(lang, str) and (tag := canonical_language(lang)):
+        if matches := language_util.matches(tag, LANGUAGES, country=hass.config.country):
+            language = matches[0]
+    strings = await translation.async_get_translations(hass, language, "common", {DOMAIN})
+    text = strings.get(f"component.{DOMAIN}.common.{result.speech_key}") or ""
+    try:
+        return plain_speech(text.format(**result.placeholders))
+    except (KeyError, IndexError):
+        return plain_speech(text)
 
 
 def error_response(
@@ -328,6 +346,48 @@ class HomeRequestHandler:
         )
         return created.id
 
+    async def _async_structured(
+        self, request_id: str, data: Mapping[str, Any], conversation_id: str | None
+    ) -> dict[str, Any] | None:
+        """Carry out the request's structured action, or None to go on with its words.
+
+        Only a fresh request (a follow-up to Assist's question is words), only on
+        a link to the household's own Home Assistant, and only when the options
+        leave structured actions on (the default).
+        """
+        action = data.get("action")
+        options = self._entry.options
+        if (
+            not isinstance(action, Mapping)
+            or conversation_id
+            or self._self_hosted
+            or options.get(CONF_STRUCTURED_ACTIONS, True) is False
+        ):
+            return None
+        try:
+            result = await async_execute(
+                self._hass,
+                action,
+                device_id=self._async_device_id(data.get("device")),
+                allow_sensitive=options.get(CONF_STRUCTURED_SENSITIVE) is True,
+                alarm_code=options.get(CONF_ALARM_CODE) or None,
+            )
+        except Exception as err:  # noqa: BLE001 - the words still go to Assist
+            LOGGER.warning(
+                "Request %s: structured action failed with %s", request_id, type(err).__name__
+            )
+            return None
+        if result is None:
+            return None
+        speech = await async_action_speech(self._hass, data.get("lang"), result)
+        LOGGER.debug("Request %s answered by a structured action", request_id)
+        return {
+            "request_id": request_id,
+            "speech": speech,
+            "continue_conversation": False,
+            "response_type": result.response_type,
+        }
+
     async def _async_converse(
         self, request_id: str, data: Mapping[str, Any], budget: float
     ) -> dict[str, Any]:
@@ -340,6 +400,9 @@ class HomeRequestHandler:
         if not isinstance(utterance, str) or not utterance.strip():
             LOGGER.debug("Request %s carries no utterance", request_id)
             return error_response(request_id, ERROR_UNKNOWN, conversation_id)
+
+        if (structured := await self._async_structured(request_id, data, conversation_id)) is not None:
+            return structured
 
         agent_id: str = conversation.HOME_ASSISTANT_AGENT
         if not self._self_hosted:

@@ -60,9 +60,12 @@ from .const import (
     ADMISSION_TIMEOUT,
     CONF_ACCOUNT_ID,
     CONF_AGENT_ID,
+    CONF_ALARM_CODE,
     CONF_ALLOW_ANNOUNCEMENTS,
     CONF_ALLOW_RECEIVE,
     CONF_ALLOW_URGENT,
+    CONF_STRUCTURED_ACTIONS,
+    CONF_STRUCTURED_SENSITIVE,
     CONF_CREDENTIALS,
     CONF_HOME_CLIENT_ID,
     CONF_HUB_ID,
@@ -965,11 +968,24 @@ class ThalovantOptionsFlow(OptionsFlow):
                 # Only what is on is stored: an entry that never used Intercom
                 # is stored exactly as it was before it existed.
                 self._options = {CONF_AGENT_ID: user_input[CONF_AGENT_ID]} | {
+                    # structured actions are on unless turned off: only the off is stored
+                    **(
+                        {CONF_STRUCTURED_ACTIONS: False}
+                        if user_input.get(CONF_STRUCTURED_ACTIONS) is False
+                        else {}
+                    ),
+                    **(
+                        {CONF_ALARM_CODE: user_input[CONF_ALARM_CODE]}
+                        if user_input.get(CONF_ALARM_CODE)
+                        else {}
+                    ),
+                } | {
                     key: True
                     for key in (
                         CONF_ALLOW_ANNOUNCEMENTS,
                         CONF_ALLOW_URGENT,
                         CONF_ALLOW_RECEIVE,
+                        CONF_STRUCTURED_SENSITIVE,
                     )
                     if user_input.get(key) is True
                 }
@@ -997,6 +1013,18 @@ class ThalovantOptionsFlow(OptionsFlow):
                         CONF_ALLOW_RECEIVE,
                         default=options.get(CONF_ALLOW_RECEIVE) is True,
                     ): BooleanSelector(),
+                    probatio.Optional(
+                        CONF_STRUCTURED_ACTIONS,
+                        default=options.get(CONF_STRUCTURED_ACTIONS, True) is not False,
+                    ): BooleanSelector(),
+                    probatio.Optional(
+                        CONF_STRUCTURED_SENSITIVE,
+                        default=options.get(CONF_STRUCTURED_SENSITIVE) is True,
+                    ): BooleanSelector(),
+                    probatio.Optional(
+                        CONF_ALARM_CODE,
+                        description={"suggested_value": options.get(CONF_ALARM_CODE)},
+                    ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
                 }
             ),
             errors=errors,

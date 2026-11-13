@@ -24,6 +24,11 @@ CONF_AGENT_ID: Final = "agent_id"
 CONF_ALLOW_ANNOUNCEMENTS: Final = "allow_announcements"
 CONF_ALLOW_URGENT: Final = "allow_urgent"
 CONF_ALLOW_RECEIVE: Final = "allow_receive"
+# Structured actions (the hub names a capability, a target and a value instead of leaving a sentence to Assist).
+# On by default; sensitive ones (locks, alarm panels, garage doors, gates, valves, sirens) are off by default.
+CONF_STRUCTURED_ACTIONS: Final = "structured_actions"
+CONF_STRUCTURED_SENSITIVE: Final = "structured_sensitive"
+CONF_ALARM_CODE: Final = "alarm_code"
 CONF_SPEAKER_PLAYERS: Final = "speaker_players"
 CONF_SPEAKER_AREAS: Final = "speaker_areas"
 CONF_TTS_ENTITY: Final = "tts_entity"

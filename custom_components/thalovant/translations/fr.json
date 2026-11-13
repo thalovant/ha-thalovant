@@ -112,13 +112,19 @@
           "agent_id": "Agent de conversation",
           "allow_announcements": "Envoyer des annonces",
           "allow_urgent": "Autoriser les annonces urgentes",
-          "allow_receive": "Jouer les annonces sur ce Home Assistant"
+          "allow_receive": "Jouer les annonces sur ce Home Assistant",
+          "structured_actions": "Exécuter les demandes structurées",
+          "structured_sensitive": "Autoriser serrures, alarmes, portes de garage, portails, vannes et sirènes",
+          "alarm_code": "Code de l'alarme (pour désarmer)"
         },
         "data_description": {
           "agent_id": "L'agent qui répond aux demandes du hub. L'agent de Home Assistant n'agit que sur les entités exposées à Assist.",
           "allow_announcements": "Ajoute les actions `announce`, `cancel_announcement` et `list_speakers`, et une entité de notification Intercom, désactivée tant que vous ne l'activez pas. Cocher cette case demande d'abord une autorisation supplémentaire à Thalovant ; si vous refusez, elle reste désactivée. Votre forfait Thalovant doit inclure Intercom, et le propriétaire du hub active Intercom pour ce hub dans le tableau de bord Thalovant.",
           "allow_urgent": "Permet qu'une annonce soit urgente : elle ignore Ne pas déranger et peut se répéter jusqu'à ce que quelqu'un l'acquitte. Demande sa propre autorisation. Nécessite que les annonces soient activées.",
-          "allow_receive": "Permet au hub de jouer des annonces sur ce Home Assistant, sur les lecteurs multimédias que vous choisirez ensuite. Home Assistant indique à Thalovant que cette connexion peut jouer des annonces, et le propriétaire du hub doit aussi activer la réception pour elle dans le tableau de bord Thalovant, onglet Intercom."
+          "allow_receive": "Permet au hub de jouer des annonces sur ce Home Assistant, sur les lecteurs multimédias que vous choisirez ensuite. Home Assistant indique à Thalovant que cette connexion peut jouer des annonces, et le propriétaire du hub doit aussi activer la réception pour elle dans le tableau de bord Thalovant, onglet Intercom.",
+          "structured_actions": "Le hub peut nommer ce qu'il veut (alimentation, luminosité, position, température...) au lieu d'une phrase, et Home Assistant l'exécute sur les entités exposées à Assist. Ce qui n'est pas résolu exactement part vers Assist en mots.",
+          "structured_sensitive": "Désactivé par défaut. Désactivé, ces demandes partent vers Assist en mots, et les règles d'exposition de Home Assistant décident.",
+          "alarm_code": "Conservé ici, jamais envoyé par le hub. Nécessaire pour désarmer une centrale d'alarme à la voix."
         }
       },
       "receive": {

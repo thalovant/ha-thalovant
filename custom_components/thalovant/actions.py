@@ -18,7 +18,7 @@ Assistant's own exposure rules decide. Entities are always limited to those
 exposed to Assist.
 """
 
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 import re
 from typing import Any
@@ -78,7 +78,6 @@ PLAYBACK = {"play": "media_play", "pause": "media_pause", "stop": "media_stop",
             "next": "media_next_track", "previous": "media_previous_track"}
 ARM_MODES = {"away": "alarm_arm_away", "home": "alarm_arm_home", "night": "alarm_arm_night"}
 SENSITIVE_COVER_CLASSES = frozenset({"garage", "gate", "door"})
-STATE_DOMAINS_NAMES = ()
 
 
 @dataclass
@@ -146,15 +145,23 @@ class _Registries:
 
 
 def resolve(
-    hass: HomeAssistant, action: Mapping[str, Any], device_id: str | None
+    hass: HomeAssistant,
+    action: Mapping[str, Any],
+    device_id: str | None,
+    any_domain: bool = False,
 ) -> list[State] | None:
-    """The exposed entities the action means, or None when it is not exactly resolved."""
+    """The exposed entities the action means, or None when it is not exactly resolved.
+
+    ``any_domain`` is for a state read, which may name an entity of any domain.
+    """
     capability = action.get("capability")
     target = action.get("target") or {}
     domains = CAPABILITY_DOMAINS.get(capability)
     if domains is None:
         return None
-    if target.get("domain"):
+    if any_domain:
+        domains = (target["domain"],) if target.get("domain") else ()
+    elif target.get("domain"):
         domains = tuple(d for d in domains if d == target["domain"]) if domains else (target["domain"],)
         if not domains:
             return None
@@ -193,7 +200,7 @@ def resolve(
     else:
         if not (area or floor or here or target.get("all")):
             return None
-        if not domains:
+        if not domains and not any_domain:
             return None
         if not target.get("domain") and capability in ("power_on", "power_off", "toggle"):
             scoped = [s for s in scoped if s.entity_id.split(".", 1)[0] in DEFAULT_DOMAINS]
@@ -347,7 +354,7 @@ async def async_execute(
     capability = action.get("capability")
     if capability not in CAPABILITY_DOMAINS:
         return None
-    states = resolve(hass, action, device_id) if capability != "state" else _state_targets(hass, action, device_id)
+    states = resolve(hass, action, device_id, any_domain=capability == "state")
     if not states:
         return None
     if capability == "state":
@@ -373,28 +380,9 @@ async def async_execute(
                         [s.entity_id for s in states])
 
 
-def _state_targets(hass: HomeAssistant, action: Mapping[str, Any], device_id: str | None) -> list[State] | None:
-    """A state read names an entity (any domain it is exposed in)."""
-    target = dict(action.get("target") or {})
-    probe = {"capability": "state", "target": target}
-    reg_domains = target.get("domain")
-    # resolve() has no domains for "state": widen to the named domain or every exposed entity
-    original = CAPABILITY_DOMAINS["state"]
-    try:
-        if reg_domains:
-            CAPABILITY_DOMAINS["state"] = (reg_domains,)
-        else:
-            CAPABILITY_DOMAINS["state"] = tuple(sorted({s.entity_id.split(".", 1)[0] for s in hass.states.async_all()}))
-        return resolve(hass, probe, device_id)
-    finally:
-        CAPABILITY_DOMAINS["state"] = original
-
-
 def _answer_state(hass: HomeAssistant, states: list[State]) -> ActionResult:
     first = states[0]
     unit = first.attributes.get("unit_of_measurement")
     value = f"{first.state} {unit}".strip() if unit else first.state
     return ActionResult("query_answer", "action_state", {"name": first.name, "state": value})
 
-
-Resolver = Callable[..., Any]
