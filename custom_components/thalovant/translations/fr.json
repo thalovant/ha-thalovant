@@ -399,7 +399,8 @@
     "reply_unknown": "Désolé, un problème est survenu dans Home Assistant.",
     "hub_not_ready": "{hub} (ne peut pas encore être relié)",
     "action_done": "C'est fait.",
-    "action_state": "{name} : {state}."
+    "action_state": "{name} : {state}.",
+    "action_partial": "Désolé, je n'ai pu en faire qu'une partie."
   },
   "services": {
     "announce": {

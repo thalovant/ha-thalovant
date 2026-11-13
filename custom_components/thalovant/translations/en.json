@@ -399,7 +399,8 @@
     "reply_unknown": "Sorry, something went wrong in Home Assistant.",
     "hub_not_ready": "{hub} (can't link Home Assistant yet)",
     "action_done": "Done.",
-    "action_state": "{name} is {state}."
+    "action_state": "{name} is {state}.",
+    "action_partial": "Sorry, I could only do part of that."
   },
   "services": {
     "announce": {

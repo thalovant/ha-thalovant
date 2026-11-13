@@ -1,12 +1,13 @@
 """A request's structured action is carried out; anything it cannot do goes on as words."""
 
-from typing import Any
+# ruff: noqa: F811
 from unittest.mock import patch
 
-import pytest
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_mock_service,
+)
 
-from custom_components.thalovant.actions import ActionResult
 from custom_components.thalovant.const import CONF_STRUCTURED_ACTIONS
 from homeassistant.components import conversation
 from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
@@ -27,7 +28,10 @@ async def _light(hass: HomeAssistant) -> None:
 
 
 async def test_a_structured_action_is_done_without_asking_assist(
-    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry,
 ) -> None:
     await _light(hass)
     agent = use_agent(FakeAgent(lambda _: None))  # type: ignore[arg-type]
@@ -39,11 +43,16 @@ async def test_a_structured_action_is_done_without_asking_assist(
 
 
 async def test_an_action_that_cannot_be_resolved_goes_on_as_words(
-    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry,
 ) -> None:
     await _light(hass)
 
-    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
         return _result(intent.IntentResponseType.ACTION_DONE, "Turned it down")
 
     agent = use_agent(FakeAgent(answer))
@@ -53,11 +62,16 @@ async def test_an_action_that_cannot_be_resolved_goes_on_as_words(
 
 
 async def test_structured_actions_can_be_turned_off(
-    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry: MockConfigEntry  # noqa: F811
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry: MockConfigEntry,
 ) -> None:
     await _light(hass)
 
-    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
         return _result(intent.IntentResponseType.ACTION_DONE, "As words")
 
     use_agent(FakeAgent(answer))
@@ -70,28 +84,78 @@ async def test_structured_actions_can_be_turned_off(
 
 
 async def test_a_follow_up_to_assist_is_never_structured(
-    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry,
 ) -> None:
     await _light(hass)
 
-    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
         return _result(intent.IntentResponseType.ACTION_DONE, "Follow-up")
 
     use_agent(FakeAgent(answer))
     calls = async_mock_service(hass, "light", "turn_on")
-    response = await _ask(hass, mock_hub_connection, _request(action=ACTION, conversation_id="c-1"))
+    response = await _ask(
+        hass, mock_hub_connection, _request(action=ACTION, conversation_id="c-1")
+    )
     assert response["speech"] == "Follow-up" and not calls
 
 
 async def test_a_crash_in_the_resolver_goes_on_as_words(
-    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry,
 ) -> None:
     await _light(hass)
 
-    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+    async def answer(
+        _: conversation.ConversationInput,
+    ) -> conversation.ConversationResult:
         return _result(intent.IntentResponseType.ACTION_DONE, "Words")
 
     use_agent(FakeAgent(answer))
-    with patch("custom_components.thalovant.handler.async_execute", side_effect=RuntimeError("x")):
+    with patch(
+        "custom_components.thalovant.handler.async_execute",
+        side_effect=RuntimeError("x"),
+    ):
         response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
     assert response["speech"] == "Words"
+
+
+async def test_speech_that_cannot_be_made_still_answers_and_never_asks_assist(
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry,
+) -> None:
+    await _light(hass)
+    agent = use_agent(FakeAgent(lambda _: None))  # type: ignore[arg-type]
+    calls = async_mock_service(hass, "light", "turn_on")
+    with patch(
+        "custom_components.thalovant.handler.async_action_speech",
+        side_effect=RuntimeError("no strings"),
+    ):
+        response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
+    assert calls and response["speech"] == "Done." and not agent.inputs
+
+
+async def test_an_expired_request_changes_nothing(
+    hass: HomeAssistant, loaded_entry
+) -> None:
+    from custom_components.thalovant.handler import HomeRequestHandler
+
+    await _light(hass)
+    calls = async_mock_service(hass, "light", "turn_on")
+    handler = HomeRequestHandler(hass, loaded_entry, None)  # type: ignore[arg-type]
+    response = await handler._async_converse(
+        "req-x", {"utterance": "dim the desk", "action": ACTION}, 0.0
+    )
+    assert (
+        response["response_type"] == "error"
+        and response["error_code"] == "timeout"
+        and not calls
+    )

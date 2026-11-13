@@ -64,8 +64,6 @@ from .const import (
     CONF_ALLOW_ANNOUNCEMENTS,
     CONF_ALLOW_RECEIVE,
     CONF_ALLOW_URGENT,
-    CONF_STRUCTURED_ACTIONS,
-    CONF_STRUCTURED_SENSITIVE,
     CONF_CREDENTIALS,
     CONF_HOME_CLIENT_ID,
     CONF_HUB_ID,
@@ -75,6 +73,8 @@ from .const import (
     CONF_SELF_HOSTED,
     CONF_SPEAKER_AREAS,
     CONF_SPEAKER_PLAYERS,
+    CONF_STRUCTURED_ACTIONS,
+    CONF_STRUCTURED_SENSITIVE,
     CONF_TOKENS,
     CONF_TTS_ENTITY,
     CONF_VOICE_CLIENT_ID,
@@ -967,28 +967,32 @@ class ThalovantOptionsFlow(OptionsFlow):
                 )
                 # Only what is on is stored: an entry that never used Intercom
                 # is stored exactly as it was before it existed.
-                self._options = {CONF_AGENT_ID: user_input[CONF_AGENT_ID]} | {
-                    # structured actions are on unless turned off: only the off is stored
-                    **(
-                        {CONF_STRUCTURED_ACTIONS: False}
-                        if user_input.get(CONF_STRUCTURED_ACTIONS) is False
-                        else {}
-                    ),
-                    **(
-                        {CONF_ALARM_CODE: user_input[CONF_ALARM_CODE]}
-                        if user_input.get(CONF_ALARM_CODE)
-                        else {}
-                    ),
-                } | {
-                    key: True
-                    for key in (
-                        CONF_ALLOW_ANNOUNCEMENTS,
-                        CONF_ALLOW_URGENT,
-                        CONF_ALLOW_RECEIVE,
-                        CONF_STRUCTURED_SENSITIVE,
-                    )
-                    if user_input.get(key) is True
-                }
+                self._options = (
+                    {CONF_AGENT_ID: user_input[CONF_AGENT_ID]}
+                    | {
+                        # structured actions are on unless turned off: only the off is stored
+                        **(
+                            {CONF_STRUCTURED_ACTIONS: False}
+                            if user_input.get(CONF_STRUCTURED_ACTIONS) is False
+                            else {}
+                        ),
+                        **(
+                            {CONF_ALARM_CODE: user_input[CONF_ALARM_CODE]}
+                            if user_input.get(CONF_ALARM_CODE)
+                            else {}
+                        ),
+                    }
+                    | {
+                        key: True
+                        for key in (
+                            CONF_ALLOW_ANNOUNCEMENTS,
+                            CONF_ALLOW_URGENT,
+                            CONF_ALLOW_RECEIVE,
+                            CONF_STRUCTURED_SENSITIVE,
+                        )
+                        if user_input.get(key) is True
+                    }
+                )
                 if self._options.get(CONF_ALLOW_RECEIVE) is True:
                     return await self.async_step_receive()
                 return self._async_finish()
