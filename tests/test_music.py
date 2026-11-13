@@ -49,8 +49,11 @@ class Fake:
         self.device_ids: dict[str, str] = {}
         self.world_search: dict[str, Any] | None = None
 
-    def effects(self) -> list[dict[str, Any]]:
-        """The calls that change something, as the abstract effects the vectors name."""
+    def effects(self, named_source: bool = True) -> list[dict[str, Any]]:
+        """The calls that change something, as the abstract effects the vectors name.
+
+        ``named_source`` is whether the request named the queue to move: a transfer that did not
+        (the vectors' ``source: null``) is abstract, whatever source this executor resolved for it."""
         names = {v: k for k, v in self.ids.items()}
         out: list[dict[str, Any]] = []
         for _domain, service, data in self.calls:
@@ -85,7 +88,9 @@ class Fake:
                     {
                         "op": "transfer",
                         "player": player,
-                        "source": names.get(data.get("source_player", "")),
+                        "source": names.get(data.get("source_player", ""))
+                        if named_source
+                        else None,
                     }
                 )
         return out
@@ -252,7 +257,36 @@ async def test_the_shared_vectors(hass: HomeAssistant, case: dict[str, Any]) -> 
     assert got["speech_key"] == expect["speech_key"]
     for key, value in expect["placeholders"].items():
         assert got["placeholders"][key] == value
-    assert fake.effects() == expect["effects"]
+    assert fake.effects(named_source="other" in case["action"]) == expect["effects"]
+
+
+async def test_a_transfer_without_a_source_names_the_one_exposed_player_that_is_playing(
+    hass: HomeAssistant,
+) -> None:
+    fake = await _house(hass)
+    action = {"capability": "transfer", "target": {"name": "kitchen"}}
+    result = await async_execute_music(hass, action, device_id=None)
+    assert result is not None and result.speech_key == "music_transferred"
+    # Mark2 is the one exposed player that is playing; the hidden player that also plays is never the source
+    assert fake.calls[-1][2]["source_player"] == fake.ids["Mark2"]
+    assert fake.calls[-1][2]["entity_id"] == fake.ids["Kitchen"]
+
+
+async def test_a_transfer_without_a_source_does_not_guess_between_two_or_none(
+    hass: HomeAssistant,
+) -> None:
+    fake = await _house(hass)
+    action = {"capability": "transfer", "target": {"name": "kitchen"}}
+    hass.states.async_set(fake.ids["Bedroom"], "playing", {"friendly_name": "Bedroom"})
+    assert await async_execute_music(hass, action, device_id=None) is None
+    hass.states.async_set(fake.ids["Bedroom"], "idle", {"friendly_name": "Bedroom"})
+    hass.states.async_set(fake.ids["Mark2"], "idle", {"friendly_name": "Mark2"})
+    # only the hidden player (not exposed to Assist) is playing: it cannot be the source
+    assert await async_execute_music(hass, action, device_id=None) is None
+    # the target itself playing is not a source for itself
+    hass.states.async_set(fake.ids["Kitchen"], "playing", {"friendly_name": "Kitchen"})
+    assert await async_execute_music(hass, action, device_id=None) is None
+    assert fake.effects() == []
 
 
 async def test_a_chromecast_with_the_same_name_is_not_a_music_player(
@@ -473,6 +507,20 @@ async def test_volume_for_the_speaker_s_own_room_goes_to_its_music_player(
     )
     assert result is not None
     assert [c.data["entity_id"] for c in volume] == [fake.ids["Mark2"]]
+
+
+async def test_a_shared_control_never_borrows_another_rooms_playing_player(
+    hass: HomeAssistant,
+) -> None:
+    """The speaker has no Music Assistant player of its own; Mark2 elsewhere is the only one playing. A volume
+    request from this speaker must not change Mark2: it goes on to the generic path, which finds nothing here."""
+    fake = await _house(hass)
+    volume = async_mock_service(hass, "media_player", "volume_set")
+    action = {"v": 1, "capability": "volume", "value": 30, "target": {"here": True}}
+    await async_execute_action(
+        hass, action, device_id=fake.device_ids["somewhere else"]
+    )
+    assert [c.data["entity_id"] for c in volume] == []
 
 
 async def test_the_plain_actions_module_still_ignores_music(

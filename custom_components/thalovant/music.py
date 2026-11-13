@@ -498,7 +498,26 @@ async def _transfer(
         source = music_player(hass, action, device_id, key="other")
         if source is None or source.entity_id == player.entity_id:
             return None
-        data["source_player"] = source.entity_id
+    else:
+        # No source named: Home Assistant would take the first playing queue of the whole Music Assistant
+        # server, exposed to Assist or not, in whatever order it lists them. Name the one exposed player
+        # that is playing, or do not guess.
+        exposed = (
+            resolve(
+                hass,
+                {**action, "target": {"all": True, "domain": "media_player"}},
+                device_id,
+                platform=MA_DOMAIN,
+            )
+            or []
+        )
+        playing = [
+            s for s in exposed if s.state == "playing" and s.entity_id != player.entity_id
+        ]
+        if len(playing) != 1:
+            return None
+        source = playing[0]
+    data["source_player"] = source.entity_id
     await _call(hass, MA_DOMAIN, "transfer_queue", data, ctx)
     return ActionResult(
         "action_done",
@@ -545,7 +564,7 @@ async def async_execute_action(
     if (
         capability in SHARED_CAPABILITIES
         and target.get("here") is True
-        and (player := music_player(hass, action, device_id, allow_active=True))
+        and (player := music_player(hass, action, device_id))
     ):
         # the player already chosen, not its name again: a Chromecast called the same is exposed too
         return await async_execute(

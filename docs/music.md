@@ -21,18 +21,18 @@ device -> hub -> thalovant-skill-music-assistant -> thalovant.home.request {acti
 | `play_media` with `similar` | `music_assistant.get_queue` (the current track), then `play_media` with radio mode |
 | `now_playing` | the player's `media_title` / `media_artist` / state |
 | `shuffle`, `repeat` | `media_player.shuffle_set`, `repeat_set` |
-| `transfer` (`other` = the source) | `music_assistant.transfer_queue` |
+| `transfer` (`other` = the source; without it, the one exposed player that is playing) | `music_assistant.transfer_queue` with that source named |
 | `join` (`other`), `unjoin` | `media_player.join`, `unjoin` |
 | `volume`, `mute`, `playback` (pause/play/next/previous/stop) | the shared media actions (see [Structured actions](../README.md#structured-actions)) |
 
-Players are the **Music Assistant media players that are exposed to Assist** (a Chromecast that shares a name is never reached). The target is found by name or alias, area, the speaking device's own room, a player named like the speaking device (`mark2` on the Mark II), and, for "what's playing", shuffle and repeat only, the one player that is playing. Two candidates, or none: the request goes on as words, as for any structured action.
+Players are the **Music Assistant media players that are exposed to Assist** (a Chromecast that shares a name is never reached). The target is found by name or alias, area, the speaking device's own room, a player named like the speaking device (`mark2` on the Mark II), and, for "what's playing", shuffle and repeat only, the one player that is playing, paused or buffering (volume, mute and playback never use this fallback: with no player of the speaker's own they go to the generic media path). A `transfer` with no source names the one exposed player that is playing (never a player hidden from Assist, whatever Music Assistant lists first). Two candidates, or none: the request goes on as words, as for any structured action.
 
 Answers are spoken from this integration's translations (English and French; other languages hear English): "Playing Adam's Song by blink-182 on mark2." A title that no provider has is an answer ("I couldn't find ... in your music"), not a guess.
 
 ## Known limits (Home Assistant's Music Assistant integration does not expose them)
 
 - No genre play and no "add the current track to favorites": use the direct or bridge transport of the skill.
-- Search is through `music_assistant.search`, which spans your providers; a result that is not in the library is still played if the provider has it. A title by a different artist than the one you named is not played.
+- Search is through `music_assistant.search`, which spans your providers; a result that is not in the library is still played if the provider has it. The artist you name narrows the search and rules out a result whose listed artists do not contain it (or are not contained in it: a substring match, so "Muse" can match "Muse Tribute Band"); a result with no artist information, such as a playlist or a station, is not ruled out.
 - Favorites are limited to 50 tracks per request.
 - Speakers list ("which speakers do I have") is not an action; ask Home Assistant.
 

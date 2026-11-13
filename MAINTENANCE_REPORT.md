@@ -1,6 +1,16 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
 
 # Maintenance report
+
+## 2026-11-13 · music actions, review round 2 (not released)
+
+`custom_components/thalovant/music.py`: `_transfer` names the one exposed playing player as `source_player` (refuses zero or several); the shared media controls no longer use the active-player fallback (`async_execute_action`). `tests/test_music.py`: the transfer and shared-control tests, the vectors' `source: null` stays abstract (`Fake.effects(named_source)`). docs/music.md and docs/music.fr.md qualified. Verification: `pytest tests`: 881 passed, 100 % coverage (HA 2026.10.4 harness). Nothing was released.
+
+### Transparency Report
+
+- AI model: Claude Sonnet 5.5.
+- Actions: fixed the two code findings and the doc findings of CodeRabbit's second review round, wrote the tests.
+- Oversight: owner-directed; the pull request awaits human review.
 
 ## 2026-11-12 · 0.4.0 (not released)
 
