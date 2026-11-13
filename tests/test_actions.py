@@ -221,3 +221,12 @@ async def test_a_failing_service_or_a_missing_one_goes_on_as_words(hass: HomeAss
 async def test_an_unknown_capability_is_ignored(hass: HomeAssistant) -> None:
     await _home(hass)
     assert await async_execute(hass, {"v": 1, "capability": "explode", "target": {"name": "desk"}}, device_id=None) is None
+
+
+async def test_a_name_that_is_no_entitys_is_read_as_an_area_then_a_floor(hass: HomeAssistant) -> None:
+    ids = await _home(hass)
+    area = resolve(hass, action("temperature", name="bedroom", domain="climate", value=1, mode="relative"), ids["speaker"])
+    assert [s.entity_id for s in area] == ["climate.hvac"]
+    floor = resolve(hass, action("power_off", name="upstairs", domain="light"), ids["speaker"])
+    assert {s.entity_id for s in floor} == {"light.desk", "light.bed"}
+    assert resolve(hass, action("power_off", name="nowhere", domain="light"), ids["speaker"]) is None

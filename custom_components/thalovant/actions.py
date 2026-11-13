@@ -197,6 +197,13 @@ def resolve(
         if len(exact) > 1:
             return None  # which one? Assist asks
         found = exact
+        if not found and not (area or floor or here):
+            # "make the living room warmer": the hub cannot tell a room from a device, so a name
+            # that is no entity's is read as an area, then as a floor
+            for scope in (reg.area_matches, reg.floor_matches):
+                found = [s for s in scoped if scope(reg.area_id(s.entity_id), name)]
+                if found:
+                    break
     else:
         if not (area or floor or here or target.get("all")):
             return None
