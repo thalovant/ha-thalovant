@@ -1,6 +1,7 @@
 """A request's structured action is carried out; anything it cannot do goes on as words."""
 
 # ruff: noqa: F811
+from typing import Any
 from unittest.mock import patch
 
 from pytest_homeassistant_custom_component.common import (
@@ -159,3 +160,57 @@ async def test_an_expired_request_changes_nothing(
         and response["error_code"] == "timeout"
         and not calls
     )
+
+
+async def test_the_speech_of_an_action_follows_the_request_language(
+    hass: HomeAssistant,
+) -> None:
+    from custom_components.thalovant.actions import ActionResult
+    from custom_components.thalovant.handler import async_action_speech
+
+    done = ActionResult("action_done", "action_done", {"name": "Desk"})
+    assert await async_action_speech(hass, "fr-FR", done) == "C'est fait."
+    assert await async_action_speech(hass, None, done) == "Done."
+    assert await async_action_speech(hass, "xx", done) == "Done."
+    # a placeholder the sentence needs but the result lacks: the sentence is said as it is
+    assert "{" not in await async_action_speech(
+        hass, "en", ActionResult("query_answer", "action_state", {})
+    )
+
+
+async def test_a_structured_action_that_runs_out_of_time_is_a_timeout_never_assist(
+    hass: HomeAssistant, loaded_entry
+) -> None:
+    import asyncio
+
+    from custom_components.thalovant.handler import HomeRequestHandler
+
+    async def slow(*args: Any, **kwargs: Any) -> None:
+        await asyncio.sleep(5)
+
+    handler = HomeRequestHandler(hass, loaded_entry, None)  # type: ignore[arg-type]
+    with patch("custom_components.thalovant.handler.async_execute", slow):
+        response = await handler._async_converse(
+            "req-t", {"utterance": "dim", "action": ACTION}, 0.05
+        )
+    assert response["error_code"] == "timeout"
+
+
+async def test_a_partly_done_action_is_an_error_answer(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry
+) -> None:
+    from custom_components.thalovant.actions import ActionResult
+
+    await _light(hass)
+    agent = use_agent(FakeAgent(lambda _: None))  # type: ignore[arg-type]
+
+    async def partial(*args: Any, **kwargs: Any) -> ActionResult:
+        return ActionResult("error", "action_partial", {"name": "Desk"}, ["light.desk"])
+
+    with patch("custom_components.thalovant.handler.async_execute", partial):
+        response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
+    assert (
+        response["response_type"] == "error"
+        and response["error_code"] == "failed_to_handle"
+    )
+    assert "part" in response["speech"] and not agent.inputs

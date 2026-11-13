@@ -283,8 +283,6 @@ def resolve(
     else:
         if not (area or floor or here or target.get("all")):
             return None
-        if not domains and not any_domain:
-            return None
         if not target.get("domain") and capability in (
             "power_on",
             "power_off",

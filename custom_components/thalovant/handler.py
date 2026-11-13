@@ -1,6 +1,7 @@
 """Answer the hub's home requests through Home Assistant's conversation API."""
 
 import asyncio
+from collections import defaultdict
 from collections.abc import Mapping
 import re
 import time
@@ -158,10 +159,9 @@ async def async_action_speech(
         hass, language, "common", {DOMAIN}
     )
     text = strings.get(f"component.{DOMAIN}.common.{result.speech_key}") or ""
-    try:
-        return plain_speech(text.format(**result.placeholders))
-    except KeyError, IndexError:
-        return plain_speech(text)
+    # a placeholder the result lacks is said as nothing; a malformed string raises, and the
+    # caller answers "Done." instead
+    return plain_speech(text.format_map(defaultdict(str, result.placeholders)))
 
 
 def error_response(
