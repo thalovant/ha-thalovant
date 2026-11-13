@@ -230,3 +230,11 @@ async def test_a_name_that_is_no_entitys_is_read_as_an_area_then_a_floor(hass: H
     floor = resolve(hass, action("power_off", name="upstairs", domain="light"), ids["speaker"])
     assert {s.entity_id for s in floor} == {"light.desk", "light.bed"}
     assert resolve(hass, action("power_off", name="nowhere", domain="light"), ids["speaker"]) is None
+
+
+async def test_slower_never_switches_the_fan_off(hass: HomeAssistant) -> None:
+    ids = await _home(hass)
+    calls = async_mock_service(hass, "fan", "set_percentage")
+    hass.states.async_set("fan.ceiling", "on", {"friendly_name": "Ceiling Fan", "percentage": 25, "percentage_step": 25})
+    assert await async_execute(hass, action("fan_speed", name="ceiling fan", value=-1, mode="relative"), device_id=ids["speaker"])
+    assert calls[0].data["percentage"] == 25

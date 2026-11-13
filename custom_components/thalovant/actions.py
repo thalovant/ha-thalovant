@@ -290,7 +290,10 @@ def _calls(
         if relative:
             step = _pct(attrs.get("percentage_step"), 25)
             direction = 1 if _pct(value) >= 0 else -1
-            level = _pct(attrs.get("percentage")) + direction * max(step, abs(_pct(value)))
+            current = _pct(attrs.get("percentage"))
+            level = current + direction * max(step, abs(_pct(value)))
+            if direction < 0 and current > 0:
+                level = max(level, step)  # "slower" never switches the fan off
         else:
             level = _pct(value, -1)
             if level < 0:
