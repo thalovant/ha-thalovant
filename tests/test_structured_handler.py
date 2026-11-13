@@ -214,3 +214,26 @@ async def test_a_partly_done_action_is_an_error_answer(
         and response["error_code"] == "failed_to_handle"
     )
     assert "part" in response["speech"] and not agent.inputs
+
+
+async def test_a_timeout_after_some_entities_changed_is_a_partial_answer(
+    hass: HomeAssistant, loaded_entry
+) -> None:
+    import asyncio
+
+    from custom_components.thalovant.handler import HomeRequestHandler
+
+    async def half_done(*args: Any, progress: list[str], **kwargs: Any) -> None:
+        progress.append("light.desk")
+        await asyncio.sleep(5)
+
+    handler = HomeRequestHandler(hass, loaded_entry, None)  # type: ignore[arg-type]
+    with patch("custom_components.thalovant.handler.async_execute", half_done):
+        response = await handler._async_converse(
+            "req-p", {"utterance": "toggle", "action": ACTION}, 0.05
+        )
+    assert (
+        response["response_type"] == "error"
+        and response["error_code"] == "failed_to_handle"
+    )
+    assert "part" in response["speech"]

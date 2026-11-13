@@ -422,7 +422,9 @@ def _fan_speed(r: _Request) -> Call | None:
     if r.relative:
         step = _pct(r.attrs.get("percentage_step"), 25)
         direction = 1 if number >= 0 else -1
-        current = _pct(r.attrs.get("percentage"))
+        current = _num(r.attrs.get("percentage"))
+        if current is None:
+            return None  # an unknown speed cannot be adjusted relatively
         level = current + direction * max(step, abs(number))
         if direction < 0 and current > 0:
             level = max(level, step)  # "slower" never switches the fan off
@@ -471,7 +473,10 @@ def _volume(r: _Request) -> Call | None:
     if r.domain != "media_player" or number is None:
         return None
     if r.relative:
-        level = _pct(r.attrs.get("volume_level")) + number / 100
+        current = _num(r.attrs.get("volume_level"))
+        if current is None:
+            return None  # an unknown volume cannot be moved relatively
+        level = current + number / 100
     else:
         if number < 0:
             return None
@@ -575,8 +580,13 @@ async def async_execute(
     allow_sensitive: bool = False,
     alarm_code: str | None = None,
     context: Context | None = None,
+    progress: list[str] | None = None,
 ) -> ActionResult | None:
-    """Carry the action out, or return None so the words go on to Assist."""
+    """Carry the action out, or return None so the words go on to Assist.
+
+    ``progress`` collects the entity ids already changed, so a caller that cancels this (a
+    deadline) knows whether part of the action was done.
+    """
     capability = action.get("capability")
     if capability not in CAPABILITY_DOMAINS:
         return None
@@ -600,7 +610,7 @@ async def async_execute(
             return None  # one entity it cannot do: do none of it, let Assist answer
         calls.append((state, call))
     ctx = context or Context()
-    done: list[str] = []
+    done: list[str] = progress if progress is not None else []
     for state, (domain, service, data) in calls:
         try:
             await hass.services.async_call(

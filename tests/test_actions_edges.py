@@ -115,6 +115,16 @@ CASES: list[tuple[str, State, Any, str | None, str | None, Any]] = [
         None,
         ("fan", "set_percentage", {"percentage": 25}),
     ),
+    ("fan_speed", _state("fan.f"), 1, "relative", None, None),
+    ("volume", _state("media_player.m", "off"), 10, "relative", None, None),
+    (
+        "volume",
+        _state("media_player.m", volume_level=0.4),
+        10,
+        "relative",
+        None,
+        ("media_player", "volume_set", {"volume_level": 0.5}),
+    ),
     ("temperature", _state("light.l"), 20, None, None, None),
     ("temperature", _state("climate.c"), "hot", None, None, None),
     (

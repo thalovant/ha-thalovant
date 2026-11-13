@@ -376,6 +376,7 @@ class HomeRequestHandler:
             return None
         if budget <= 0:
             return error_response(request_id, ERROR_TIMEOUT, conversation_id)
+        changed: list[str] = []
         try:
             async with asyncio.timeout(budget):
                 result = await async_execute(
@@ -384,11 +385,16 @@ class HomeRequestHandler:
                     device_id=self._async_device_id(data.get("device")),
                     allow_sensitive=options.get(CONF_STRUCTURED_SENSITIVE) is True,
                     alarm_code=options.get(CONF_ALARM_CODE) or None,
+                    progress=changed,
                 )
         except TimeoutError:
             # some of it may have run: never hand the sentence to Assist on top of that
             LOGGER.debug("Request %s: structured action ran out of time", request_id)
-            return error_response(request_id, ERROR_TIMEOUT, conversation_id)
+            if changed:
+                # the first calls finished: say it is partial, so nobody retries a toggle
+                result = ActionResult("error", "action_partial", {}, list(changed))
+            else:
+                return error_response(request_id, ERROR_TIMEOUT, conversation_id)
         except Exception as err:  # noqa: BLE001 - the words still go to Assist
             LOGGER.warning(
                 "Request %s: structured action failed with %s",
