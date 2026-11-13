@@ -6,9 +6,9 @@ Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the m
 
 Intercom is safety-adjacent (a text is spoken aloud in a home, an urgent one can
 repeat), so the integration keeps it off by default, in three separate switches
-([`ThalovantOptionsFlow.async_step_init()`](custom_components/thalovant/config_flow.py#L942)),
+([`ThalovantOptionsFlow.async_step_init()`](custom_components/thalovant/config_flow.py#L945)),
 and stores nothing about it until it is on
-([`test_options_without_intercom_are_stored_as_before`](tests/test_intercom_options.py#L96),
+([`test_options_without_intercom_are_stored_as_before`](tests/test_intercom_options.py#L100),
 [`test_nothing_on_changes_nothing`](tests/test_intercom_setup.py#L47): no request, no
 platform, no Repairs notice for an entry that never turned it on).
 
@@ -83,14 +83,14 @@ podman) reported 0 invalid integrations. Counts are in
   [`test_urgent_needs_its_option_and_its_scope`](tests/test_intercom.py#L494).
 - **Re-consent asks only for the extra scopes, stores nothing until granted, and
   keeps the option off if refused or not granted**
-  ([`async_step_intercom_consent()`](custom_components/thalovant/config_flow.py#L220),
-  [`_async_finish_consent()`](custom_components/thalovant/config_flow.py#L462)):
-  [`test_turning_announcements_on_asks_for_the_permission`](tests/test_intercom_options.py#L223),
-  [`test_refused_consent_leaves_everything_off`](tests/test_intercom_options.py#L305),
-  [`test_a_plan_without_intercom_is_not_granted_the_scope`](tests/test_intercom_options.py#L332),
-  [`test_consent_with_another_account`](tests/test_intercom_options.py#L352) (the new
+  ([`async_step_intercom_consent()`](custom_components/thalovant/config_flow.py#L223),
+  [`_async_finish_consent()`](custom_components/thalovant/config_flow.py#L465)):
+  [`test_turning_announcements_on_asks_for_the_permission`](tests/test_intercom_options.py#L227),
+  [`test_refused_consent_leaves_everything_off`](tests/test_intercom_options.py#L309),
+  [`test_a_plan_without_intercom_is_not_granted_the_scope`](tests/test_intercom_options.py#L336),
+  [`test_consent_with_another_account`](tests/test_intercom_options.py#L356) (the new
   token is revoked). With nothing on, a sign-in asks for exactly the 0.3.0 scopes
-  ([`test_sign_ins_with_nothing_on_ask_for_what_they_always_did`](tests/test_intercom_options.py#L507)).
+  ([`test_sign_ins_with_nothing_on_ask_for_what_they_always_did`](tests/test_intercom_options.py#L511)).
 - **Receiving admits one message shape and bounds it**
   ([`parse_announcement()`](custom_components/thalovant/speaker.py#L82),
   [`IntercomSpeakerHandler._admit()`](custom_components/thalovant/speaker.py#L184)):
@@ -154,8 +154,8 @@ podman) reported 0 invalid integrations. Counts are in
 5. **The re-consent replaces the account's token for every entry.** Signing in again
    revokes the previous token, so the new one carries the base scopes plus every
    Intercom scope an entry's options need
-   ([`_wanted_scopes()`](custom_components/thalovant/config_flow.py#L871),
-   [`test_new_sign_ins_ask_for_what_stays_on`](tests/test_intercom_options.py#L476)).
+   ([`_wanted_scopes()`](custom_components/thalovant/config_flow.py#L874),
+   [`test_new_sign_ins_ask_for_what_stays_on`](tests/test_intercom_options.py#L480)).
    With two Thalovant accounts, linking one asks for the other's Intercom scopes too,
    which its plan may not grant. Known, not handled.
 6. **Receiving trusts the hub link.** Like the existing request handler for account
@@ -201,7 +201,7 @@ podman) reported 0 invalid integrations. Counts are in
 ## Link account (0.3.0)
 
 Link account
-([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L772),
+([`ThalovantConfigFlow._async_start_link_account()`](custom_components/thalovant/config_flow.py#L775),
 [`ThalovantOAuth2Implementation`](custom_components/thalovant/oauth.py)) uses Home Assistant's own OAuth 2
 machinery. The `state` is a JWT signed with this installation's secret, and
 Home Assistant's `OAuth2AuthorizeCallbackView` refuses any other with a 400
@@ -231,7 +231,7 @@ that approved it; from another network it answers 400 with detail
 them nothing. The copy says to approve from a phone or computer on Home
 Assistant's network, and to approve only requests you started.
 Only that code maps to `link_wrong_network`
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L232),
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L274),
 [`test_link_account_invalid_grant`](tests/test_link_account.py#L259),
 [`test_reauth_link_failure_returns_to_confirm`](tests/test_link_account.py#L484)). Any
 other `invalid_grant`, including one with no code from an API before #502, is
@@ -247,16 +247,16 @@ No error message carries the code or the verifier
 ([`test_exchange_errors`](tests/test_oauth.py#L253)). A refused code logs the HTTP
 status and the problem's detail and code only. `async_step_creation()`
 drops the code before the exchange
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L215)). It also replaces Home Assistant's own
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L256)). It also replaces Home Assistant's own
 creation step, which would log a token without `expires_in` in full and store
 it as an OAuth entry. The token is held like a device login's: `_tokens` and
-`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L254)), revoked when unused
+`_minted` ([`config_flow.py`](custom_components/thalovant/config_flow.py#L295)), revoked when unused
 ([`test_link_account_no_hubs_revokes_the_token`](tests/test_link_account.py#L401)).
 
 Fixed in review (CodeRabbit on #26): closing the dialog while the exchange
 was in flight let the token arrive after `async_remove` had run, so nothing
 revoked it. `async_step_creation()` now revokes such a token and aborts
-([`config_flow.py`](custom_components/thalovant/config_flow.py#L247),
+([`config_flow.py`](custom_components/thalovant/config_flow.py#L289),
 [`test_closed_while_thalovant_answers`](tests/test_link_account.py#L544)). The same window
 exists, from before 0.3.0, for a connection whose creation is in flight when
 the dialog closes; it is left as it was.
