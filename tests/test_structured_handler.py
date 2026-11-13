@@ -1,0 +1,97 @@
+"""A request's structured action is carried out; anything it cannot do goes on as words."""
+
+from typing import Any
+from unittest.mock import patch
+
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+
+from custom_components.thalovant.actions import ActionResult
+from custom_components.thalovant.const import CONF_STRUCTURED_ACTIONS
+from homeassistant.components import conversation
+from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import intent
+from homeassistant.setup import async_setup_component
+
+from .conftest import FakeHubConnection
+from .test_handler import FakeAgent, _ask, _request, _result, loaded_entry, use_agent  # noqa: F401
+
+ACTION = {"v": 1, "capability": "brightness", "target": {"name": "desk"}, "value": 30}
+
+
+async def _light(hass: HomeAssistant) -> None:
+    assert await async_setup_component(hass, "homeassistant", {})
+    hass.states.async_set("light.desk", "on", {"friendly_name": "Desk"})
+    async_expose_entity(hass, "conversation", "light.desk", True)
+
+
+async def test_a_structured_action_is_done_without_asking_assist(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+) -> None:
+    await _light(hass)
+    agent = use_agent(FakeAgent(lambda _: None))  # type: ignore[arg-type]
+    calls = async_mock_service(hass, "light", "turn_on")
+    response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
+    assert calls[0].data["brightness_pct"] == 30
+    assert response["response_type"] == "action_done" and response["speech"] == "Done."
+    assert not agent.inputs
+
+
+async def test_an_action_that_cannot_be_resolved_goes_on_as_words(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+) -> None:
+    await _light(hass)
+
+    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Turned it down")
+
+    agent = use_agent(FakeAgent(answer))
+    unknown = {**ACTION, "target": {"name": "no such lamp"}}
+    response = await _ask(hass, mock_hub_connection, _request(action=unknown))
+    assert response["speech"] == "Turned it down" and len(agent.inputs) == 1
+
+
+async def test_structured_actions_can_be_turned_off(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry: MockConfigEntry  # noqa: F811
+) -> None:
+    await _light(hass)
+
+    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "As words")
+
+    use_agent(FakeAgent(answer))
+    hass.config_entries.async_update_entry(
+        loaded_entry, options={**loaded_entry.options, CONF_STRUCTURED_ACTIONS: False}
+    )
+    calls = async_mock_service(hass, "light", "turn_on")
+    response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
+    assert response["speech"] == "As words" and not calls
+
+
+async def test_a_follow_up_to_assist_is_never_structured(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+) -> None:
+    await _light(hass)
+
+    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Follow-up")
+
+    use_agent(FakeAgent(answer))
+    calls = async_mock_service(hass, "light", "turn_on")
+    response = await _ask(hass, mock_hub_connection, _request(action=ACTION, conversation_id="c-1"))
+    assert response["speech"] == "Follow-up" and not calls
+
+
+async def test_a_crash_in_the_resolver_goes_on_as_words(
+    hass: HomeAssistant, mock_hub_connection: FakeHubConnection, use_agent, loaded_entry  # noqa: F811
+) -> None:
+    await _light(hass)
+
+    async def answer(_: conversation.ConversationInput) -> conversation.ConversationResult:
+        return _result(intent.IntentResponseType.ACTION_DONE, "Words")
+
+    use_agent(FakeAgent(answer))
+    with patch("custom_components.thalovant.handler.async_execute", side_effect=RuntimeError("x")):
+        response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
+    assert response["speech"] == "Words"

@@ -89,8 +89,12 @@ async def test_the_form(
         CONF_ALLOW_ANNOUNCEMENTS,
         CONF_ALLOW_URGENT,
         CONF_ALLOW_RECEIVE,
+        "structured_actions",
+        "structured_sensitive",
+        "alarm_code",
     ]
-    assert [key.default() for key in keys[1:]] == [False, False, False]
+    # Intercom switches off; structured actions on, their sensitive half off.
+    assert [key.default() for key in keys[1:6]] == [False, False, False, True, False]
 
 
 async def test_options_without_intercom_are_stored_as_before(
