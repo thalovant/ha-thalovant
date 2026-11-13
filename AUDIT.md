@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom audit against the released thalovant 0.12.0 and the platform's final API: what the code guarantees, how it is tested, and the known limits; Intercom ships off on the platform.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: independent security review of the structured-action path (alarm code in diagnostics, mass actions, sensitive spread) with the findings still open.
 
 # Audit
 
@@ -302,3 +302,27 @@ The Home Assistant 2026.11.0 smoke used actual SDK receive and reply framing,
 the device registry and built-in Assist with an in-memory transport.
 Live hub admission, the physical mirror and restoration are separate acceptance
 checks for the deployment.
+
+
+## Security review of structured actions (2026-11-13)
+
+Evidence: `pytest` 833 passed, `ruff`, `ruff format --check` and `mypy` clean on Home Assistant
+2026.10.4; each fix below has a test that fails without it.
+
+| Severity | Finding | Where | State |
+| --- | --- | --- | --- |
+| High | The alarm code was in diagnostics: `entry.options` is dumped and `alarm_code` was not in `TO_REDACT`, so a diagnostics file pasted into a public issue carried the code that disarms the panel. | [`diagnostics.py`](custom_components/thalovant/diagnostics.py) `TO_REDACT`; [`test_diagnostics_never_hold_the_alarm_code`](tests/test_diagnostics.py) | Fixed |
+| Medium | "Unlock the kitchen", `{"all": true, "domain": "lock"}` or a floor name resolved to every lock in it once sensitive actions were on; `activate` with `all` ran every exposed script, `power_off` with `all` switched off every exposed automation (up to `MAX_TARGETS` = 50). A hub, router or future skill bug could ask for it. | [`actions.py`](custom_components/thalovant/actions.py) `_one_at_a_time`, `async_execute`; [`test_a_sensitive_action_never_spreads_over_a_room_a_floor_or_all`](tests/test_actions.py) | Fixed |
+| Medium | A window cover opened without the sensitive switch (only garage, gate and door classes were gated). | `SENSITIVE_COVER_CLASSES`; [`test_opening_a_window_cover_is_sensitive`](tests/test_actions.py) | Fixed |
+| Low | No replay or age check on a request: `HomeRequestHandler.async_answer` answers any `thalovant.home.request` it is handed. The Noise session already refuses replay, tampering and reordering on the wire, so only the hub itself could replay one. A `request_id` cache of the last 256 ids would close it. | [`handler.py`](custom_components/thalovant/handler.py) `async_answer` | Open, see SUGGESTIONS |
+| Low | Only the self-hosted path checks that a request came from `thalovant.home.router` and that the session is `home-<request_id>`; the normal path trusts the link. | [`self_hosted.py`](custom_components/thalovant/self_hosted.py) `permits_lighting_request` | Open |
+| Low | The normal link runs on Home Assistant's shared aiohttp session, which follows redirects on the SDK's `ws_connect` (measured with aiohttp 3.14.5: a 307 from the upgrade URL is followed). TLS is verified (`ssl=True`, certifi/system store) and the Noise key pin makes a redirected hub fail with `ThalovantHubKeyChangedError`, so no credential is given away, but the self-hosted path rejects redirects explicitly and this one does not. | [`__init__.py`](custom_components/thalovant/__init__.py) `async_setup_entry` (`async_get_clientsession`), `thalovant._hive._WSSCarrier.open` | Open |
+| Low | The alarm code is stored in clear in the config entry options (Home Assistant's own `.storage/core.config_entries`, as every integration's secrets are) and travels in the `alarm_control_panel` service data, which Home Assistant fires on its event bus to administrators. | `ThalovantOptionsFlow`, `_arm` and `_disarm` in `actions.py` | Accepted, documented |
+| Low | A voice-only disarm: anyone the speaker hears can ask for what the skill builds. The 0.5.0 skill never builds `disarm`, `unlock` or `arm`; the router would carry one. | `ACTION_CAPABILITIES` in hivemind-home-router | Owner decision before any skill builds it |
+
+Checked and found sound: services are called only from the closed `BUILDERS` set with data built
+from validated fields (no entity id, service or domain comes from the hub); only entities exposed
+to Assist are resolved (`async_should_expose`); two entities or two areas with one name resolve to
+nothing; a failure after part of an action is reported as partial and never retried as words
+(`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`); the logs carry request ids and
+exception type names only; the announcement receiver is off by default, closed and rate limited.

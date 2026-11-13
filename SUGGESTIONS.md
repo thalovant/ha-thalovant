@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: the SDK is released and the platform ships Intercom off; what remains (release timing, a public client update, confirming receiving on a real hub) and follow-ups.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: security review follow-ups (replay cache, redirect refusal, source check).
 
 # Suggestions
 
@@ -76,3 +76,17 @@ A public SDK property for the original context would give authorization
 consumers a stable way to read the sender before local event normalization.
 Keep the serialized targeted request and reply regression when upgrading SDKs.
 [Transport regressions](tests/test_self_hosted_transport.py).
+
+
+## Close the Low findings of the 2026-11-13 security review
+
+**Problem.** The normal link trusts the hub's `thalovant.home.request` completely: no source check, no
+replay cache, and Home Assistant's shared session follows a redirect on the websocket upgrade
+([AUDIT.md](AUDIT.md)). Each is stopped elsewhere (Noise session, key pin) but the integration should not rely on
+that for the one path that can change a house.
+
+**Proposal.** (1) Remember the last 256 `request_id`s and drop a repeat; (2) apply the self-hosted source and
+session checks (`context.source == "thalovant.home.router"`, session `home-<request_id>`) to every link; (3) build the
+link's session with a trace config that rejects redirects, as `self_hosted.async_create_session` does.
+
+**Impact.** About 60 lines and three tests. No behaviour change for a healthy hub.

@@ -146,3 +146,26 @@ async def test_diagnostics_hold_counts_of_announcements_never_text(
     }
     assert diagnostics["intercom"]["last_sent_at"] is not None
     assert diagnostics["intercom"]["last_received_at"] is not None
+
+
+async def test_diagnostics_never_hold_the_alarm_code(
+    hass: HomeAssistant,
+    hass_client: ClientSessionGenerator,
+    mock_config_entry: MockConfigEntry,
+    mock_hub_connection: FakeHubConnection,
+) -> None:
+    """The alarm code disarms a panel; a diagnostics file is pasted into public issues."""
+    assert await async_setup_component(hass, "diagnostics", {})
+    mock_config_entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        mock_config_entry,
+        options={**mock_config_entry.options, "alarm_code": "482913"},
+    )
+    assert await hass.config_entries.async_setup(mock_config_entry.entry_id)
+    await hass.async_block_till_done()
+
+    diagnostics = await get_diagnostics_for_config_entry(
+        hass, hass_client, mock_config_entry
+    )
+    assert "482913" not in json.dumps(diagnostics)
+    assert diagnostics["entry"]["options"]["alarm_code"] == "**REDACTED**"

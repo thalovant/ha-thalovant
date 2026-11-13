@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import (
     CONF_ACCOUNT_ID,
+    CONF_ALARM_CODE,
     CONF_ALLOW_ANNOUNCEMENTS,
     CONF_ALLOW_RECEIVE,
     CONF_ALLOW_URGENT,
@@ -22,12 +23,13 @@ from .const import (
 )
 from .models import ThalovantConfigEntry
 
-# The tokens and the connection's credentials are dropped whole; the account,
+# The tokens, the connection's credentials and the alarm code are dropped whole; the account,
 # the hub name and the title can be personal, and so can the players and areas
 # announcements are played on. No utterance, reply or announcement text is ever
 # kept: Intercom's counters hold outcomes only.
 TO_REDACT = {
     CONF_ACCOUNT_ID,
+    CONF_ALARM_CODE,
     CONF_CREDENTIALS,
     CONF_HOME_CLIENT_ID,
     CONF_HUB_NAME,

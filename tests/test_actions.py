@@ -554,3 +554,96 @@ async def test_a_failure_after_part_of_it_is_done_is_reported_not_retried(
         "action_partial",
     )
     assert len(result.changed) == 1
+
+
+async def test_a_sensitive_action_never_spreads_over_a_room_a_floor_or_all(
+    hass: HomeAssistant,
+) -> None:
+    """Even with sensitive actions on, "unlock the kitchen" is not "unlock every lock in it"."""
+    ids = await _home(hass)
+    ents = er.async_get(hass)
+    entry = MockConfigEntry(domain="test")
+    entry.add_to_hass(hass)
+    reg = ents.async_get_or_create(
+        "lock", "test", "back", suggested_object_id="back", config_entry=entry
+    )
+    ents.async_update_entity(
+        reg.entity_id, area_id=ar.async_get(hass).async_get_area_by_name("Kitchen").id
+    )
+    hass.states.async_set("lock.back", "locked", {"friendly_name": "Back Door"})
+    async_expose_entity(hass, "conversation", "lock.back", True)
+    unlock = async_mock_service(hass, "lock", "unlock")
+    for target in (
+        {"area": "kitchen"},
+        {"all": True, "domain": "lock"},
+        {"name": "kitchen"},
+    ):
+        assert (
+            await async_execute(
+                hass,
+                action("unlock", **target),
+                device_id=ids["speaker"],
+                allow_sensitive=True,
+            )
+            is None
+        ), target
+    assert not unlock
+    # named exactly, it is still done
+    assert await async_execute(
+        hass,
+        action("unlock", name="front door"),
+        device_id=ids["speaker"],
+        allow_sensitive=True,
+    )
+    assert [c.data["entity_id"] for c in unlock] == ["lock.front"]
+
+
+async def test_scripts_and_automations_are_run_or_switched_one_at_a_time(
+    hass: HomeAssistant,
+) -> None:
+    ids = await _home(hass)
+    for eid, name in (
+        ("script.a", "A"),
+        ("script.b", "B"),
+        ("automation.x", "X"),
+        ("automation.y", "Y"),
+    ):
+        hass.states.async_set(eid, "off", {"friendly_name": name})
+        async_expose_entity(hass, "conversation", eid, True)
+    run = async_mock_service(hass, "script", "turn_on")
+    off = async_mock_service(hass, "automation", "turn_off")
+    assert (
+        await async_execute(
+            hass,
+            action("activate", all=True, domain="script"),
+            device_id=ids["speaker"],
+        )
+        is None
+    )
+    assert (
+        await async_execute(
+            hass,
+            action("power_off", all=True, domain="automation"),
+            device_id=ids["speaker"],
+        )
+        is None
+    )
+    assert not run and not off
+
+
+async def test_opening_a_window_cover_is_sensitive(hass: HomeAssistant) -> None:
+    ids = await _home(hass)
+    hass.states.async_set(
+        "cover.window",
+        "closed",
+        {"friendly_name": "Bedroom Window", "device_class": "window"},
+    )
+    async_expose_entity(hass, "conversation", "cover.window", True)
+    opened = async_mock_service(hass, "cover", "open_cover")
+    assert (
+        await async_execute(
+            hass, action("power_on", name="bedroom window"), device_id=ids["speaker"]
+        )
+        is None
+    )
+    assert not opened

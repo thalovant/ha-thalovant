@@ -125,7 +125,12 @@ ARM_MODES = {
     "home": "alarm_arm_home",
     "night": "alarm_arm_night",
 }
-SENSITIVE_COVER_CLASSES = frozenset({"garage", "gate", "door"})
+#: Covers whose opening lets someone in (a window is as much a way in as a door).
+SENSITIVE_COVER_CLASSES = frozenset({"garage", "gate", "door", "window"})
+#: Domains that run something rather than change a state: never more than one at a time.
+RUNNABLE_DOMAINS = frozenset(
+    {"scene", "script", "automation", "button", "input_button"}
+)
 
 
 @dataclass
@@ -311,6 +316,16 @@ def _is_sensitive(capability: str, state: State) -> bool:
     ):
         return capability in ("power_on", "position", "toggle")
     return False
+
+
+def _one_at_a_time(capability: str, state: State) -> bool:
+    """Whether this entity is only ever acted on alone, never as part of a room, a floor or "all".
+
+    "unlock the kitchen" must not unlock every lock in it, and "turn off all the automations" must
+    not disable the household's automations: a sensitive action or a runnable one is named exactly.
+    """
+    domain = state.entity_id.split(".", 1)[0]
+    return _is_sensitive(capability, state) or domain in RUNNABLE_DOMAINS
 
 
 def _num(value: Any) -> float | None:
@@ -609,6 +624,13 @@ async def async_execute(
         if call is None or not hass.services.has_service(call[0], call[1]):
             return None  # one entity it cannot do: do none of it, let Assist answer
         calls.append((state, call))
+    if len(states) > 1 and any(_one_at_a_time(capability, s) for s in states):
+        LOGGER.debug(
+            "Structured %s on %d entities left to Assist: it needs exactly one",
+            capability,
+            len(states),
+        )
+        return None
     ctx = context or Context()
     done: list[str] = progress if progress is not None else []
     for state, (domain, service, data) in calls:
