@@ -214,6 +214,8 @@ def resolve(
     """
     capability = action.get("capability")
     target = action.get("target") or {}
+    if not isinstance(capability, str):
+        return None
     domains = CAPABILITY_DOMAINS.get(capability)
     if domains is None:
         return None
