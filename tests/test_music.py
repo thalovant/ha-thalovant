@@ -47,6 +47,7 @@ class Fake:
         self.ids: dict[str, str] = {}
         self.entry_id = ""
         self.device_ids: dict[str, str] = {}
+        self.world_search: dict[str, Any] | None = None
 
     def effects(self) -> list[dict[str, Any]]:
         """The calls that change something, as the abstract effects the vectors name."""
@@ -178,10 +179,24 @@ async def _house(hass: HomeAssistant, with_services: bool = True) -> Fake:
         fake.calls.append((MA_DOMAIN, "search", dict(call.data)))
         if "search" in fake.fail:
             raise HomeAssistantError("boom")
-        return {
+        found = {
             k: WORLD["search"].get(k, [])
             for k in ("artists", "albums", "tracks", "playlists", "radio")
         }
+        if fake.world_search is not None:
+            found = fake.world_search
+        if call.data.get("artist"):
+            # a provider that narrows by artist
+            want = call.data["artist"].casefold()
+            found = {
+                k: [
+                    i
+                    for i in v
+                    if any(want in a["name"].casefold() for a in i.get("artists", []))
+                ]
+                for k, v in found.items()
+            }
+        return found
 
     async def library(call: ServiceCall) -> Any:
         fake.calls.append((MA_DOMAIN, "get_library", dict(call.data)))
@@ -519,3 +534,80 @@ async def test_without_a_device_or_a_room_nothing_is_guessed(
     found = music_player(hass, action, None, allow_active=True)
     assert found is not None and found.name == "Mark2"
     assert music_player(hass, action, None) is None
+
+
+async def test_the_artist_narrows_the_search_and_another_artists_song_is_not_it(
+    hass: HomeAssistant,
+) -> None:
+    fake = await _house(hass)
+    action = {
+        "capability": "play_media",
+        "target": {"name": "kitchen"},
+        "media": {"query": "adam's song", "artist": "blink-182"},
+    }
+    result = await async_execute_music(hass, action, device_id=None)
+    assert result is not None and result.speech_key == "music_playing_by"
+    searches = [d for _c, s, d in fake.calls if s == "search"]
+    assert len(searches) == 1 and searches[0]["artist"] == "blink-182"
+    # only another artist has the title: it is not what was asked for
+    fake.calls.clear()
+    fake.world_search = {
+        "tracks": [
+            {
+                "uri": "library://track/7",
+                "name": "Adam's Song",
+                "artists": [{"name": "Other"}],
+            }
+        ]
+    }
+    action["media"]["artist"] = "someone else"
+    result = await async_execute_music(hass, action, device_id=None)
+    assert result is not None and result.speech_key == "music_not_found"
+    assert [s for _c, s, _d in fake.calls].count(
+        "search"
+    ) == 2  # with the artist, then the title alone
+    assert fake.effects() == []
+
+
+async def test_a_provider_that_ignores_the_artist_is_searched_by_title_too(
+    hass: HomeAssistant,
+) -> None:
+    fake = await _house(hass)
+
+    async def deaf(call: ServiceCall) -> Any:
+        fake.calls.append((MA_DOMAIN, "search", dict(call.data)))
+        if call.data.get("artist"):
+            return {
+                "tracks": [],
+                "artists": [],
+                "albums": [],
+                "playlists": [],
+                "radio": [],
+            }
+        return WORLD["search"]
+
+    hass.services.async_register(
+        MA_DOMAIN, "search", deaf, supports_response=SupportsResponse.ONLY
+    )
+    action = {
+        "capability": "play_media",
+        "target": {"name": "kitchen"},
+        "media": {"query": "adam's song", "artist": "blink-182"},
+    }
+    result = await async_execute_music(hass, action, device_id=None)
+    assert result is not None and result.speech_key == "music_playing_by"
+    assert [s for _c, s, _d in fake.calls].count("search") == 2
+
+
+async def test_a_shared_control_keeps_the_music_player_it_chose(
+    hass: HomeAssistant,
+) -> None:
+    fake = await _house(hass)
+    volume = async_mock_service(hass, "media_player", "volume_set")
+    # the kitchen speaker is in the Kitchen, where a Music Assistant player and a Chromecast are both "Kitchen"
+    action = {"v": 1, "capability": "volume", "value": 30, "target": {"here": True}}
+    result = await async_execute_action(
+        hass, action, device_id=fake.device_ids["kitchen speaker"]
+    )
+    assert result is not None
+    assert [c.data["entity_id"] for c in volume] == [fake.ids["Kitchen"]]

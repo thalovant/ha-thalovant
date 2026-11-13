@@ -145,9 +145,11 @@ def best_match(
             score = _score(query, str(item.get("name") or ""))
             if score < MIN_MATCH:
                 continue
-            if artist and artist in {
-                fold(a.get("name")) for a in item.get("artists") or [] if a
-            }:
+            if artist and (
+                names := {fold(a.get("name")) for a in item.get("artists") or [] if a}
+            ):
+                if not any(artist in n or n in artist for n in names):
+                    continue  # "by blink-182": another artist's song of the same name is not it
                 score += 0.2
             if best is None or (score, -rank) > (best[0], -best[1]):
                 best = (score, rank, {**item, "_kind": kind})
@@ -334,20 +336,28 @@ async def _play_media(
             "action_done", "music_similar", placeholders, [player.entity_id]
         )
     kinds = [media["type"]] if media.get("type") in RESULT_KEYS else list(RESULT_KEYS)
-    results = await _call(
-        hass,
-        MA_DOMAIN,
-        "search",
-        {
-            "config_entry_id": entry_id,
-            "name": media["query"],
-            "media_type": kinds,
-            "limit": 8,
-        },
-        ctx,
-        response=True,
-    )
-    hit = best_match(results or {}, media)
+    search: dict[str, Any] = {
+        "config_entry_id": entry_id,
+        "name": media["query"],
+        "media_type": kinds,
+        "limit": 8,
+    }
+    hit = None
+    if media.get("artist"):
+        # The artist narrows what the provider returns (a title many artists share would otherwise fill
+        # the first results); if that finds nothing, the title alone is searched.
+        results = await _call(
+            hass,
+            MA_DOMAIN,
+            "search",
+            {**search, "artist": media["artist"]},
+            ctx,
+            response=True,
+        )
+        hit = best_match(results or {}, media)
+    if hit is None:
+        results = await _call(hass, MA_DOMAIN, "search", search, ctx, response=True)
+        hit = best_match(results or {}, media)
     if hit is None:
         return ActionResult("error", "music_not_found", placeholders)
     enqueue = media.get("enqueue") or "replace"
@@ -537,10 +547,17 @@ async def async_execute_action(
         and target.get("here") is True
         and (player := music_player(hass, action, device_id, allow_active=True))
     ):
-        action = {
-            **action,
-            "target": {"name": _name(player), "domain": "media_player"},
-        }
+        # the player already chosen, not its name again: a Chromecast called the same is exposed too
+        return await async_execute(
+            hass,
+            action,
+            device_id=device_id,
+            allow_sensitive=allow_sensitive,
+            alarm_code=alarm_code,
+            context=context,
+            progress=progress,
+            states=[player],
+        )
     return await async_execute(
         hass,
         action,

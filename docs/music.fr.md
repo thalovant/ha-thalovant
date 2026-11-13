@@ -1,25 +1,30 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions: Music Assistant players played and steered through the Home Assistant link.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Actions musique : lecteurs Music Assistant joués et pilotés par le lien Home Assistant.
 
 # Musique via Home Assistant
 
-Si votre foyer utilise Music Assistant derriere Home Assistant (integration *Music Assistant*), vos appareils Thalovant peuvent le piloter **par le lien Home Assistant deja en place** : pas de seconde connexion, pas de port ouvert, aucun jeton Music Assistant sur le hub.
+Si votre foyer utilise Music Assistant derrière Home Assistant (intégration *Music Assistant*), vos appareils Thalovant peuvent le piloter **par le lien Home Assistant déjà en place** : pas de seconde connexion, pas de port ouvert, aucun jeton Music Assistant sur le hub.
 
 ```
 appareil -> hub -> thalovant-skill-music-assistant -> thalovant.home.request {action}
-         -> hivemind-home-router (votre foyer seulement) -> cette integration (custom_components/thalovant/music.py)
+         -> hivemind-home-router (votre foyer seulement) -> cette intégration (custom_components/thalovant/music.py)
          -> Home Assistant : music_assistant.search / play_media, media_player.* -> Music Assistant
 ```
 
 ## Ce qu'elle fait
 
-Les actions musique sont `capability` + `target` (+ `media`, `value`, `other`) : `play_media` (requete, type piste/album/artiste/liste/radio, artiste, `enqueue` play/replace/next/add) via `music_assistant.search` puis `play_media` (meilleure correspondance de nom dans votre bibliotheque, jamais une URL brute) ; `play_media` avec `favorites` (favoris en aleatoire) ou `similar` (mode radio sur la piste en cours) ; `now_playing` ; `shuffle`, `repeat` ; `transfer` (`other` = la source) ; `join`/`unjoin` ; et le volume, la sourdine et la lecture (pause, reprise, suivant, precedent, arret) par les actions media communes.
+Les actions musique sont `capability` + `target` (+ `media`, `value`, `other`) :
 
-Les lecteurs sont les **lecteurs Music Assistant exposes a Assist** (une enceinte Chromecast du meme nom n'est jamais touchee). La cible se trouve par nom ou alias, zone, la piece de l'appareil qui parle, un lecteur portant le nom de l'appareil (`mark2` sur le Mark II) et, pour « que joue-t-on », aleatoire et repetition seulement, l'unique lecteur en lecture. Deux candidats ou aucun : la demande continue en phrase, comme pour toute action structuree.
+- `play_media` (requête, type piste/album/artiste/liste/radio, artiste, `enqueue` play/replace/next/add) : `music_assistant.search` (la meilleure correspondance de nom dans votre bibliothèque et chez vos fournisseurs, affinée par l'artiste quand vous en nommez un, jamais une URL brute), puis `music_assistant.play_media`.
+- `play_media` avec `favorites` : jusqu'à 50 titres favoris (`music_assistant.get_library`), lus en aléatoire (`media_player.shuffle_set`, une fois la lecture lancée). Avec `similar` : mode radio sur la piste en cours.
+- `now_playing`, `shuffle`, `repeat` ; `transfer` (`other` = la source) ; `join` / `unjoin`.
+- Le volume, la sourdine et la lecture (pause, reprise, suivant, précédent, arrêt) passent par les actions media communes.
 
-Les reponses viennent des traductions de l'integration (anglais et francais ; les autres langues entendent l'anglais). Un titre absent de votre bibliotheque est une reponse (« Je n'ai pas trouve ... »), pas une supposition.
+Les lecteurs sont les **lecteurs Music Assistant exposés à Assist** (une enceinte Chromecast du même nom n'est jamais touchée). La cible se trouve par nom ou alias, zone, la pièce de l'appareil qui parle, un lecteur portant le nom de l'appareil (`mark2` sur le Mark II) et, pour « que joue-t-on », aléatoire et répétition seulement, l'unique lecteur en lecture. Deux candidats ou aucun : la demande continue en phrase, comme pour toute action structurée.
 
-## Limites connues (l'integration Music Assistant de Home Assistant ne les expose pas)
+Les réponses viennent des traductions de l'intégration (anglais et français ; les autres langues entendent l'anglais). Un titre qu'aucun fournisseur n'a est une réponse (« Je n'ai pas trouvé ... »), pas une supposition ; un titre du même nom par un autre artiste que celui nommé n'est pas joué.
 
-Pas de lecture par genre ni d'ajout du titre en cours aux favoris : utilisez le transport direct ou le pont de la competence. La liste des enceintes n'est pas une action.
+## Limites connues (l'intégration Music Assistant de Home Assistant ne les expose pas)
 
-Code : `custom_components/thalovant/music.py`, vecteurs de test partages `tests/music_vectors.json`, `tests/test_music.py`.
+Pas de lecture par genre ni d'ajout du titre en cours aux favoris : utilisez le transport direct ou le pont de la compétence. La liste des enceintes n'est pas une action. Les favoris sont limités à 50 titres par demande.
+
+Code : `custom_components/thalovant/music.py`, vecteurs de test partagés `tests/music_vectors.json`, `tests/test_music.py`.

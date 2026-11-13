@@ -614,8 +614,12 @@ async def async_execute(
     alarm_code: str | None = None,
     context: Context | None = None,
     progress: list[str] | None = None,
+    states: list[State] | None = None,
 ) -> ActionResult | None:
     """Carry the action out, or return None so the words go on to Assist.
+
+    ``states`` is a resolution already made (the music player a shared control was sent to): it is used
+    as it is instead of resolving the action's target again.
 
     ``progress`` collects the entity ids already changed, so a caller that cancels this (a
     deadline) knows whether part of the action was done.
@@ -623,7 +627,8 @@ async def async_execute(
     capability = action.get("capability")
     if capability not in CAPABILITY_DOMAINS:
         return None
-    states = resolve(hass, action, device_id, any_domain=capability == "state")
+    if states is None:
+        states = resolve(hass, action, device_id, any_domain=capability == "state")
     if not states:
         return None
     if capability == "state":
