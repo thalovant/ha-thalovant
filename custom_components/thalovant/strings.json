@@ -112,13 +112,19 @@
           "agent_id": "Conversation agent",
           "allow_announcements": "Send announcements",
           "allow_urgent": "Allow urgent announcements",
-          "allow_receive": "Play announcements on this Home Assistant"
+          "allow_receive": "Play announcements on this Home Assistant",
+          "structured_actions": "Carry out structured requests",
+          "structured_sensitive": "Allow locks, alarms, garage doors, gates, valves and sirens",
+          "alarm_code": "Alarm code (to disarm)"
         },
         "data_description": {
           "agent_id": "The agent that answers requests from the hub. Home Assistant's own agent only acts on entities exposed to Assist.",
           "allow_announcements": "Adds the actions `announce`, `cancel_announcement` and `list_speakers`, and an Intercom notify entity that is disabled until you enable it. Turning this on asks Thalovant for an extra permission first; if you decline, it stays off. Your Thalovant plan must include Intercom, and the hub's owner switches Intercom on for the hub in the Thalovant dashboard.",
           "allow_urgent": "Lets an announcement be urgent: it ignores Do Not Disturb and can repeat until somebody acknowledges it. Asks for its own permission. Needs announcements turned on.",
-          "allow_receive": "Lets the hub play announcements on this Home Assistant, on the media players you choose next. Home Assistant tells Thalovant that this connection can play announcements, and the hub's owner must also switch receiving on for it in the Thalovant dashboard, on the Intercom tab."
+          "allow_receive": "Lets the hub play announcements on this Home Assistant, on the media players you choose next. Home Assistant tells Thalovant that this connection can play announcements, and the hub's owner must also switch receiving on for it in the Thalovant dashboard, on the Intercom tab.",
+          "structured_actions": "The hub can name what it wants (power, brightness, position, temperature...) instead of a sentence, and Home Assistant carries it out on the entities you exposed to Assist. Anything it cannot resolve exactly goes to Assist as words.",
+          "structured_sensitive": "Off by default. When off, these go to Assist as words, so Home Assistant's own exposure rules decide.",
+          "alarm_code": "Kept here, never sent by the hub. Needed to disarm an alarm panel by voice."
         }
       },
       "receive": {
@@ -391,7 +397,10 @@
     "reply_no_valid_targets": "Sorry, Home Assistant couldn't find that device.",
     "reply_timeout": "Sorry, Home Assistant took too long to answer.",
     "reply_unknown": "Sorry, something went wrong in Home Assistant.",
-    "hub_not_ready": "{hub} (can't link Home Assistant yet)"
+    "hub_not_ready": "{hub} (can't link Home Assistant yet)",
+    "action_done": "Done.",
+    "action_state": "{name} is {state}.",
+    "action_partial": "Sorry, I could only do part of that."
   },
   "services": {
     "announce": {
