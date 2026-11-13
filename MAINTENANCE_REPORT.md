@@ -1,6 +1,16 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements from Home Assistant and playing the hub's announcements, all off by default; aligned with the released thalovant 0.12.0 and the platform's final API, which ships Intercom switched off.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
 
 # Maintenance report
+
+## 2026-11-13 · music actions, review round 2 (not released)
+
+`custom_components/thalovant/music.py`: `_transfer` names the one exposed playing player as `source_player` (refuses zero or several); the shared media controls no longer use the active-player fallback (`async_execute_action`). `tests/test_music.py`: the transfer and shared-control tests, the vectors' `source: null` stays abstract (`Fake.effects(named_source)`). docs/music.md and docs/music.fr.md qualified. Verification: `pytest tests`: 881 passed, 100 % coverage (HA 2026.10.4 harness). Nothing was released.
+
+### Transparency Report
+
+- AI model: Claude Sonnet 5.5.
+- Actions: fixed the two code findings and the doc findings of CodeRabbit's second review round, wrote the tests.
+- Oversight: owner-directed; the pull request awaits human review.
 
 ## 2026-11-12 · 0.4.0 (not released)
 
@@ -294,3 +304,15 @@ Assist and used an in-memory hub connection.
 - **Oversight:** Separate agent review of the transport boundary and a root
   review before any release or deployment. The user authorized pairing their
   private Christmas hub and testing the strip.
+
+## 2026-11-13 - Music actions (unreleased)
+
+Added `custom_components/thalovant/music.py` and its speech strings (en, fr); `handler.py` now calls `async_execute_action()`, which sends music capabilities to `music.py` and everything else to `actions.async_execute()` unchanged. `actions.resolve()` gained `platform` and `key` parameters.
+
+Verification: `pytest --cov`: 867 passed, coverage 100 percent; ruff and mypy clean. Real: Home Assistant 2026.10.4 core with the real Music Assistant integration against the owner's server, the request handler driven with real actions (`tests/real_ma_verify.py`, not part of the suite): play Adam's Song on `mark2`, what's playing, volume, pause, resume, shuffle, next, stop; volume restored.
+
+### Transparency Report
+
+- AI model: Claude Sonnet 5.5.
+- Actions: designed and wrote `music.py`, tests and vectors, translations and docs; ran the real-server check.
+- Oversight: owner-directed design; the pull request awaits human review.

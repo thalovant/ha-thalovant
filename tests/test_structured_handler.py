@@ -120,7 +120,7 @@ async def test_a_crash_in_the_resolver_goes_on_as_words(
 
     use_agent(FakeAgent(answer))
     with patch(
-        "custom_components.thalovant.handler.async_execute",
+        "custom_components.thalovant.handler.async_execute_action",
         side_effect=RuntimeError("x"),
     ):
         response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
@@ -189,7 +189,7 @@ async def test_a_structured_action_that_runs_out_of_time_is_a_timeout_never_assi
         await asyncio.sleep(5)
 
     handler = HomeRequestHandler(hass, loaded_entry, None)  # type: ignore[arg-type]
-    with patch("custom_components.thalovant.handler.async_execute", slow):
+    with patch("custom_components.thalovant.handler.async_execute_action", slow):
         response = await handler._async_converse(
             "req-t", {"utterance": "dim", "action": ACTION}, 0.05
         )
@@ -207,7 +207,7 @@ async def test_a_partly_done_action_is_an_error_answer(
     async def partial(*args: Any, **kwargs: Any) -> ActionResult:
         return ActionResult("error", "action_partial", {"name": "Desk"}, ["light.desk"])
 
-    with patch("custom_components.thalovant.handler.async_execute", partial):
+    with patch("custom_components.thalovant.handler.async_execute_action", partial):
         response = await _ask(hass, mock_hub_connection, _request(action=ACTION))
     assert (
         response["response_type"] == "error"
@@ -228,7 +228,7 @@ async def test_a_timeout_after_some_entities_changed_is_a_partial_answer(
         await asyncio.sleep(5)
 
     handler = HomeRequestHandler(hass, loaded_entry, None)  # type: ignore[arg-type]
-    with patch("custom_components.thalovant.handler.async_execute", half_done):
+    with patch("custom_components.thalovant.handler.async_execute_action", half_done):
         response = await handler._async_converse(
             "req-p", {"utterance": "toggle", "action": ACTION}, 0.05
         )

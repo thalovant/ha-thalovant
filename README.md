@@ -366,7 +366,7 @@ announcement repeats, the hub only checks whether a reply is an acknowledgement.
 
 ## Structured actions
 
-A hub request can carry, next to the sentence, an `action`: a capability (power, brightness, color, color temperature, position, fan speed, temperature, HVAC mode, humidity, lock, volume, mute, playback, activate, start/stop/dock, arm/disarm, state), a target (name, area, floor, domain, or the speaking device's own room) and a value, absolute or relative. The integration resolves it among the entities **exposed to Assist** (names, aliases, areas, floors, domains) and calls the entity's own services: "dim the kitchen lamp" lowers its brightness by a step from its real state, "toggle", "make it warmer" (setpoint plus one), "turn the fan up" (the fan's own step), scenes, scripts, vacuums, media players by name.
+A hub request can carry, next to the sentence, an `action`: a capability (power, brightness, color, color temperature, position, fan speed, temperature, HVAC mode, humidity, lock, volume, mute, playback, activate, start/stop/dock, arm/disarm, state), a target (name, area, floor, domain, or the speaking device's own room) and a value, absolute or relative. The integration resolves it among the entities **exposed to Assist** (names, aliases, areas, floors, domains) and calls the entity's own services: "dim the kitchen lamp" lowers its brightness by a step from its real state, "toggle", "make it warmer" (setpoint plus one), "turn the fan up" (the fan's own step), scenes, scripts, vacuums, media players by name; music (below).
 
 It never guesses. If the action names no exposed entity, two entities share the name, the domain lacks the capability, or a service fails, the request goes on as the sentence it carries, through Assist, exactly as before. A follow-up to Assist's own question is always the sentence.
 
@@ -379,6 +379,10 @@ Options (Settings, Devices & services, Thalovant, Configure):
 | Alarm code | empty | Kept in the options, never sent by the hub; an alarm panel is disarmed by voice only with it. |
 
 Not done structurally: timers, to-do and shopping lists (their own Thalovant skills), cameras, `input_*`, `number`/`select`/`text` values, remotes, sirens' tones, water heater modes.
+
+### Music
+
+The same link plays and steers your **Music Assistant** players (the *Music Assistant* integration of Home Assistant): play a track, album, artist, playlist or radio by name, queue next or last, favorites, more like this, shuffle, repeat, move or group rooms, what is playing, plus volume and playback. The players must be exposed to Assist; nothing new is opened and no Music Assistant token leaves your Home Assistant. See [docs/music.md](docs/music.md) ([en francais](docs/music.fr.md)); limits (genre play, adding to favorites) are listed there.
 
 ## What it cannot do
 

@@ -90,3 +90,7 @@ session checks (`context.source == "thalovant.home.router"`, session `home-<requ
 link's session with a trace config that rejects redirects, as `self_hosted.async_create_session` does.
 
 **Impact.** About 60 lines and three tests. No behaviour change for a healthy hub.
+
+## Music
+
+**Standalone bridge for households without Home Assistant.** Problem: this path needs Home Assistant. Proposed: `thalovant-music-bridge`, an outbound-only LAN client that executes the same actions (same `tests/music_vectors.json`) directly against Music Assistant. Impact: Music Assistant-only homes get the same voice control.

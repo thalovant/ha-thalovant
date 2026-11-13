@@ -96,6 +96,14 @@ CAPABILITY_DOMAINS: dict[str, tuple[str, ...]] = {
     "arm": ("alarm_control_panel",),
     "disarm": ("alarm_control_panel",),
     "state": (),
+    # Music: carried out on Music Assistant's players (see music.py).
+    "play_media": ("media_player",),
+    "now_playing": ("media_player",),
+    "shuffle": ("media_player",),
+    "repeat": ("media_player",),
+    "transfer": ("media_player",),
+    "join": ("media_player",),
+    "unjoin": ("media_player",),
 }
 #: The domains a bare area or floor means when the action names none: what a person
 #: means by "turn off the kitchen" is the lights.
@@ -212,13 +220,18 @@ def resolve(
     action: Mapping[str, Any],
     device_id: str | None,
     any_domain: bool = False,
+    platform: str | None = None,
+    key: str = "target",
 ) -> list[State] | None:
     """The exposed entities the action means, or None when it is not exactly resolved.
 
     ``any_domain`` is for a state read, which may name an entity of any domain.
+    ``platform`` keeps only the entities of that integration (Music Assistant's
+    players: a Chromecast called "Kitchen" is not the "Kitchen" to play music on).
+    ``key`` is where the target is read from (``other`` names a second speaker).
     """
     capability = action.get("capability")
-    target = action.get("target") or {}
+    target = action.get(key) or {}
     if not isinstance(capability, str):
         return None
     domains = CAPABILITY_DOMAINS.get(capability)
@@ -247,6 +260,11 @@ def resolve(
         if domains and domain not in domains:
             continue
         if not async_should_expose(hass, "conversation", state.entity_id):
+            continue
+        if platform is not None and (
+            (entry := reg.entities.async_get(state.entity_id)) is None
+            or entry.platform != platform
+        ):
             continue
         pool.append(state)
 
@@ -302,9 +320,15 @@ def resolve(
     return found
 
 
+#: The verbs the connector spec flags ``sensitive`` for ``home_assistant`` (thalovant-connector-spec,
+#: ``connectors/home_assistant.json``): always carried out only for a household that switched sensitive actions
+#: on. ``tests/test_sensitive_verbs.py`` keeps this equal to the spec's flags when the spec is installed.
+SENSITIVE_VERBS = frozenset({"lock", "unlock", "arm", "disarm"})
+
+
 def _is_sensitive(capability: str, state: State) -> bool:
     domain = state.entity_id.split(".", 1)[0]
-    if capability in ("lock", "unlock", "arm", "disarm"):
+    if capability in SENSITIVE_VERBS:
         return True
     if domain == "siren":
         return capability in ("power_on", "power_off", "toggle")
@@ -596,8 +620,12 @@ async def async_execute(
     alarm_code: str | None = None,
     context: Context | None = None,
     progress: list[str] | None = None,
+    states: list[State] | None = None,
 ) -> ActionResult | None:
     """Carry the action out, or return None so the words go on to Assist.
+
+    ``states`` is a resolution already made (the music player a shared control was sent to): it is used
+    as it is instead of resolving the action's target again.
 
     ``progress`` collects the entity ids already changed, so a caller that cancels this (a
     deadline) knows whether part of the action was done.
@@ -605,7 +633,8 @@ async def async_execute(
     capability = action.get("capability")
     if capability not in CAPABILITY_DOMAINS:
         return None
-    states = resolve(hass, action, device_id, any_domain=capability == "state")
+    if states is None:
+        states = resolve(hass, action, device_id, any_domain=capability == "state")
     if not states:
         return None
     if capability == "state":

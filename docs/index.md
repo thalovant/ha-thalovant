@@ -75,3 +75,5 @@ Intercom switched off for the whole platform (reads answer
 the integration treats "not switched on yet" as a normal state: a clear error, a
 Repairs notice, no crash and no retry
 (`ThalovantApi._translate_intercom()`, `IntercomController._error()`).
+
+- [Music through Home Assistant](music.md) ([fr](music.fr.md)): `custom_components/thalovant/music.py`, `async_execute_action()`, Music Assistant players as media players.

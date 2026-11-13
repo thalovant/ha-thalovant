@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: independent security review of the structured-action path (alarm code in diagnostics, mass actions, sensitive spread) with the findings still open.
+Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
 
 # Audit
 
@@ -326,3 +326,13 @@ to Assist are resolved (`async_should_expose`); two entities or two areas with o
 nothing; a failure after part of an action is reported as partial and never retried as words
 (`test_a_failure_after_part_of_it_is_done_is_reported_not_retried`); the logs carry request ids and
 exception type names only; the announcement receiver is off by default, closed and rate limited.
+
+## Music actions (unreleased)
+
+- [`music_player()`](custom_components/thalovant/music.py) never reaches a player that is not a Music Assistant entity or not exposed to Assist ([`test_a_chromecast_with_the_same_name_is_not_a_music_player`](tests/test_music.py), [`test_an_unexposed_player_is_never_reached`](tests/test_music.py)).
+- No raw URL is ever played: media is a name searched in Music Assistant ([`best_match()`](custom_components/thalovant/music.py)).
+- A failure after music started answers "partial" and never repeats the sentence through Assist ([`test_a_failure_after_the_music_started_keeps_what_was_done`](tests/test_music.py)).
+- Known limit: name matching is a 0.6 similarity threshold (`MIN_MATCH`); a very different title spelling is "not found".
+- **Fixed (review round 2): a transfer with no source took any playing queue.** `_transfer` sent no `source_player`, so Home Assistant's Music Assistant integration took the first playing queue of the whole server, exposed to Assist or not. It now names the one exposed player that is playing, and does not guess between two or none ([`test_a_transfer_without_a_source_names_the_one_exposed_player_that_is_playing`](tests/test_music.py), [`test_a_transfer_without_a_source_does_not_guess_between_two_or_none`](tests/test_music.py)).
+- **Fixed (review round 2): a shared control borrowed another room's player.** Volume, mute and playback used the "the one active player" fallback, so a speaker whose room has a Chromecast and no Music Assistant player changed the player in another room. The fallback now serves `now_playing`, `shuffle` and `repeat` only ([`test_a_shared_control_never_borrows_another_rooms_playing_player`](tests/test_music.py)).
+- **Documented (review round 2): artist matching is a substring match** and a result without artist information is not ruled out ([`best_match()`](custom_components/thalovant/music.py); docs/music.md, docs/music.fr.md).
