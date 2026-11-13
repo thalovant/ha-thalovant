@@ -96,6 +96,14 @@ CAPABILITY_DOMAINS: dict[str, tuple[str, ...]] = {
     "arm": ("alarm_control_panel",),
     "disarm": ("alarm_control_panel",),
     "state": (),
+    # Music: carried out on Music Assistant's players (see music.py).
+    "play_media": ("media_player",),
+    "now_playing": ("media_player",),
+    "shuffle": ("media_player",),
+    "repeat": ("media_player",),
+    "transfer": ("media_player",),
+    "join": ("media_player",),
+    "unjoin": ("media_player",),
 }
 #: The domains a bare area or floor means when the action names none: what a person
 #: means by "turn off the kitchen" is the lights.
@@ -212,13 +220,18 @@ def resolve(
     action: Mapping[str, Any],
     device_id: str | None,
     any_domain: bool = False,
+    platform: str | None = None,
+    key: str = "target",
 ) -> list[State] | None:
     """The exposed entities the action means, or None when it is not exactly resolved.
 
     ``any_domain`` is for a state read, which may name an entity of any domain.
+    ``platform`` keeps only the entities of that integration (Music Assistant's
+    players: a Chromecast called "Kitchen" is not the "Kitchen" to play music on).
+    ``key`` is where the target is read from (``other`` names a second speaker).
     """
     capability = action.get("capability")
-    target = action.get("target") or {}
+    target = action.get(key) or {}
     if not isinstance(capability, str):
         return None
     domains = CAPABILITY_DOMAINS.get(capability)
@@ -247,6 +260,11 @@ def resolve(
         if domains and domain not in domains:
             continue
         if not async_should_expose(hass, "conversation", state.entity_id):
+            continue
+        if platform is not None and (
+            (entry := reg.entities.async_get(state.entity_id)) is None
+            or entry.platform != platform
+        ):
             continue
         pool.append(state)
 

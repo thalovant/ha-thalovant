@@ -20,7 +20,7 @@ from homeassistant.helpers import (
 from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util, language as language_util
 
-from .actions import ActionResult, async_execute
+from .actions import ActionResult
 from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
@@ -41,6 +41,7 @@ from .const import (
     RESPONSE_MESSAGE_TYPE,
 )
 from .models import ThalovantConfigEntry
+from .music import async_execute_action
 from .self_hosted import permits_lighting_request
 
 # Error codes this integration adds to the ones Assist reports.
@@ -379,7 +380,7 @@ class HomeRequestHandler:
         changed: list[str] = []
         try:
             async with asyncio.timeout(budget):
-                result = await async_execute(
+                result = await async_execute_action(
                     self._hass,
                     action,
                     device_id=self._async_device_id(data.get("device")),
