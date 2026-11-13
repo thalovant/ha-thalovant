@@ -206,8 +206,8 @@ the [Christmas Protocol receiver](https://github.com/thalovant/thalovant-skill-c
 - **Hub connection**, a connectivity sensor on that device. It is on while the
   hub can reach this Home Assistant, and off while the link is down.
 - **Diagnostics** you can download from the integration page. They hold
-  counts and timings, never a token, a key, or anything that was said or
-  announced.
+  counts and timings, never a token, a key, the alarm code, or anything that was
+  said or announced. See [Diagnostics](#diagnostics).
 - **Repair notices** when the conversation agent chosen in the options no
   longer exists, when the hub answers with a different security key, and, if
   announcements are on, when Intercom cannot run on the hub (plan, kid or public
@@ -497,8 +497,9 @@ entity, waiting for each. Nothing is retried.
 A **sensitive** action is one a person should not trigger by voice without the
 household having decided so. The hub-side contract flags the four verbs `lock`,
 `unlock`, `arm` and `disarm` `sensitive` in the connector spec
-([thalovant-connector-spec: connectors/home_assistant.json], rate bucket
-`sensitive_per_minute` 6); this integration keeps the same four in
+([thalovant-connector-spec: thalovant_connector_spec/connectors/home_assistant.json];
+the router also limits sensitive requests per household per minute, with its own
+bucket; the numbers live in the spec and may change); this integration keeps the same four in
 `SENSITIVE_VERBS`, and `tests/test_sensitive_verbs.py` fails if the two differ
 (it skips when the private spec package is not installed, which is the case in
 this repository's CI: see AUDIT.md). The integration also treats as sensitive,
@@ -558,10 +559,40 @@ on real entities, and any device other than the fixtures.
 
 The same link plays and steers your **Music Assistant** players (the *Music Assistant* integration of Home Assistant): play a track, album, artist, playlist or radio by name, queue next or last, favorites, more like this, shuffle, repeat, move or group rooms, what is playing, plus volume and playback. The players must be exposed to Assist; nothing new is opened and no Music Assistant token leaves your Home Assistant. See [docs/music.md](docs/music.md) ([en francais](docs/music.fr.md)); limits (genre play, adding to favorites) are listed there.
 
+## Diagnostics
+
+**Download diagnostics** on the integration page
+(`async_get_config_entry_diagnostics()` in `diagnostics.py`). The file is meant to
+be pasted into a public issue, so the entry's `data` and `options` go through
+Home Assistant's `async_redact_data()` with this list (`TO_REDACT`):
+
+| Redacted (shown as `**REDACTED**`) | Why |
+| --- | --- |
+| `tokens`, `credentials` | the Thalovant API token and the connection's keys |
+| `account_id`, `home_client_id`, `voice_client_id`, `unique_id` | identify the account or the connection |
+| `hub_name`, `title` | can be personal |
+| `alarm_code` | it disarms the alarm panel (added by PR #32; before that it was in the options dump) |
+| `speaker_players`, `speaker_areas`, `tts_entity` | where announcements are played |
+
+Not redacted, by design: the option flags (`structured_actions`,
+`structured_sensitive`, `allow_*`, the agent id), the connection state, the
+endpoint of a normal link (**redacted** for a private Christmas link), whether a
+secret exists (`has_secret`), the token's scopes, request counts by outcome with
+the last duration, and Intercom counters. `structured_sensitive: true` therefore
+shows in a pasted file; that is the household's own setting, not a secret. No
+sentence, answer or announcement text is ever recorded: the counters hold
+outcomes only. Tested by `tests/test_diagnostics.py`
+(`test_diagnostics`, `test_diagnostics_hold_counts_of_announcements_never_text`,
+`test_diagnostics_never_hold_the_alarm_code`) and the snapshot
+`tests/snapshots/test_diagnostics.ambr`.
+
 ## What it cannot do
 
-- It only controls what you have exposed to Assist. If Assist cannot do it by
-  voice from Home Assistant's own dialog, it cannot do it from Thalovant either.
+- It only controls what you have exposed to Assist. Since `main` after 0.4.0 it
+  can also do what Assist's sentences cannot express ("dim", "toggle", "make it
+  warmer": see [Structured actions](#structured-actions)), but still only on
+  exposed entities, and a lock, alarm panel, garage door, gate, window, valve or
+  siren only if you turned the sensitive option on.
 - It does not turn Home Assistant into a Thalovant satellite. Home Assistant
   never sends what it hears to the hub; it only answers. With announcements on it
   also sends the text you tell it to announce, and with playing on it says the
@@ -580,21 +611,27 @@ The same link plays and steers your **Music Assistant** players (the *Music Assi
 - **What is stored.** The Thalovant API token from the sign-in (valid for a
   year, one per account, the same whichever way you linked) and the
   connection's keys, in Home Assistant's config
-  entry storage, like any other integration's credentials. The key the hub
+  entry storage, like any other integration's credentials. The alarm code, if you
+  set one, is stored in the same place, in clear, in the entry's options. The key the hub
   recognises this Home Assistant by, and the hub's own key, live in
   `.storage/thalovant/`, one folder per link, so they survive updates and are
   part of your backups.
-- **What leaves your home.** Only Assist's answers, sent to your hub, and,
-  only if you turn announcements on, the text of each announcement you send
-  (see [Announcements](#announcements-intercom)). No Home Assistant token, and no
-  entity list.
+- **What leaves your home.** Only the answer to each request, sent to your hub:
+  Assist's own sentence, or this integration's short sentence for a structured
+  action ("Done.", "Kitchen Lamp is on.", the title of the track that is
+  playing), and, only if you turn announcements on, the text of each
+  announcement you send (see [Announcements](#announcements-intercom)). No Home
+  Assistant token, no alarm code, and no entity list. The hub's request carries
+  the sentence, an optional structured action and the speaking device's id and
+  name; nothing more is read from it.
 - **Logs.** This integration never logs what was said, what Assist answered or
   what was announced, even at debug level; it logs request ids, outcomes,
   announcement ids, error types and timings. Home
   Assistant's own `conversation` integration does log the sentence when *its*
   debug logging is turned on.
 - **Diagnostics** redact the tokens, the connection keys, the account id, the
-  hub's name and the players, areas and text to speech chosen for announcements.
+  hub's name, the alarm code and the players, areas and text to speech chosen for
+  announcements. See [Diagnostics](#diagnostics).
 
 ## Troubleshooting
 
@@ -669,6 +706,33 @@ makes a new connection with a new key.
 **The hub says Home Assistant didn't understand.** Try the same sentence in
 Assist in Home Assistant. If it fails there too, the entity is probably not
 exposed to Assist, or its name differs from what you said.
+
+**A lock, alarm, garage door, gate, window, valve or siren is not done.** These
+are sensitive: structured actions on them need **Allow locks, alarms, garage
+doors, gates, valves and sirens** in the options (off by default). Off, the
+sentence goes to Assist, which only acts on what is exposed to it, and locks are
+not exposed by default. See [Sensitive actions](#sensitive-actions).
+
+**The alarm will arm but not disarm.** A structured disarm needs the **Alarm
+code** option; without it nothing is built and the sentence goes to Assist.
+
+**"Sorry, I could only do part of that."** A structured action changed some of
+the entities it resolved and then a service failed (or time ran out). The
+sentence is deliberately not sent to Assist as well, because that would repeat
+the part that already ran (a toggle would flip back). Look at the entities and
+say it again for the rest.
+
+**"Dim" turned a light on.** A relative change starts from the light's real
+state, and an off light counts as 0: dimming it by 20 gives the minimum, 1
+percent, so the light comes on. `actions._brightness` does this
+(see AUDIT.md).
+
+**Structured requests are ignored.** Check that **Carry out structured
+requests** is on, that the entity is exposed to Assist, that no two entities
+share the name (it then asks which), and that the request is not an answer to a
+question Assist asked (those are always words). Debug logs (`custom_components.thalovant`) say
+so when a sensitive action was left to Assist, when one needed exactly one
+entity, or when a service failed; a target that resolves to nothing logs nothing.
 
 **A device says "I'm not connected to your home yet".** The hub has no Home
 Assistant link for the account that device is signed in to. Link it here with
