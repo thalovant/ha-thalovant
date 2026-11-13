@@ -391,7 +391,9 @@
     "reply_no_valid_targets": "Désolé, Home Assistant n'a pas trouvé cet appareil.",
     "reply_timeout": "Désolé, Home Assistant a mis trop de temps à répondre.",
     "reply_unknown": "Désolé, un problème est survenu dans Home Assistant.",
-    "hub_not_ready": "{hub} (ne peut pas encore être relié)"
+    "hub_not_ready": "{hub} (ne peut pas encore être relié)",
+    "action_done": "C'est fait.",
+    "action_state": "{name} : {state}."
   },
   "services": {
     "announce": {

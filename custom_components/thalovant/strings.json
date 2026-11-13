@@ -391,7 +391,9 @@
     "reply_no_valid_targets": "Sorry, Home Assistant couldn't find that device.",
     "reply_timeout": "Sorry, Home Assistant took too long to answer.",
     "reply_unknown": "Sorry, something went wrong in Home Assistant.",
-    "hub_not_ready": "{hub} (can't link Home Assistant yet)"
+    "hub_not_ready": "{hub} (can't link Home Assistant yet)",
+    "action_done": "Done.",
+    "action_state": "{name} is {state}."
   },
   "services": {
     "announce": {
