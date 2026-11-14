@@ -1,5 +1,7 @@
 # Thalovant for Home Assistant
 
+New here? Follow [Connect Home Assistant to Thalovant](connect-home-assistant.md), then [Play music from Music Assistant](play-music-from-music-assistant.md): one task per page, with pictures of the screens.
+
 The integration receives home requests from a Thalovant hub and passes them
 to Assist. See the [guide](guide.md) and [configuration facts](../QUICK_FACTS.md).
 Since 0.4.0, and only when its options turn it on, it also sends announcements to
