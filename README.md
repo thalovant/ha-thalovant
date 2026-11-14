@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements from Home Assistant and playing the hub's announcements, both off by default; aligned with the released `thalovant` 0.12.0 SDK and the final platform API; says plainly that Intercom is rolling out and may not be enabled yet.
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: structured actions say what they check first, what a room means, which covers are sensitive, that a refused sensitive action is answered and not passed to Assist, that `all` is gone, the Highest volume option, and what cannot be classified.
 
 <p align="center">
   <picture>
@@ -368,21 +368,32 @@ announcement repeats, the hub only checks whether a reply is an acknowledgement.
 
 A hub request can carry, next to the sentence, an `action`: a capability (power, brightness, color, color temperature, position, fan speed, temperature, HVAC mode, humidity, lock, volume, mute, playback, activate, start/stop/dock, arm/disarm, state), a target (name, area, floor, domain, or the speaking device's own room) and a value, absolute or relative. The integration resolves it among the entities **exposed to Assist** (names, aliases, areas, floors, domains) and calls the entity's own services: "dim the kitchen lamp" lowers its brightness by a step from its real state, "toggle", "make it warmer" (setpoint plus one), "turn the fan up" (the fan's own step), scenes, scripts, vacuums, media players by name; music (below).
 
-It never guesses. If the action names no exposed entity, two entities share the name, the domain lacks the capability, or a service fails, the request goes on as the sentence it carries, through Assist, exactly as before. A follow-up to Assist's own question is always the sentence.
+It never guesses. The action is first checked against closed lists (a known capability; in the target only `name`, `area`, `floor`, `domain`, `here`; a known domain): anything else is not an action. If the action names no exposed entity, two entities share the name, the domain lacks the capability, or a service fails **before anything changed**, the request goes on as the sentence it carries, through Assist, exactly as before. A service that fails **after part of the action was done** is different: the answer says it was only partly done and the sentence is never sent to Assist, because replaying it would undo a toggle that worked or double a step. A volume the cap lowered whose call then fails is answered as failed for the same kind of reason: as words, Assist would set the level that was asked for. A follow-up to Assist's own question is always the sentence.
+
+**A room or a floor named alone means its lights.** "Toggle the garage" toggles the garage's lights, not its freezer plug, its door relay or its door, whether the hub understood "garage" as a room or as a name. Name a kind of device to reach another ("the kitchen plugs"). One action changes at most 50 entities. There is no "everything" target: `all` was removed in 0.5.0.
+
+**Sensitive actions** are off until you turn them on: locking and unlocking, arming and disarming, a siren, opening a valve, and opening, toggling or positioning **any cover that is not a window covering**. A cover is treated as a window covering only when its device class is `awning`, `blind`, `curtain`, `shade` or `shutter`; a garage door, gate, door, window or damper is sensitive, and so is a cover with **no device class**, which is what many garage doors from MQTT, ESPHome or a template are. Closing a cover is never sensitive. Set the device class of your blinds (Settings, Entities, the entity, *Show as*) if they stopped answering.
+
+**A refused sensitive action is answered, not passed on.** With the option off, the hub hears "Sorry, I didn't do that: sensitive actions are turned off for this home." and nothing is sent to Assist. The same holds with the option on when the action would reach more than one sensitive entity ("unlock the kitchen"), and for a disarm when no alarm code is stored. Up to 0.4 such a request went to Assist as words, where an exposed entity could be operated after all. A request the hub sends as a plain sentence, with no action, still goes to Assist, where Home Assistant's own exposure rules decide (locks are not exposed by default): the option governs structured actions, not Assist.
+
+**What cannot be recognised.** A relay is a switch like any other, and a script, scene, button or automation can do anything: the integration cannot tell that one opens a door. Exposed to Assist and named exactly, they are carried out with the sensitive option off, as Assist itself would. Do not expose to Assist what a voice must not operate.
 
 Options (Settings, Devices & services, Thalovant, Configure):
 
 | Option | Default | Meaning |
 |---|---|---|
 | Carry out structured requests | on | Off sends every request to Assist as words, as before 0.5. |
-| Allow locks, alarms, garage doors, gates, valves and sirens | off | Sensitive actions are only done structurally when on; otherwise they go to Assist as words, where Home Assistant's own exposure rules decide (locks are not exposed by default). |
+| Allow locks, alarms, sirens, valves, and garage doors, gates and other covers that are not window coverings | off | Sensitive actions are only carried out when on. When off, a structured one is refused aloud and is not passed to Assist. |
 | Alarm code | empty | Kept in the options, never sent by the hub; an alarm panel is disarmed by voice only with it. |
+| Highest volume (percent) | 100 (no cap) | The loudest a structured request may set a media player, music included, as an absolute level or by steps. A request for more is set at this level and the answer says so; if that call fails, the answer says it failed and the sentence is not passed to Assist. A sentence Assist handles itself (a request with no structured action, or one the integration could not resolve) is not capped. |
 
 Not done structurally: timers, to-do and shopping lists (their own Thalovant skills), cameras, `input_*`, `number`/`select`/`text` values, remotes, sirens' tones, water heater modes.
 
+Code: [`is_known_action()`, `resolve()`, `async_execute()`](custom_components/thalovant/actions.py), [`HomeRequestHandler._async_structured()`](custom_components/thalovant/handler.py); tests: [`tests/test_action_bounds.py`](tests/test_action_bounds.py), [`tests/test_structured_handler.py`](tests/test_structured_handler.py). Versions: [CHANGELOG.md](CHANGELOG.md).
+
 ### Music
 
-The same link plays and steers your **Music Assistant** players (the *Music Assistant* integration of Home Assistant): play a track, album, artist, playlist or radio by name, queue next or last, favorites, more like this, shuffle, repeat, move or group rooms, what is playing, plus volume and playback. The players must be exposed to Assist; nothing new is opened and no Music Assistant token leaves your Home Assistant. See [docs/music.md](docs/music.md) ([en francais](docs/music.fr.md)); limits (genre play, adding to favorites) are listed there.
+The same link plays and steers your **Music Assistant** players (the *Music Assistant* integration of Home Assistant): play a track, album, artist, playlist or radio by name, queue next or last, favorites, more like this, shuffle, repeat, move or group rooms, what is playing, plus volume (up to the **Highest volume** option) and playback. The players must be exposed to Assist; nothing new is opened and no Music Assistant token leaves your Home Assistant. See [docs/music.md](docs/music.md) ([en francais](docs/music.fr.md)); limits (genre play, adding to favorites) are listed there.
 
 ## What it cannot do
 

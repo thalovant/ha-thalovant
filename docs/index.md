@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0, Intercom: announcements and playing, with the guide and where it lives in the code; Intercom is rolling out (the platform switch ships off) and the integration is aligned with the released thalovant 0.12.0 SDK.
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: a section for structured actions and music (what is checked first, what a room means, sensitive covers, refusals, the volume cap) with where each lives in the code and its tests; the changelog.
 
 # Thalovant for Home Assistant
 
@@ -18,6 +18,8 @@ send nothing. Intercom is a convenience, not a certified safety system.
 | SDK transport | [`HubConnection`](../custom_components/thalovant/api.py) and [`async_create_session()`](../custom_components/thalovant/self_hosted.py) |
 | Private request validation | [`permits_lighting_request()`](../custom_components/thalovant/self_hosted.py) |
 | Assist handoff | [`HomeRequestHandler.async_answer()` and `_async_converse()`](../custom_components/thalovant/handler.py) |
+| Structured actions | [`HomeRequestHandler._async_structured()`](../custom_components/thalovant/handler.py); [`is_known_action()`, `resolve()`, `exposed()`, `async_execute()`, `max_volume_of()`](../custom_components/thalovant/actions.py); checks: [bounds](../tests/test_action_bounds.py), [resolution](../tests/test_actions.py), [builders](../tests/test_actions_edges.py), [handler](../tests/test_structured_handler.py), [the spec's flags and domains](../tests/test_sensitive_verbs.py) |
+| Music | [`async_execute_action()`, `async_execute_music()`, `music_player()`, `best_match()`](../custom_components/thalovant/music.py); checks: [actions](../tests/test_music.py), [verb lists, vectors and version](../tests/test_music_contract.py) |
 | Entry lifecycle | [`async_setup_entry()` and `async_remove_entry()`](../custom_components/thalovant/__init__.py) |
 | Announcements: options, re-consent | [`ThalovantOptionsFlow`](../custom_components/thalovant/config_flow.py), [`ThalovantConfigFlow.async_step_intercom_consent()` and `_async_finish_consent()`](../custom_components/thalovant/config_flow.py), [`scopes_for_options()`](../custom_components/thalovant/intercom.py) |
 | Announcements: sending | [`IntercomController`](../custom_components/thalovant/intercom.py), [`async_setup_services()`](../custom_components/thalovant/services.py), [`IntercomNotifyEntity`](../custom_components/thalovant/notify.py) |
@@ -76,4 +78,25 @@ the integration treats "not switched on yet" as a normal state: a clear error, a
 Repairs notice, no crash and no retry
 (`ThalovantApi._translate_intercom()`, `IntercomController._error()`).
 
-- [Music through Home Assistant](music.md) ([fr](music.fr.md)): `custom_components/thalovant/music.py`, `async_execute_action()`, Music Assistant players as media players.
+## Structured actions and music (0.5.0, unreleased)
+
+A request can carry an `action` beside its sentence. The [README](../README.md#structured-actions) says what a
+household sees; [QUICK_FACTS.md](../QUICK_FACTS.md) has the lists; [CHANGELOG.md](../CHANGELOG.md) what changed.
+
+| Rule | Where |
+| --- | --- |
+| The action is checked against the closed capability, target-key and domain lists before anything is read or created | `is_known_action()` with `CAPABILITY_DOMAINS`, `TARGET_KEYS`, `TARGET_DOMAINS` in `actions.py`, called by `HomeRequestHandler._async_structured()`, `music.async_execute_action()`, `actions.async_execute()` and `actions.resolve()` |
+| A room or floor named alone is its lights, as `area`, `floor`, `here` or a `name` that is no entity's | `_room_default()` with `DEFAULT_DOMAINS` and `DEFAULT_DOMAIN_CAPABILITIES` in `actions.resolve()` |
+| No "everything" target (`all` removed) | `TARGET_KEYS`; `exposed()` lists a domain for the integration's own use (`music.music_player()`, `music._transfer()`) |
+| Sensitive: the spec's flagged verbs, sirens, valves opening, covers that are not window coverings | `SENSITIVE_VERBS`, `SAFE_COVER_CLASSES`, `_is_sensitive()` in `actions.py` |
+| A refused sensitive action is an `error` answer with `failed_to_handle` and a sentence; it never reaches Assist | `_refusal()` and `async_execute()` in `actions.py`; `_async_structured()` and `_ACTION_ERROR_SPEECH` in `handler.py` |
+| The volume cap | `CONF_MAX_VOLUME` in `const.py`, `max_volume_of()` and `_volume()` in `actions.py`, `ThalovantOptionsFlow.async_step_init()` in `config_flow.py` |
+
+The hub side is described in `[hivemind-home-router: README.md]` (which requests reach a household's
+Home Assistant, and what becomes of an action the connector spec refuses) and in
+`[thalovant-connector-spec: docs/design.md]` (the `home_assistant` connector: its verbs, the `sensitive`
+flag, the error codes an answer may carry). Neither is exercised by this repository's tests, except
+that `tests/test_sensitive_verbs.py` compares the sensitive verbs and the target domains with the spec's
+when the spec package is installed.
+
+- [Music through Home Assistant](music.md) ([fr](music.fr.md)): `custom_components/thalovant/music.py`, `async_execute_action()`, Music Assistant players as media players; what `tests/music_vectors.json` is.

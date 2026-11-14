@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: security review follow-ups (replay cache, redirect refusal, source check).
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: follow-ups of the 2026-11-13 recheck: household-marked sensitive entities, `all` out of the spec, vectors generated from the spec, the cap for Assist's own path.
 
 # Suggestions
 
@@ -94,3 +94,33 @@ link's session with a trace config that rejects redirects, as `self_hosted.async
 ## Music
 
 **Standalone bridge for households without Home Assistant.** Problem: this path needs Home Assistant. Proposed: `thalovant-music-bridge`, an outbound-only LAN client that executes the same actions (same `tests/music_vectors.json`) directly against Music Assistant. Impact: Music Assistant-only homes get the same voice control.
+
+## After the 2026-11-13 recheck (0.5.0)
+
+**Let the household mark entities as sensitive.** Problem: a relay that opens a garage door is a `switch`, and a
+script can do anything; `_is_sensitive()` in [`actions.py`](custom_components/thalovant/actions.py) cannot recognise
+either, so both are carried out with the sensitive option off when exposed to Assist and named exactly
+([`test_known_limit_a_relay_or_a_script_named_exactly_is_carried_out`](tests/test_action_bounds.py)). Proposed: an
+option holding a list of entities (an entity selector, several) that are treated as sensitive whatever their domain:
+refused with the option off, one at a time with it on. Impact: about 40 lines in `actions.py`, `config_flow.py` and the
+strings, five tests; closes the last two cases of the recheck's proof of concept. A product decision (one more option
+on a public integration), so it was not taken here.
+
+**Take `all` out of the connector spec's `home_assistant` target.** Problem: the spec (0.4.0) still lists `all` among
+the target's properties, so the router validates and forwards it; this integration no longer accepts it (`TARGET_KEYS`).
+Proposed: remove it from the spec so an action carrying it is refused at the hub. Impact: one line of the spec and its
+vectors; `tests/test_sensitive_verbs.py::test_the_target_domains_are_exactly_the_specs` already ties the domain list.
+
+**Generate `tests/music_vectors.json` from the spec, or delete it.** Problem: it is a hand-kept copy in an older shape;
+the comparison with the spec's `behavior` list runs only where the spec package is installed, which this public
+repository's CI cannot do (the spec is private). Proposed: publish the spec's vector file (it holds no secret) and
+read it in the tests, or vendor it with a recorded hash and version. Impact: the two executors are provably held to
+one file again.
+
+**Cap the volume on Assist's own path too.** Problem: `max_volume` limits structured actions; "set the kitchen speaker
+to 100 percent" as a sentence that Assist handles is not limited. Proposed: nothing in this integration can limit
+Home Assistant's own intents; document it (done) and consider sending every volume sentence as a structured action
+from the skills. Impact: a skill change, not an integration change.
+
+**Say the level in every volume answer.** Problem: a volume action answers "Done." unless the cap lowered it. Proposed:
+answer the level always (the bridge route does). Impact: one string per language, changes what users hear.

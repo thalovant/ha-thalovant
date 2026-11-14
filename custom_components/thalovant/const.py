@@ -25,10 +25,14 @@ CONF_ALLOW_ANNOUNCEMENTS: Final = "allow_announcements"
 CONF_ALLOW_URGENT: Final = "allow_urgent"
 CONF_ALLOW_RECEIVE: Final = "allow_receive"
 # Structured actions (the hub names a capability, a target and a value instead of leaving a sentence to Assist).
-# On by default; sensitive ones (locks, alarm panels, garage doors, gates, valves, sirens) are off by default.
+# On by default; sensitive ones (locks, alarm panels, sirens, valves, and every cover that is not a window
+# covering) are off by default.
 CONF_STRUCTURED_ACTIONS: Final = "structured_actions"
 CONF_STRUCTURED_SENSITIVE: Final = "structured_sensitive"
 CONF_ALARM_CODE: Final = "alarm_code"
+# The highest volume a structured action may set on a media player, in percent (1 to 100). Stored only when
+# below 100; absent means no cap.
+CONF_MAX_VOLUME: Final = "max_volume"
 CONF_SPEAKER_PLAYERS: Final = "speaker_players"
 CONF_SPEAKER_AREAS: Final = "speaker_areas"
 CONF_TTS_ENTITY: Final = "tts_entity"

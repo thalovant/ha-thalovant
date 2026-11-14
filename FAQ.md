@@ -1,4 +1,4 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: what changed, why a room toggles only its lights, why a cover or a lock is refused aloud, the volume cap, relays and scripts, the removed `all` target, the test vectors.
 
 # FAQ
 
@@ -148,3 +148,19 @@ removes the local entry and its Noise state. See the [setup guide](README.md).
 **Can I play music from a Thalovant device through Home Assistant?** Yes, if Home Assistant has the Music Assistant integration and its players are exposed to Assist: "play Adam's Song on the kitchen speaker". See [docs/music.md](docs/music.md).
 
 **Why did it say it could not find a song that is in Music Assistant?** The name is searched with `music_assistant.search` and must be close to the title (60 percent similar); say the artist too.
+
+**What changed in 0.5.0?** Structured actions and music (new), and the fixes of the 2026-11-13 recheck: a room named alone is its lights, covers are sensitive unless they are window coverings, a refused sensitive action is answered instead of being passed to Assist, the `all` target is gone, and a **Highest volume** option. See [CHANGELOG.md](CHANGELOG.md).
+
+**Why did "toggle the garage" only toggle the light?** By design since 0.5.0. A room or a floor named alone means its lights (`DEFAULT_DOMAINS` in [`actions.py`](custom_components/thalovant/actions.py), `_room_default()`), whether the hub read "garage" as a room or as a name. Before, a name that turned out to be a room reached every light, switch, fan, helper and cover in it. Say the device ("toggle the freezer") or the kind ("the garage plugs").
+
+**Why does it say "sensitive actions are turned off for this home"?** You asked for a lock, an alarm, a siren, a valve, or a cover that is not a window covering, and **Allow locks, alarms, ...** is off in the integration's options. The request was refused and was not passed to Assist. Turn the option on if a voice may do these in your home.
+
+**My blinds stopped opening by voice. Why?** A cover is a window covering only when its device class is `awning`, `blind`, `curtain`, `shade` or `shutter` (`SAFE_COVER_CLASSES`). A cover with no device class is treated like a garage door, because many garage doors have none. Set the device class in Home Assistant (Settings, Entities, the entity, *Show as*), or turn the sensitive option on.
+
+**Is my garage door safe if it is a relay or a script?** No more than any switch or script. The integration cannot tell that `switch.garage_opener` or a script opens a door, so it carries them out when they are exposed to Assist and named exactly, sensitive option or not (`test_known_limit_a_relay_or_a_script_named_exactly_is_carried_out` in [`tests/test_action_bounds.py`](tests/test_action_bounds.py)). A room or floor name no longer reaches them. Do not expose to Assist what a voice must not operate.
+
+**Can I stop voice requests from turning the music all the way up?** Yes: **Highest volume (percent)** in the options. A structured request for more, as a level or by steps, is set at the cap and answered "The volume is at 60 percent, the highest allowed here." It applies to every media player a structured action reaches. It does not limit a sentence Assist handles itself, the volume buttons, or automations.
+
+**Does "turn off everything" work?** Not as a structured action: the `all` target was removed in 0.5.0 (no Thalovant skill used it, and it reached up to 50 entities of a domain). The sentence goes to Assist, which decides.
+
+**Are the music tests the same as the bridge's?** No. [`tests/music_vectors.json`](tests/music_vectors.json) is this repository's own copy, in the shape `world` + `cases`; the connector spec's vectors are organised as `validation` and `behavior`. See [docs/music.md](docs/music.md#test-vectors-what-they-are).

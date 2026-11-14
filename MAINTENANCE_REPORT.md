@@ -1,6 +1,91 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: second review round on the music actions (implicit transfer source, shared controls keep to the speaker's own player), docs qualified.
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: structured action bounds (H1 to H4), version and changelog (H5), music verb lists and vectors (H6).
 
 # Maintenance report
+
+## 2026-11-13 · 0.5.0, review of the pull request (not released)
+
+Two comments of the automated review, both checked against the code and found true.
+`custom_components/thalovant/actions.py`: `async_execute()` answers a volume request that the cap
+lowered and whose service call then failed with the error `action_failed` instead of `None` (the
+words would have reached Assist, uncapped); `handler.py`: its fallback sentence; `strings.json`,
+`translations/en.json`, `translations/fr.json`: `common.action_failed`. `README.md`: the fallback
+paragraph distinguishes a failure before anything changed (words to Assist) from a failure after
+part of the action (answered as partial, never replayed). `QUICK_FACTS.md`, `docs/music.md`,
+`docs/music.fr.md`, `CHANGELOG.md`, `AUDIT.md` follow. Tests:
+`test_a_capped_volume_whose_call_fails_is_said_failed_not_handed_to_assist`
+(`tests/test_action_bounds.py`) and one more case in `tests/test_structured_handler.py`.
+Verification: the full suite, ruff, ruff format, mypy and hassfest were run again (numbers in
+AUDIT.md, "Evidence"). Still open: the cap does not reach words Assist handles itself.
+
+### Transparency Report
+
+- **AI model:** Claude Fable 5.2.
+- **Actions taken:** read the two review comments as untrusted data, checked each against the code,
+  made the two changes above with a test, re-ran the suite and the linters.
+- **Oversight:** no human review yet; the pull request stays open. Nothing merged, tagged or released.
+
+## 2026-11-13 · 0.5.0, fixes of the recheck (not released)
+
+An independent recheck of structured and music actions (tree `e28f73d`) left six findings, H1 to H6;
+[AUDIT.md](AUDIT.md) has the table with evidence. What changed, and why:
+
+- **`custom_components/thalovant/actions.py`**
+  - `is_known_action()`, `TARGET_KEYS`, `TARGET_DOMAINS`: the action is checked against closed lists before
+    anything else (H3). `all` is no target key: no skill sent it and it reached every entity of a domain.
+    `exposed()` lists a domain for the integration's own use.
+  - `_room_default()`, `DEFAULT_DOMAIN_CAPABILITIES`: a room or floor named alone is its lights also when
+    it arrives as a `name` (H1).
+  - `SAFE_COVER_CLASSES` replaces `SENSITIVE_COVER_CLASSES`: a cover is sensitive unless it is a window
+    covering, so a cover with no device class no longer opens with the option off (H2).
+  - `async_execute()`: a sensitive action that is refused returns an `error` result (`_refusal()`:
+    `action_sensitive_off`, `action_sensitive_one`, `action_alarm_code`) instead of `None` (H2).
+    `_is_runnable()` replaces `_one_at_a_time()` for what is left of it.
+  - `max_volume_of()`, `_volume()`, `_Request.capped`: the volume cap and the `action_volume_capped` answer (H4).
+- **`handler.py`**: `_async_structured()` checks `is_known_action()` first, passes `max_volume`, and says a
+  refusal as what it is when translations cannot be loaded (`_ACTION_ERROR_SPEECH`).
+- **`music.py`**: `async_execute_action()` checks the lists first and passes `max_volume`; `music_player()`
+  and `_transfer()` list players with `exposed()` instead of an `all` target; `NOT_CARRIED` names `targets`.
+- **`config_flow.py`, `const.py`, `strings.json`, `translations/en.json`, `translations/fr.json`**: the
+  **Highest volume** option (`max_volume`, stored only below 100), the four new sentences, and option texts
+  that say what the sensitive option now does.
+- **`manifest.json`, `pyproject.toml`**: 0.5.0 (H5). New `CHANGELOG.md`.
+- **Tests**: new `tests/test_action_bounds.py` (the recheck's proofs of concept turned into regression
+  tests) and `tests/test_music_contract.py` (verb lists against the docs, vectors, version); additions in
+  `test_structured_handler.py`, `test_music.py`, `test_intercom_options.py`, `test_sensitive_verbs.py`;
+  existing tests in `test_actions.py` and `test_actions_edges.py` updated where they pinned the old
+  behaviour (`None` for a refusal, `all`, a blind with no device class).
+- **Docs**: README (Structured actions), `docs/index.md`, `docs/music.md`, `docs/music.fr.md`,
+  `QUICK_FACTS.md`, `FAQ.md`, `AUDIT.md`, `SUGGESTIONS.md`, `tests/music_vectors.json` (its own note).
+
+**Behaviour a household may notice.** A blind or shutter whose entity has no device class stops answering a
+structured "open" until the class is set or the sensitive option is on. A refused lock, alarm or cover is
+answered "Sorry, I didn't do that: sensitive actions are turned off for this home." instead of whatever
+Assist did with the sentence. "Toggle the garage" toggles lights only.
+
+**Verification** (Python 3.14.10, Home Assistant 2026.10.4, `thalovant` 0.12.0, fakes only): before,
+`pytest --cov`: 881 passed, 1 skipped, 100 percent; the recheck's 21 proofs of concept: 21 passed (weak
+as described). After: `pytest --cov --cov-report=term-missing`: **986 passed, 4 skipped, 100 percent**
+statement and branch coverage without the connector spec package (as CI), **990 passed** with spec 0.4.0
+installed from a copy of its source; `ruff check .`, `ruff format --check .` and `mypy` clean. The proofs
+of concept against the changed tree: 17 fail, 4 pass (the relay, the script, volume without a cap set, an
+unknown capability). `hassfest` (the `ghcr.io/home-assistant/hassfest:latest` image, with podman, no network): 0 invalid integrations. Not run: the HACS check (CI), any real Home Assistant, Music Assistant,
+hub or skill.
+
+**Left open:** a relay switch or a script that opens a door cannot be recognised (documented; a proposal is
+in SUGGESTIONS); the connector spec still lists `all` in its target; the vectors are still a hand-kept copy.
+
+### Transparency Report
+
+- **AI model:** Claude Fable 5.2.
+- **Actions taken:** read the integration, its tests and the recheck's proofs of concept; ran the proofs
+  against the unchanged tree; wrote the code changes above, the regression tests and the documentation;
+  ran the full suite, the linters and the type checker; compared the private vectors with the connector
+  spec's. The French strings and the French guide were written by the model and have not been reviewed by
+  a French speaker. Nothing was pushed, merged, tagged, released or deployed by this work; no real server
+  was contacted.
+- **Oversight:** directed by the owner's written contract for the 2026-11-13 fixes through a lead agent; the
+  pull request awaits human review. Choices made here that an owner may want to revisit are listed in
+  AUDIT.md ("What stays open or was decided").
 
 ## 2026-11-13 · music actions, review round 2 (not released)
 

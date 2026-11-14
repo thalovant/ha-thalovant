@@ -26,6 +26,9 @@ from homeassistant.helpers.selector import (
     ConversationAgentSelector,
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
     SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
@@ -36,6 +39,7 @@ from homeassistant.helpers.selector import (
 )
 from homeassistant.util import dt as dt_util
 
+from .actions import MAX_VOLUME, max_volume_of
 from .api import (
     Account,
     ConnectionCredentials,
@@ -70,6 +74,7 @@ from .const import (
     CONF_HUB_NAME,
     CONF_INTERCOM_CONSENT,
     CONF_LINKED_AT,
+    CONF_MAX_VOLUME,
     CONF_SELF_HOSTED,
     CONF_SPEAKER_AREAS,
     CONF_SPEAKER_PLAYERS,
@@ -981,6 +986,13 @@ class ThalovantOptionsFlow(OptionsFlow):
                             if user_input.get(CONF_ALARM_CODE)
                             else {}
                         ),
+                        # no cap unless one is set: only a cap below 100 is stored
+                        **(
+                            {CONF_MAX_VOLUME: cap}
+                            if (cap := max_volume_of(user_input.get(CONF_MAX_VOLUME)))
+                            < MAX_VOLUME
+                            else {}
+                        ),
                     }
                     | {
                         key: True
@@ -1029,6 +1041,18 @@ class ThalovantOptionsFlow(OptionsFlow):
                         CONF_ALARM_CODE,
                         description={"suggested_value": options.get(CONF_ALARM_CODE)},
                     ): TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD)),
+                    probatio.Optional(
+                        CONF_MAX_VOLUME,
+                        default=max_volume_of(options.get(CONF_MAX_VOLUME)),
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1,
+                            max=MAX_VOLUME,
+                            step=1,
+                            mode=NumberSelectorMode.SLIDER,
+                            unit_of_measurement="%",
+                        )
+                    ),
                 }
             ),
             errors=errors,
