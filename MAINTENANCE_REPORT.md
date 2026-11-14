@@ -1,5 +1,13 @@
 # Maintenance report
 
+## 2026-11-14 - music pages: what a timeout means
+
+`docs/music.md` and `docs/music.fr.md` gain "When Music Assistant is slow": a music action that runs out of time before any step finished is answered "took too long" and is not sent to Assist, and the music may still have started, so check the speaker before asking again; if an earlier step finished, the answer is "I could only do part of that" (`HomeRequestHandler._async_structured()`, `CONVERSE_TIMEOUT`). This is what is left of the first draft of this pull request: its other pages (structured actions, options, diagnostics, the music table) are already in `docs/guide.md` and `docs/music.md` on `main`, which are newer.
+
+Review comments of the first draft, checked against the code and `main`'s text: the fallback to a player named like the speaking device is already described in `docs/music.md` (`music_player()`); the two-entity fallback and the sensitive option are written correctly in `docs/guide.md` (duplicate names fall back; closing a cover is not sensitive, `_is_sensitive()`); the timeout comment was right and is the paragraph above.
+
+Transparency Report: AI model Claude Sonnet 5.5; read `handler.py`, `music.py` and `actions.py`; docs only, no code change, tests not needed (the timeout and partial answers are covered by `tests/test_structured_handler.py`). The French needs a human pass.
+
 ## 2026-11-14 - final review: link guard, Markdown in names
 
 From the final independent review. `config_flow.py`: the guard that stops a second link while one waits to be let in now expires after `PENDING_LINK_MAX_AGE` (5 minutes, `const.py`), using a start time the flow records when it begins waiting (`link_started_at`); an expired or untimed flow is closed (which also deletes its unused connection) and no longer blocks new links until Home Assistant restarts; a finished or aborted flow was never counted (the flow leaves Home Assistant's list). New `text.py`, `escape_markdown()`: `[ ] ( ) ` < >` and `://` become spaces, so `x](http://evil)` is no link; applied to every placeholder passed to a repair issue (`__init__.py`, `handler.py`, `intercom.py`, `rooms.py`), to the flow's descriptions (hub, account, code) and to the values formatted into a spoken answer (`async_action_speech`). Tests: `tests/test_text.py`, three in `tests/test_config_flow.py`. 1014 passed, 4 skipped, 100 percent; ruff, format, mypy clean. Transparency: Claude Sonnet 5.5; no human review yet.
