@@ -509,6 +509,23 @@ async def test_volume_for_the_speaker_s_own_room_goes_to_its_music_player(
     assert [c.data["entity_id"] for c in volume] == [fake.ids["Mark2"]]
 
 
+async def test_the_volume_cap_holds_on_the_speakers_own_music_player(
+    hass: HomeAssistant,
+) -> None:
+    """The household's cap is for music first: a Music Assistant player is set at it, not above."""
+    fake = await _house(hass)
+    volume = async_mock_service(hass, "media_player", "volume_set")
+    action = {"v": 1, "capability": "volume", "value": 100, "target": {"here": True}}
+    result = await async_execute_action(
+        hass, action, device_id=fake.device_ids["mark2"], max_volume=45
+    )
+    assert result is not None and result.speech_key == "action_volume_capped"
+    assert result.placeholders["level"] == "45"
+    assert [(c.data["entity_id"], c.data["volume_level"]) for c in volume] == [
+        (fake.ids["Mark2"], 0.45)
+    ]
+
+
 async def test_a_shared_control_never_borrows_another_rooms_playing_player(
     hass: HomeAssistant,
 ) -> None:

@@ -8,7 +8,12 @@ from pytest_homeassistant_custom_component.common import (
     async_mock_service,
 )
 
-from custom_components.thalovant.actions import async_execute, fold, resolve
+from custom_components.thalovant.actions import (
+    ActionResult,
+    async_execute,
+    fold,
+    resolve,
+)
 from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import (
@@ -73,7 +78,14 @@ async def _home(hass: HomeAssistant) -> dict[str, Any]:
         device_class="garage",
         current_position=0,
     )
-    add("cover.blind", "open", bedroom, "Blind", current_position=100)
+    add(
+        "cover.blind",
+        "open",
+        bedroom,
+        "Blind",
+        device_class="blind",
+        current_position=100,
+    )
     add("lock.front", "locked", kitchen, "Front Door")
     add(
         "climate.hvac",
@@ -111,6 +123,18 @@ def action(capability: str, **target: Any) -> dict[str, Any]:
     if mode:
         out["mode"] = mode
     return out
+
+
+def refused(result: ActionResult | None, key: str = "action_sensitive_off") -> bool:
+    """Whether the action was refused aloud: an error with that sentence, nothing changed.
+
+    A refusal is an answer, never None: None would send the words on to Assist.
+    """
+    return (
+        result is not None
+        and (result.response_type, result.speech_key) == ("error", key)
+        and result.changed == []
+    )
 
 
 async def test_names_are_compared_without_accents_or_case() -> None:
@@ -292,16 +316,15 @@ async def test_sensitive_actions_are_off_by_default(
 ) -> None:
     ids = await _home(hass)
     calls = async_mock_service(hass, domain, service)
-    assert (
+    assert refused(
         await async_execute(
             hass,
             action(capability, **target),
             device_id=ids["speaker"],
             alarm_code="1234",
         )
-        is None
     )
-    assert not calls  # left to Assist as words: its own exposure rules decide
+    assert not calls  # refused aloud; never left to Assist as words
 
 
 async def test_sensitive_actions_when_allowed_and_the_alarm_needs_its_code(
@@ -317,15 +340,16 @@ async def test_sensitive_actions_when_allowed_and_the_alarm_needs_its_code(
     )
     assert lock
     alarm = async_mock_service(hass, "alarm_control_panel", "alarm_disarm")
-    assert (
+    assert refused(
         await async_execute(
             hass,
             action("disarm", name="house"),
             device_id=ids["speaker"],
             allow_sensitive=True,
-        )
-        is None
+        ),
+        "action_alarm_code",
     )
+    assert not alarm  # without the stored code: refused aloud, never left to Assist
     assert await async_execute(
         hass,
         action("disarm", name="house"),
@@ -465,11 +489,10 @@ async def test_a_siren_is_sensitive_in_both_directions(hass: HomeAssistant) -> N
     hass.states.async_set("siren.alarm", "on", {"friendly_name": "Alarm Horn"})
     async_expose_entity(hass, "conversation", "siren.alarm", True)
     calls = async_mock_service(hass, "siren", "turn_off")
-    assert (
+    assert refused(
         await async_execute(
             hass, action("power_off", name="alarm horn"), device_id=ids["speaker"]
         )
-        is None
     )
     assert not calls
     assert await async_execute(
@@ -492,7 +515,9 @@ async def test_zero_brightness_switches_the_light_off(hass: HomeAssistant) -> No
 
 async def test_a_relative_position_needs_a_known_position(hass: HomeAssistant) -> None:
     ids = await _home(hass)
-    hass.states.async_set("cover.shade", "open", {"friendly_name": "Shade"})
+    hass.states.async_set(
+        "cover.shade", "open", {"friendly_name": "Shade", "device_class": "shade"}
+    )
     async_expose_entity(hass, "conversation", "cover.shade", True)
     calls = async_mock_service(hass, "cover", "set_cover_position")
     assert (
@@ -556,10 +581,13 @@ async def test_a_failure_after_part_of_it_is_done_is_reported_not_retried(
     assert len(result.changed) == 1
 
 
-async def test_a_sensitive_action_never_spreads_over_a_room_a_floor_or_all(
+async def test_a_sensitive_action_never_spreads_over_a_room_or_a_floor(
     hass: HomeAssistant,
 ) -> None:
-    """Even with sensitive actions on, "unlock the kitchen" is not "unlock every lock in it"."""
+    """Even with sensitive actions on, "unlock the kitchen" is not "unlock every lock in it".
+
+    It is refused aloud (it used to be None, which sent "unlock the kitchen" to Assist as words).
+    """
     ids = await _home(hass)
     ents = er.async_get(hass)
     entry = MockConfigEntry(domain="test")
@@ -573,20 +601,26 @@ async def test_a_sensitive_action_never_spreads_over_a_room_a_floor_or_all(
     hass.states.async_set("lock.back", "locked", {"friendly_name": "Back Door"})
     async_expose_entity(hass, "conversation", "lock.back", True)
     unlock = async_mock_service(hass, "lock", "unlock")
-    for target in (
-        {"area": "kitchen"},
-        {"all": True, "domain": "lock"},
-        {"name": "kitchen"},
-    ):
-        assert (
+    for target in ({"area": "kitchen"}, {"name": "kitchen"}, {"here": True}):
+        assert refused(
             await async_execute(
                 hass,
                 action("unlock", **target),
                 device_id=ids["speaker"],
                 allow_sensitive=True,
-            )
-            is None
+            ),
+            "action_sensitive_one",
         ), target
+    # "all" is no longer a target: such an action is not one this integration knows
+    assert (
+        await async_execute(
+            hass,
+            action("unlock", all=True, domain="lock"),
+            device_id=ids["speaker"],
+            allow_sensitive=True,
+        )
+        is None
+    )
     assert not unlock
     # named exactly, it is still done
     assert await async_execute(
@@ -601,34 +635,39 @@ async def test_a_sensitive_action_never_spreads_over_a_room_a_floor_or_all(
 async def test_scripts_and_automations_are_run_or_switched_one_at_a_time(
     hass: HomeAssistant,
 ) -> None:
+    """Several runnable entities in one room are never run or switched together.
+
+    They are not sensitive, so this is not a refusal: the words go on to Assist (None).
+    """
     ids = await _home(hass)
+    areas, ents = ar.async_get(hass), er.async_get(hass)
+    shed = areas.async_create("Shed")
     for eid, name in (
         ("script.a", "A"),
         ("script.b", "B"),
         ("automation.x", "X"),
         ("automation.y", "Y"),
     ):
-        hass.states.async_set(eid, "off", {"friendly_name": name})
-        async_expose_entity(hass, "conversation", eid, True)
+        domain, object_id = eid.split(".")
+        reg = ents.async_get_or_create(
+            domain, "test", object_id, suggested_object_id=object_id
+        )
+        ents.async_update_entity(reg.entity_id, area_id=shed.id)
+        hass.states.async_set(reg.entity_id, "off", {"friendly_name": name})
+        async_expose_entity(hass, "conversation", reg.entity_id, True)
     run = async_mock_service(hass, "script", "turn_on")
     off = async_mock_service(hass, "automation", "turn_off")
-    assert (
-        await async_execute(
-            hass,
-            action("activate", all=True, domain="script"),
-            device_id=ids["speaker"],
-        )
-        is None
-    )
-    assert (
-        await async_execute(
-            hass,
-            action("power_off", all=True, domain="automation"),
-            device_id=ids["speaker"],
-        )
-        is None
-    )
+    for capability, domain in (("activate", "script"), ("power_off", "automation")):
+        several = action(capability, area="shed", domain=domain)
+        found = resolve(hass, several, ids["speaker"])
+        assert found is not None and len(found) == 2
+        assert await async_execute(hass, several, device_id=ids["speaker"]) is None
     assert not run and not off
+    # named exactly, one is run
+    assert await async_execute(
+        hass, action("activate", name="a", domain="script"), device_id=ids["speaker"]
+    )
+    assert [c.data["entity_id"] for c in run] == ["script.a"]
 
 
 async def test_opening_a_window_cover_is_sensitive(hass: HomeAssistant) -> None:
@@ -640,10 +679,9 @@ async def test_opening_a_window_cover_is_sensitive(hass: HomeAssistant) -> None:
     )
     async_expose_entity(hass, "conversation", "cover.window", True)
     opened = async_mock_service(hass, "cover", "open_cover")
-    assert (
+    assert refused(
         await async_execute(
             hass, action("power_on", name="bedroom window"), device_id=ids["speaker"]
         )
-        is None
     )
     assert not opened

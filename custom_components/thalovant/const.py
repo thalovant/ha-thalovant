@@ -25,10 +25,14 @@ CONF_ALLOW_ANNOUNCEMENTS: Final = "allow_announcements"
 CONF_ALLOW_URGENT: Final = "allow_urgent"
 CONF_ALLOW_RECEIVE: Final = "allow_receive"
 # Structured actions (the hub names a capability, a target and a value instead of leaving a sentence to Assist).
-# On by default; sensitive ones (locks, alarm panels, garage doors, gates, valves, sirens) are off by default.
+# On by default; sensitive ones (locks, alarm panels, sirens, valves, and every cover that is not a window
+# covering) are off by default.
 CONF_STRUCTURED_ACTIONS: Final = "structured_actions"
 CONF_STRUCTURED_SENSITIVE: Final = "structured_sensitive"
 CONF_ALARM_CODE: Final = "alarm_code"
+# The highest volume a structured action may set on a media player, in percent (1 to 100). Stored only when
+# below 100; absent means no cap.
+CONF_MAX_VOLUME: Final = "max_volume"
 CONF_SPEAKER_PLAYERS: Final = "speaker_players"
 CONF_SPEAKER_AREAS: Final = "speaker_areas"
 CONF_TTS_ENTITY: Final = "tts_entity"
@@ -95,11 +99,11 @@ ADMISSION_GRACE_PERIOD: Final = timedelta(seconds=600)
 REQUEST_MESSAGE_TYPE: Final = "thalovant.home.request"
 RESPONSE_MESSAGE_TYPE: Final = "thalovant.home.response"
 
-# The hub gives up on a request 10 seconds after sending it and treats silence
+# The hub's router gives up on a request 12 seconds after sending it and treats silence
 # as a timeout; an answer after that is never sent. Counted from the request's
 # arrival, Assist gets at most CONVERSE_TIMEOUT of them, a fallback sentence
 # for an error what is left short of REPLY_RESERVE, and the reply the rest.
-HUB_TIMEOUT: Final = 10.0
+HUB_TIMEOUT: Final = 12.0
 CONVERSE_TIMEOUT: Final = 8.5
 REPLY_RESERVE: Final = 0.5
 

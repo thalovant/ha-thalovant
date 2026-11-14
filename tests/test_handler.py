@@ -722,7 +722,7 @@ async def test_no_time_left(
 
     agent = use_agent(FakeAgent(answer))
     caplog.set_level(logging.DEBUG, logger="custom_components.thalovant")
-    await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=11)
+    await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=13)
     await _until(lambda: loaded_entry.runtime_data.stats.handled == 1)
     await asyncio.sleep(0)
 
@@ -748,10 +748,10 @@ async def test_late_request_gets_what_is_left(
 
     agent = use_agent(FakeAgent(answer))
     loop = asyncio.get_running_loop()
-    # Arrived 9.6 s ago: 0.4 s left, of which the reply keeps its reserve.
+    # Arrived 11.6 s ago: 0.4 s left, of which the reply keeps its reserve.
     with patch("custom_components.thalovant.handler.REPLY_RESERVE", 0.1):
         started = loop.time()
-        await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=9.6)
+        await mock_hub_connection.emit(REQUEST_MESSAGE_TYPE, _request(), age=11.6)
         response = await mock_hub_connection.next_reply()
     assert loop.time() - started < 0.4
     assert len(agent.inputs) == 1
