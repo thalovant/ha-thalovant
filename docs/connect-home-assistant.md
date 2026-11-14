@@ -6,9 +6,9 @@ Say "turn off the kitchen light" to any Thalovant device, and Home Assistant doe
 
 - Home Assistant 2026.9 or later, with [HACS](https://hacs.xyz).
 - A Thalovant account with one hub.
-- A phone or computer on the same Wi-Fi as Home Assistant, with any VPN turned off.
+- A phone or computer on the same network as Home Assistant (home Wi-Fi or cable), with any VPN turned off.
 
-This takes about five minutes, and one of them is waiting.
+This takes about five minutes, and one of them is waiting. Steps 1, 7, 8 and 9 happen in HACS and on Thalovant's pages, so they are described in words, not pictures.
 
 ## Steps
 
@@ -50,12 +50,12 @@ This takes about five minutes, and one of them is waiting.
 
 ## Check it works
 
-Say to a Thalovant device: "Turn on the ceiling lights." The light turns on, and you hear Home Assistant's own answer, such as "Turned on the light."
+Pick one device from the Expose list in step 10, for example a light called **Ceiling Lights**. Say to a Thalovant device: "Turn on" followed by that device's name, such as "Turn on the ceiling lights." The device switches on, and you hear Home Assistant's own answer, such as "Turned on the light."
 
 ## If it doesn't work
 
 - **Home Assistant says "Failed setup, will retry".** The hub is still letting Home Assistant in. Wait two minutes. If it stays, check that the hub is online in your Thalovant account.
-- **The approval page refuses.** Open the link on a phone or computer on the same Wi-Fi as Home Assistant, with the VPN off.
+- **The approval page refuses.** Open the link on a phone or computer on the same network as Home Assistant, with the VPN off.
 - **"I can't find that device".** The device is not exposed. Do step 10 for it, and give the device a room so "in the kitchen" works.
 
 ## More

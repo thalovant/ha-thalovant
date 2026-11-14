@@ -24,7 +24,7 @@ account with at least one hub.
 2. In **Settings, Devices & services**, add **Thalovant** and choose **Link account**.
 3. Expose the entities you want to control to Assist, then try a request on a Thalovant device.
 
-The step-by-step guide with a picture for every step is [Connect Home Assistant to Thalovant](docs/connect-home-assistant.md);
+The step-by-step guide with pictures of the screens is [Connect Home Assistant to Thalovant](docs/connect-home-assistant.md);
 the [Link Home Assistant page](https://docs.thalovant.com/manage/home-assistant/) covers the same steps. To install by hand, copy `custom_components/thalovant` into your
 Home Assistant `custom_components` folder.
 

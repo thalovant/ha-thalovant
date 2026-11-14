@@ -1,6 +1,6 @@
 # Thalovant for Home Assistant: the full guide
 
-New here? Start with [Connect Home Assistant to Thalovant](connect-home-assistant.md), which has a picture for every step. The short version is the [README](../README.md); this page has everything else: linking, options, announcements, structured actions, troubleshooting and removal.
+New here? Start with [Connect Home Assistant to Thalovant](connect-home-assistant.md), with pictures of the Home Assistant screens. The short version is the [README](../README.md); this page has everything else: linking, options, announcements, structured actions, troubleshooting and removal.
 
 Say "turn off the kitchen light" to any Thalovant device, at home or away, and
 Home Assistant does it.

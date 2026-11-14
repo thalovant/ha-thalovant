@@ -1,6 +1,6 @@
 # Play music from Music Assistant through Home Assistant
 
-Say "play jazz in the kitchen" to a Thalovant device, and your Music Assistant plays it on the kitchen speaker.
+Say "play Adam's Song in the kitchen" to a Thalovant device, and your Music Assistant plays it on the kitchen speaker. Use the name of a track, album, artist or playlist you have: this route looks names up, so it does not play a whole genre.
 
 **What you need**
 
@@ -38,13 +38,13 @@ Say "play jazz in the kitchen" to a Thalovant device, and your Music Assistant p
 
    ![The Music Assistant integration page listing three devices.](images/ha-m07-music-assistant-added.png)
 
-7. **Check that Thalovant may use them.** Open **Settings**, **Voice assistants**, **Expose**, and search for the speaker's name. A blue speech bubble means it is allowed. New speakers are allowed by default.
+7. **Check that Thalovant may use them.** Open **Settings**, **Voice assistants**, **Expose**, and search for the speaker's name. A blue speech bubble means it is allowed. New speakers are allowed by default. If a speaker has no bubble (for example you turned off **Expose new entities**), select **Expose entities**, tick the speaker, and select **Expose**.
 
    ![The Expose tab filtered on Kitchen, with a blue speech bubble beside the speaker.](images/ha-m08-expose-your-players.png)
 
 ## Check it works
 
-Say: "Play jazz in the kitchen." You hear the kitchen speaker start, and Thalovant answers with what it queued, such as "Playing Adam's Song by blink-182 on Kitchen."
+Say: "Play" and the name of a track you own, then "in the kitchen", such as "Play Adam's Song in the kitchen." You hear the kitchen speaker start, and Thalovant answers with what it queued, such as "Playing Adam's Song by blink-182 on Kitchen."
 
 ## If it doesn't work
 
