@@ -206,6 +206,8 @@ class ActionResult:
     speech_key: str
     placeholders: dict[str, str] = field(default_factory=dict)
     changed: list[str] = field(default_factory=list)
+    #: Translation keys of sentences said after the answer (which of two same-named devices was used).
+    notes: list[str] = field(default_factory=list)
 
 
 def fold(text: Any) -> str:

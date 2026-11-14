@@ -24,6 +24,14 @@ Structured actions and music through the Home Assistant link, and the fixes of t
 - **Music**: play and steer Music Assistant players (`play_media`, `now_playing`,
   `shuffle`, `repeat`, `transfer`, `join`, `unjoin`, and the shared `volume`, `mute`,
   `unmute`, `playback`) ([`music.py`](custom_components/thalovant/music.py)).
+- **Setup waits in the open**: the link dialog says "Waiting to be let in" for the up to
+  90 seconds the hub takes, and a second link started meanwhile is refused with
+  `link_pending` instead of making another connection
+  ([`config_flow.py`](custom_components/thalovant/config_flow.py), `_async_pending_link()`).
+- **Repair issues for Music Assistant players** ([`rooms.py`](custom_components/thalovant/rooms.py)):
+  an exposed player with no area ("Give Kitchen a room", cleared when an area is
+  assigned), and two exposed media players with one spoken name ("Two devices are called
+  Kitchen"). A music request that names such a player says which one it used.
 - **Highest volume** option (`max_volume`, 1 to 100, default 100 = no cap): every
   structured volume action is set at most at the cap, and the answer says so when the
   cap lowered what was asked. If that capped call fails, the answer says it failed

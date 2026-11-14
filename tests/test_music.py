@@ -676,3 +676,46 @@ async def test_a_shared_control_keeps_the_music_player_it_chose(
     )
     assert result is not None
     assert [c.data["entity_id"] for c in volume] == [fake.ids["Kitchen"]]
+
+
+async def test_a_name_another_device_has_too_is_said_in_the_answer(
+    hass: HomeAssistant,
+) -> None:
+    """The Chromecast called Kitchen is exposed too: the answer says the Music Assistant one was used."""
+    fake = await _house(hass)
+    action = {
+        "capability": "play_media",
+        "target": {"name": "Kitchen"},
+        "media": {"query": "Adam's Song"},
+    }
+    result = await async_execute_music(hass, action, device_id=None)
+    assert result is not None
+    assert result.response_type == "action_done"
+    assert result.notes == ["music_name_clash"]
+    assert result.placeholders["player"] == "Kitchen"
+    assert fake.effects()[0]["player"] == "Kitchen"
+
+
+async def test_a_name_nobody_shares_or_a_room_adds_no_note(hass: HomeAssistant) -> None:
+    """No note for a name only one player has, for a room, or for an answer that is an error."""
+    fake = await _house(hass)
+    media = {"query": "Adam's Song"}
+    for target in ({"name": "Bedroom"}, {"area": "Kitchen"}, {"here": True}):
+        result = await async_execute_music(
+            hass,
+            {"capability": "play_media", "target": target, "media": media},
+            device_id=fake.device_ids["kitchen speaker"],
+        )
+        assert result is not None and result.notes == []
+    missing = await async_execute_music(
+        hass,
+        {
+            "capability": "play_media",
+            "target": {"name": "Kitchen"},
+            "media": {"query": "zzzz nothing like it"},
+        },
+        device_id=None,
+    )
+    assert missing is not None
+    assert missing.speech_key == "music_not_found"
+    assert missing.notes == []

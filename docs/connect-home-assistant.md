@@ -38,7 +38,7 @@ This takes about five minutes, and one of them is waiting. Steps 1, 7, 8 and 9 h
 
 8. **Pick your hub.** Home Assistant shows your hubs. Select the one whose devices should control this home.
 
-9. **Wait about a minute and a half.** Home Assistant says when the link is ready.
+9. **Wait up to a minute and a half.** Home Assistant shows **Waiting to be let in** and moves on by itself when the link is ready. There is no need to try again.
 
 10. **Choose what Thalovant can control.** Thalovant can only use the devices you let Assist use. Open **Settings**, then **Voice assistants**, then the **Expose** tab. A blue speech bubble in the **Assistants** column means the device is allowed.
 
@@ -55,8 +55,9 @@ Pick one device from the Expose list in step 10, for example a light called **Ce
 ## If it doesn't work
 
 - **Home Assistant says "Failed setup, will retry".** The hub is still letting Home Assistant in. Wait two minutes. If it stays, check that the hub is online in your Thalovant account.
+- **Home Assistant says "A link ... is already waiting to be let in".** A first link is still being set up. Wait up to a minute and a half for it; do not start another.
 - **The approval page refuses.** Open the link on a phone or computer on the same network as Home Assistant, with the VPN off.
-- **"I can't find that device".** The device is not exposed. Do step 10 for it, and give the device a room so "in the kitchen" works.
+- **"I can't find that device".** The device is not exposed. Do step 10 for it, and give the device a room so "in the kitchen" works. For a Music Assistant speaker with no room, **Settings**, **Repairs** says "Give ... a room".
 
 ## More
 

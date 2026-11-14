@@ -43,6 +43,7 @@ from .const import (
 from .handler import HomeRequestHandler, agent_issue_id
 from .intercom import IntercomController, can_play_issue_id, unavailable_issue_id
 from .models import ThalovantConfigEntry, ThalovantRuntimeData
+from .rooms import PlayerChecker, async_delete_entry_issues
 from .self_hosted import async_create_session, validate_credentials
 from .services import async_setup_services
 from .speaker import IntercomSpeakerHandler
@@ -270,6 +271,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
     if controller is not None:
         platforms.extend(_async_start_intercom(hass, entry, controller))
     entry.runtime_data.platforms = platforms
+    if not self_hosted:
+        # Music goes to Music Assistant's players: say when one has no room or a name another has.
+        checker = PlayerChecker(hass, entry)
+        entry.async_on_unload(checker.async_clear)
+        entry.async_on_unload(checker.async_start())
     await hass.config_entries.async_forward_entry_setups(entry, platforms)
 
     entry.async_create_background_task(
@@ -325,6 +331,7 @@ async def async_remove_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) -
     ir.async_delete_issue(hass, DOMAIN, unavailable_issue_id(entry.entry_id))
     ir.async_delete_issue(hass, DOMAIN, can_play_issue_id(entry.entry_id))
     _async_delete_key_issues(hass, entry.entry_id)
+    async_delete_entry_issues(hass, entry.entry_id)
     if (directory := _noise_dir(hass, entry)) is not None:
         await hass.async_add_executor_job(shutil.rmtree, directory, True)
     if entry.data.get(CONF_SELF_HOSTED) is True:

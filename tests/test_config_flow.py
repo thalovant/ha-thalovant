@@ -958,3 +958,35 @@ async def test_not_ready_label_without_translation(
     assert [option["label"] for option in options] == [
         "Maison (can't link Home Assistant yet)"
     ]
+
+
+async def test_a_second_link_waits_for_the_pending_one(
+    hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
+) -> None:
+    """While a link is being let in, a new one says so instead of making another connection."""
+    never = asyncio.Event()
+
+    async def hang(*_: Any, **__: Any) -> None:
+        await never.wait()
+
+    mock_api.wait_for_admission.side_effect = hang
+    pending = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    assert pending["step_id"] == "admission"
+    assert pending["progress_action"] == "wait_for_admission"
+
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    assert second["type"] is FlowResultType.ABORT
+    assert second["reason"] == "link_pending"
+    assert second["description_placeholders"] == {"hub": "Maison"}
+    mock_api.create_connection.assert_awaited_once()
+
+    # the pending one is not disturbed, and once it is gone a new link starts normally
+    hass.config_entries.flow.async_abort(pending["flow_id"])
+    await hass.async_block_till_done(wait_background_tasks=True)
+    again = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    assert again["type"] is FlowResultType.FORM
+    assert again["step_id"] == "user"

@@ -66,10 +66,13 @@
         "data_description": {
           "link_method": "Dans les deux cas, approuvez depuis un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant, sans RPV. **Relier le compte** ouvre Thalovant dans votre navigateur et revient par My Home Assistant. **Relier avec un code plutôt** affiche un code à usage unique."
         }
+      },
+      "admission": {
+        "title": "En attente d'acceptation"
       }
     },
     "progress": {
-      "wait_for_admission": "Votre hub {hub} est en train d'accepter Home Assistant. Cela prend en général une minute et demie.",
+      "wait_for_admission": "En attente d'acceptation. Votre hub {hub} est en train d'accepter Home Assistant, ce qui prend jusqu'à 90 secondes. Inutile de réessayer : cette page continue d'elle-même.",
       "wait_for_login": "Ouvrez {url} sur un téléphone ou un ordinateur connecté au même réseau que ce Home Assistant (votre Wi-Fi à la maison, sans RPV) et approuvez la connexion : Thalovant n’accepte l’approbation que depuis le réseau où se trouve ce Home Assistant. La page présente la demande sous le nom **Home Assistant**, comme une application enregistrée auprès de Thalovant. Si un code vous est demandé, saisissez :\n\n```\n{code}\n```\n\nCette étape se poursuit d'elle-même dès que vous avez approuvé."
     },
     "error": {
@@ -92,7 +95,7 @@
     "abort": {
       "all_hubs_linked": "Tous les hubs de ce compte Thalovant sont déjà reliés à ce Home Assistant.",
       "already_configured": "Ce hub est déjà relié à Home Assistant.",
-      "already_in_progress": "Une liaison avec ce hub est déjà en cours de configuration.",
+      "already_in_progress": "Une liaison avec ce hub attend déjà d'être acceptée, ce qui prend jusqu'à 90 secondes. Inutile de réessayer.",
       "hub_not_found": "Ce hub n'est plus disponible pour votre compte Thalovant.",
       "link_closed": "La configuration a été fermée avant la réponse de Thalovant. La connexion obtenue est révoquée ; ajoutez de nouveau l'intégration pour relier votre compte.",
       "no_hubs": "Ce compte Thalovant n'a aucun hub auquel relier Home Assistant.",
@@ -100,7 +103,8 @@
       "wrong_account": "Vous vous êtes connecté avec un autre compte Thalovant. Utilisez le compte auquel appartient cette liaison.",
       "different_private_hub": "La nouvelle connexion doit viser le même hub privé et garder le même ID de connexion vocale autorisée.",
       "consent_successful": "C'est fait. Thalovant a accordé l'autorisation et les options sont enregistrées. L'intégration se recharge pour les appliquer.",
-      "consent_scopes_missing": "Thalovant n'a pas accordé l'autorisation d'annonce, donc rien n'a été activé. Votre forfait Thalovant n'inclut peut-être pas Intercom."
+      "consent_scopes_missing": "Thalovant n'a pas accordé l'autorisation d'annonce, donc rien n'a été activé. Votre forfait Thalovant n'inclut peut-être pas Intercom.",
+      "link_pending": "Une liaison avec {hub} attend déjà d'être acceptée, ce qui prend jusqu'à 90 secondes. Inutile de réessayer. Attendez qu'elle se termine, puis regardez sous **Paramètres**, **Appareils et services**."
     }
   },
   "options": {
@@ -368,6 +372,14 @@
     "intercom_can_play": {
       "title": "Thalovant n'a pas été informé que {hub} peut jouer des annonces",
       "description": "La lecture des annonces est activée pour {hub}, mais Home Assistant n'a pas pu indiquer à Thalovant que cette connexion peut les jouer : le propriétaire du hub ne peut donc pas encore activer la réception pour elle. Home Assistant réessaie au redémarrage ou quand vous enregistrez les options. Vérifiez que Thalovant est joignable et que l'API de votre compte Thalovant prend en charge Intercom."
+    },
+    "music_player_no_area": {
+      "title": "Donnez une pièce à {player}",
+      "description": "{player} est un lecteur Music Assistant que Assist peut utiliser, mais il n'a pas de pièce : « mets du jazz dans la cuisine » ne peut donc pas le trouver. [Ouvrez son appareil]({device_url}) et choisissez une pièce."
+    },
+    "music_name_clash": {
+      "title": "Deux appareils s'appellent {name}",
+      "description": "Un Chromecast ou un autre lecteur exposé porte le même nom que le lecteur Music Assistant {name}. Thalovant utilise celui de Music Assistant pour la musique. [Ouvrez l'autre]({other_url}) et renommez-le si vous voulez les distinguer."
     }
   },
   "selector": {
@@ -429,7 +441,8 @@
     "music_repeat_all": "Je répète la file sur {player}.",
     "music_joined": "{other} joue maintenant avec {player}.",
     "music_unjoined": "{player} joue de nouveau seul.",
-    "music_transferred": "La musique est passée sur {player}."
+    "music_transferred": "La musique est passée sur {player}.",
+    "music_name_clash": "J'ai utilisé celui de Music Assistant : un autre appareil s'appelle aussi {player}."
   },
   "services": {
     "announce": {
