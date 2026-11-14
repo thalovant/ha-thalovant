@@ -24,8 +24,8 @@ account with at least one hub.
 2. In **Settings, Devices & services**, add **Thalovant** and choose **Link account**.
 3. Expose the entities you want to control to Assist, then try a request on a Thalovant device.
 
-The [Link Home Assistant guide](https://docs.thalovant.com/manage/home-assistant/) covers
-the same steps. To install by hand, copy `custom_components/thalovant` into your
+The step-by-step guide with a picture for every step is [Connect Home Assistant to Thalovant](docs/connect-home-assistant.md);
+the [Link Home Assistant page](https://docs.thalovant.com/manage/home-assistant/) covers the same steps. To install by hand, copy `custom_components/thalovant` into your
 Home Assistant `custom_components` folder.
 
 ## What it does
@@ -43,7 +43,7 @@ Home Assistant `custom_components` folder.
 
 ## Learn more
 
-[Full guide](docs/guide.md) (linking, options, announcements, structured actions,
+[Play music from Music Assistant](docs/play-music-from-music-assistant.md) · [Full guide](docs/guide.md) (linking, options, announcements, structured actions,
 troubleshooting, removal) · [Music](docs/music.md) · [Announcements](docs/announcements.md) ·
 [Changelog](CHANGELOG.md) · [FAQ](FAQ.md) · [Thalovant documentation](https://docs.thalovant.com/)
 
