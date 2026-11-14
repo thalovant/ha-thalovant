@@ -32,6 +32,10 @@ Players are the **Music Assistant media players that are exposed to Assist** (a 
 
 Answers are spoken from this integration's translations (English and French; other languages hear English): "Playing Adam's Song by blink-182 on mark2." A title that no provider has is an answer ("I couldn't find ... in your music"), not a guess.
 
+## When Music Assistant is slow
+
+A request has about 8.5 seconds, shared with everything else the integration does for it. If the time runs out before any step of a music action has finished, the hub hears "Sorry, Home Assistant took too long to answer." and the sentence is not sent to Assist. The music may still have started: a search or a play call that had not returned in time can finish afterwards, so look at the speaker before you ask again. If an earlier step had finished, for example the queue was loaded and the shuffle had not returned, the answer is "Sorry, I could only do part of that." Code: the timeout branch of `HomeRequestHandler._async_structured()` (`handler.py`) and `CONVERSE_TIMEOUT` (`const.py`).
+
 ## Known limits (Home Assistant's Music Assistant integration does not expose them)
 
 - No genre play and no "add the current track to favorites": use the direct or bridge transport of the skill.

@@ -23,6 +23,10 @@ Les lecteurs sont les **lecteurs Music Assistant exposés à Assist** (une encei
 
 Les réponses viennent des traductions de l'intégration (anglais et français ; les autres langues entendent l'anglais). Un titre qu'aucun fournisseur n'a est une réponse (« Je n'ai pas trouvé ... »), pas une supposition ; l'artiste nommé affine la recherche et écarte un résultat dont les artistes listés ne le contiennent pas (ou n'y sont pas contenus : une correspondance par sous-chaîne, donc « Muse » peut correspondre à « Muse Tribute Band ») ; un résultat sans information d'artiste, comme une liste ou une radio, n'est pas écarté.
 
+## Quand Music Assistant est lent
+
+Une demande dispose d'environ 8,5 secondes, partagées avec tout ce que l'intégration fait pour elle. Si le temps s'écoule avant qu'une étape d'une action musicale soit terminée, le hub entend « Désolé, Home Assistant a mis trop de temps à répondre. » et la phrase n'est pas envoyée à Assist. La musique a peut-être quand même démarré : une recherche ou un appel de lecture qui n'avait pas répondu à temps peut se terminer ensuite ; regardez l'enceinte avant de redemander. Si une étape précédente était terminée, par exemple la file chargée et l'aléatoire pas encore répondu, la réponse est « Désolé, je n'ai pu en faire qu'une partie. » Code : la branche de délai de `HomeRequestHandler._async_structured()` (`handler.py`) et `CONVERSE_TIMEOUT` (`const.py`).
+
 ## Limites connues (l'intégration Music Assistant de Home Assistant ne les expose pas)
 
 Pas de lecture par genre ni d'ajout du titre en cours aux favoris : utilisez le transport direct ou le pont de la compétence. La liste des enceintes n'est pas une action ici : le verbe `targets` de la spécification des connecteurs (0.4.0) n'est pas porté par ce chemin. Les favoris sont limités à 50 titres par demande.
