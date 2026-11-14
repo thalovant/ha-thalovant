@@ -44,6 +44,7 @@ from .const import (
 from .models import ThalovantConfigEntry
 from .music import async_execute_action
 from .self_hosted import permits_lighting_request
+from .text import escape_markdown
 
 # Error codes this integration adds to the ones Assist reports.
 ERROR_TIMEOUT = "timeout"
@@ -181,7 +182,12 @@ async def async_action_speech(
     # a placeholder the result lacks is said as nothing; a malformed string raises, and the
     # caller answers "Done." instead
     return plain_speech(
-        " ".join([text, *notes]).format_map(defaultdict(str, result.placeholders))
+        " ".join([text, *notes]).format_map(
+            defaultdict(
+                str,
+                {k: escape_markdown(v, 200) for k, v in result.placeholders.items()},
+            )
+        )
     )
 
 
@@ -498,7 +504,10 @@ class HomeRequestHandler:
                 is_fixable=False,
                 severity=ir.IssueSeverity.WARNING,
                 translation_key="agent_unavailable",
-                translation_placeholders={"agent": agent_id, "hub": self._entry.title},
+                translation_placeholders={
+                    "agent": escape_markdown(agent_id),
+                    "hub": escape_markdown(self._entry.title),
+                },
             )
             return error_response(request_id, ERROR_AGENT_UNAVAILABLE, conversation_id)
         ir.async_delete_issue(self._hass, DOMAIN, agent_issue_id(self._entry.entry_id))

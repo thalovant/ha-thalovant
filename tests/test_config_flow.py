@@ -2,6 +2,7 @@
 
 import asyncio
 from dataclasses import replace
+import time
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -990,3 +991,83 @@ async def test_a_second_link_waits_for_the_pending_one(
     )
     assert again["type"] is FlowResultType.FORM
     assert again["step_id"] == "user"
+
+
+async def test_an_abandoned_link_stops_blocking_new_ones_after_five_minutes(
+    hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
+) -> None:
+    """The pending marker had no age: a flow nobody finished blocked every new link until a restart."""
+    never = asyncio.Event()
+
+    async def hang(*_: Any, **__: Any) -> None:
+        await never.wait()
+
+    mock_api.wait_for_admission.side_effect = hang
+    pending = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    assert pending["step_id"] == "admission"
+
+    start = time.monotonic()
+    with patch(
+        "custom_components.thalovant.config_flow.time.monotonic",
+        return_value=start + 299,
+    ):
+        blocked = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+    assert (
+        blocked["type"] is FlowResultType.ABORT and blocked["reason"] == "link_pending"
+    )
+
+    with patch(
+        "custom_components.thalovant.config_flow.time.monotonic",
+        return_value=start + 301,
+    ):
+        again = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": SOURCE_USER}
+        )
+    assert again["type"] is FlowResultType.FORM and again["step_id"] == "user"
+    # the abandoned flow was closed (and so its unused connection is cleaned up), not just ignored
+    await hass.async_block_till_done(wait_background_tasks=True)
+    assert not [
+        flow
+        for flow in hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+        if flow["flow_id"] == pending["flow_id"]
+    ]
+
+
+async def test_a_pending_link_without_a_start_time_is_not_trusted(
+    hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
+) -> None:
+    never = asyncio.Event()
+
+    async def hang(*_: Any, **__: Any) -> None:
+        await never.wait()
+
+    mock_api.wait_for_admission.side_effect = hang
+    pending = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    flow = hass.config_entries.flow._progress[pending["flow_id"]]
+    flow.context.pop("link_started_at")
+    again = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    assert again["type"] is FlowResultType.FORM
+
+
+async def test_a_hub_name_cannot_make_a_link_in_the_pending_message(
+    hass: HomeAssistant, mock_auth: MagicMock, mock_api: MagicMock
+) -> None:
+    never = asyncio.Event()
+
+    async def hang(*_: Any, **__: Any) -> None:
+        await never.wait()
+
+    mock_api.wait_for_admission.side_effect = hang
+    pending = await _pick_hub(hass, await _finish_login(hass, await _start(hass)))
+    hass.config_entries.flow._progress[pending["flow_id"]].context[
+        "title_placeholders"
+    ] = {"hub": "x](http://evil.example) `y` <b>"}
+    second = await hass.config_entries.flow.async_init(
+        DOMAIN, context={"source": SOURCE_USER}
+    )
+    shown = second["description_placeholders"]["hub"]
+    assert not any(ch in shown for ch in "[]()`<>") and "://" not in shown
