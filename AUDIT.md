@@ -344,7 +344,8 @@ first, then fixed with a test that asserts the fixed behaviour.
 | The recheck's proofs of concept against the changed tree | 17 fail, 4 pass. Failing: the 3 room and floor cases, the 3 unclassified-cover cases, and 11 "holds" cases that asserted `None` (left to Assist) where the answer is now a refusal or, for the room, its lights. Still passing: the relay switch and the script (H2, open below), volume 100 with no cap set (the cap is an option, default 100), and an unknown capability |
 | `ruff check .`, `ruff format --check .`, `mypy` (strict) | clean |
 | Mutation check of the verb-list test | adding a verb to `SHARED_CAPABILITIES`, or removing one from the QUICK_FACTS row, makes `test_the_docs_list_exactly_the_verbs_the_code_carries` fail |
-| Not run here | `hassfest` and the HACS check (CI only); a real Home Assistant, a real Music Assistant, a hub or a skill (fakes only) |
+| `hassfest` (the `ghcr.io/home-assistant/hassfest:latest` image, run with podman, no network, on the tree with these fixes) | Integrations: 1, Invalid integrations: 0 |
+| Not run here | the HACS check (CI only, and only once the repository is public); a real Home Assistant, a real Music Assistant, a hub or a skill (fakes only) |
 
 ### Findings
 

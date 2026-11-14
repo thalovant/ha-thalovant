@@ -46,7 +46,7 @@ as described). After: `pytest --cov --cov-report=term-missing`: **986 passed, 4 
 statement and branch coverage without the connector spec package (as CI), **990 passed** with spec 0.4.0
 installed from a copy of its source; `ruff check .`, `ruff format --check .` and `mypy` clean. The proofs
 of concept against the changed tree: 17 fail, 4 pass (the relay, the script, volume without a cap set, an
-unknown capability). Not run: `hassfest` and the HACS check (CI), any real Home Assistant, Music Assistant,
+unknown capability). `hassfest` (the `ghcr.io/home-assistant/hassfest:latest` image, with podman, no network): 0 invalid integrations. Not run: the HACS check (CI), any real Home Assistant, Music Assistant,
 hub or skill.
 
 **Left open:** a relay switch or a script that opens a door cannot be recognised (documented; a proposal is
