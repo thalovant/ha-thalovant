@@ -172,9 +172,17 @@ async def async_action_speech(
         hass, language, "common", {DOMAIN}
     )
     text = strings.get(f"component.{DOMAIN}.common.{result.speech_key}") or ""
+    # a note is a sentence that follows the answer; one with no translation is left out
+    notes = [
+        note
+        for key in result.notes
+        if (note := strings.get(f"component.{DOMAIN}.common.{key}"))
+    ]
     # a placeholder the result lacks is said as nothing; a malformed string raises, and the
     # caller answers "Done." instead
-    return plain_speech(text.format_map(defaultdict(str, result.placeholders)))
+    return plain_speech(
+        " ".join([text, *notes]).format_map(defaultdict(str, result.placeholders))
+    )
 
 
 def error_response(

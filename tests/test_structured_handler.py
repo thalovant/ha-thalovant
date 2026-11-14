@@ -455,3 +455,25 @@ async def test_the_volume_cap_option_holds_and_the_answer_says_the_level(
     )
     await _ask(hass, mock_hub_connection, _request(action=louder))
     assert volume[-1].data["volume_level"] == 0.9 and not agent.inputs
+
+
+async def test_a_note_follows_the_answer_in_the_request_language(
+    hass: HomeAssistant,
+) -> None:
+    """The clash note is said after the answer; a note with no sentence is left out."""
+    from custom_components.thalovant.actions import ActionResult
+    from custom_components.thalovant.handler import async_action_speech
+
+    done = ActionResult(
+        "action_done",
+        "music_playing",
+        {"title": "Adam's Song", "player": "Kitchen"},
+        notes=["music_name_clash", "no_such_note"],
+    )
+    assert await async_action_speech(hass, "en", done) == (
+        "Playing Adam's Song on Kitchen. I used the Music Assistant one: another "
+        "device is also called Kitchen."
+    )
+    assert (await async_action_speech(hass, "fr", done)).endswith(
+        "un autre appareil s'appelle aussi Kitchen."
+    )

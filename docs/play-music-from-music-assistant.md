@@ -49,7 +49,8 @@ Say: "Play" and the name of a track you own, then "in the kitchen", such as "Pla
 ## If it doesn't work
 
 - **"I couldn't find that in your music".** The title is not in Music Assistant or its services. Try an artist you know is there.
-- **The wrong speaker plays.** Two devices share a name, for example a Chromecast and a Music Assistant speaker. Thalovant only uses the Music Assistant one. Rename the other in Home Assistant.
+- **"in the kitchen" is not understood.** Open **Settings**, then **Repairs**. "Give Kitchen a room" means the speaker has no Area: open its device and choose one.
+- **The wrong speaker plays.** Two devices share a name, for example a Chromecast and a Music Assistant speaker. **Repairs** says "Two devices are called Kitchen", and when you name it, Thalovant says it used the Music Assistant one. Rename the other in Home Assistant.
 - **A speaker is missing.** In Music Assistant, open the player's settings and tick **Expose this player to Home Assistant**.
 
    ![Player settings in Music Assistant with Expose this player to Home Assistant circled.](images/ma-05-player-settings.png)

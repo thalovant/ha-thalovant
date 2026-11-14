@@ -183,7 +183,11 @@ the [Christmas Protocol receiver](https://github.com/thalovant/thalovant-skill-c
   counts and timings, never a token, a key, or anything that was said or
   announced.
 - **Repair notices** when the conversation agent chosen in the options no
-  longer exists, when the hub answers with a different security key, and, if
+  longer exists, when the hub answers with a different security key, when a
+  Music Assistant player exposed to Assist has no area ("Give Kitchen a room",
+  cleared once you choose one), when two exposed media players share a name
+  ("Two devices are called Kitchen"; Thalovant uses the Music Assistant one for
+  music and says so), and, if
   announcements are on, when Intercom cannot run on the hub (plan, kid or public
   hub, switched off by Thalovant or by the hub's owner).
 - **With the options on**, and only then: the announce actions, an Intercom
@@ -452,6 +456,10 @@ a restart forgets the one in progress. If the error persists, My Home Assistant
 is sending your browser to another Home Assistant: open
 [My Home Assistant][my] and check that the address it remembers is this
 Home Assistant's.
+
+**"A link to ... is already waiting to be let in".** A first link is still being
+let in by the hub, which takes up to 90 seconds. Wait for it; a second link would
+only be another connection to clean up.
 
 **"This hub can't link Home Assistant yet".** The hub or the Thalovant API
 does not support Home Assistant connections yet. Pick another hub; there is

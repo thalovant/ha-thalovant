@@ -186,11 +186,27 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     ) -> ConfigFlowResult:
         """Explain the sign-in, then start it the way the user chose."""
         if user_input is None:
+            if (pending := self._async_pending_link()) is not None:
+                # A link is still being let in: a second one would only be another connection to
+                # clean up, and it would wait the same ninety seconds.
+                return self.async_abort(
+                    reason="link_pending",
+                    description_placeholders={"hub": pending},
+                )
             return self._async_show_start_form()
         if user_input.get(CONF_SELF_HOSTED) is True:
             return await self.async_step_self_hosted()
         self._method = user_input.get(_CONF_LINK_METHOD, LINK_ACCOUNT)
         return await self._async_start_login()
+
+    @callback
+    def _async_pending_link(self) -> str | None:
+        """The hub another flow of ours is waiting to be let in to, if there is one."""
+        for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN):
+            if flow["flow_id"] != self.flow_id and flow["step_id"] == "admission":
+                titles = flow["context"].get("title_placeholders") or {}
+                return str(titles.get("hub", ""))
+        return None
 
     async def async_step_reauth(
         self, entry_data: Mapping[str, Any]
@@ -818,6 +834,11 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     async def _async_link_hub(self, hub: Hub) -> ConfigFlowResult:
         """Create this installation's connection on the hub, then wait for it."""
         self._hub = hub
+        # Named for the hub while it waits, so a second attempt can say which link is pending.
+        self.context["title_placeholders"] = {
+            **self.context.get("title_placeholders", {}),
+            "hub": hub.name,
+        }
         api = self._api
         if self.source == SOURCE_REAUTH:
             # The old connection goes first: a plan that allows one connection

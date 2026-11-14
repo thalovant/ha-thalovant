@@ -122,6 +122,13 @@ REMOVE_TIMEOUT: Final = 10.0
 
 MANUFACTURER: Final = "Thalovant"
 
+# Music Assistant's integration domain: its players are the media players music requests play on.
+MA_DOMAIN: Final = "music_assistant"
+
+# After a change to the registries, wait this long (seconds) before looking at the players again, so a
+# burst of changes (Home Assistant starting, a device being renamed) is looked at once.
+PLAYER_CHECK_DELAY: Final = 2.0
+
 # Intercom: sending (the services and the notify entity).
 SERVICE_ANNOUNCE: Final = "announce"
 SERVICE_CANCEL_ANNOUNCEMENT: Final = "cancel_announcement"

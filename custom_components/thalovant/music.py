@@ -34,9 +34,9 @@ from .actions import (
     is_known_action,
     resolve,
 )
-from .const import LOGGER
+from .const import LOGGER, MA_DOMAIN
+from .rooms import name_clash
 
-MA_DOMAIN = "music_assistant"
 MUSIC_CAPABILITIES = frozenset(
     {
         "play_media",
@@ -216,7 +216,7 @@ async def async_execute_music(
     ctx = context or Context()
     done = progress if progress is not None else []
     try:
-        return await _RUNNERS[str(capability)](
+        result = await _RUNNERS[str(capability)](
             hass, action, player, device_id, ctx, done
         )
     except TimeoutError:
@@ -231,6 +231,19 @@ async def async_execute_music(
         return ActionResult(
             "error", "music_failed", {"player": _name(player)}, list(done)
         )
+    if result is not None and result.response_type != "error":
+        _note_name_clash(hass, action, player, result)
+    return result
+
+
+def _note_name_clash(
+    hass: HomeAssistant, action: Mapping[str, Any], player: State, result: ActionResult
+) -> None:
+    """Say which device was used when the target was a name another exposed player has too."""
+    name = (action.get("target") or {}).get("name")
+    if name_clash(hass, player, str(name or "")):
+        result.placeholders.setdefault("player", _name(player))
+        result.notes.append("music_name_clash")
 
 
 async def _now_playing(
