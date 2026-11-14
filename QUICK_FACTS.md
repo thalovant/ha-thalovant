@@ -1,11 +1,11 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-13 - Motive: Music actions through the Home Assistant link (music.py), verified against a real Music Assistant.
+Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: version, structured action bounds (closed lists first, a room means its lights, covers sensitive unless a window covering, refusals answered, no `all`, volume cap), the music verb lists as the code has them, what the private vectors are.
 
 # Quick facts
 
 | Fact | Value |
 | --- | --- |
 | Project | `ha-thalovant` |
-| Home Assistant integration domain and version | `thalovant`, `0.4.0` |
+| Home Assistant integration domain and version | `thalovant`, `0.5.0` (`custom_components/thalovant/manifest.json`; unreleased: the last tag is `v0.4.0`) |
 | SDK requirement | `thalovant==0.12.0` (released on PyPI; the first with Intercom; `manifest.json`, enforced by `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin`) |
 | Config entry points | `ThalovantConfigFlow.async_step_user()`, `async_step_self_hosted()`, `async_step_reauth()` |
 | Sign-in methods | Link account (default): `AbstractOAuth2FlowHandler` steps `auth` and `creation` with `ThalovantOAuth2Implementation`; Link with a code instead: `async_step_login()` (device login) |
@@ -53,13 +53,32 @@ services.
 Implementation links and tests are indexed in [documentation](docs/index.md) and
 [the announcements guide](docs/announcements.md).
 
+## Structured actions (0.5.0, unreleased)
+
+| Fact | Value |
+| --- | --- |
+| Modules | `custom_components/thalovant/actions.py`: `is_known_action()`, `resolve()`, `exposed()`, `async_execute()`, `max_volume_of()`; `handler.py`: `HomeRequestHandler._async_structured()` |
+| Checked first (`is_known_action()`) | a capability of `CAPABILITY_DOMAINS` (31); in `target` and `other` only the keys `name`, `area`, `floor`, `domain`, `here` (`TARGET_KEYS`) and a domain of `TARGET_DOMAINS` (30, the connector spec's list). Anything else is not an action: nothing is resolved or called, the words go to Assist |
+| `all` | removed in 0.5.0: no skill sent it and it reached every entity of a domain. A target that carries it is not an action |
+| A room or floor named alone | its lights only (`DEFAULT_DOMAINS`) for `power_on`, `power_off`, `toggle` with no `domain`, whether it arrives as `area`, `floor`, `here` or as a `name` that is no entity's (`_room_default()`) |
+| Most entities one action changes | 50 (`MAX_TARGETS`) |
+| Sensitive (`_is_sensitive()`), off by default | the verbs `lock`, `unlock`, `arm`, `disarm` (`SENSITIVE_VERBS`); a siren on, off or toggled; a valve opened or positioned; a cover opened, toggled or positioned unless its `device_class` is `awning`, `blind`, `curtain`, `shade` or `shutter` (`SAFE_COVER_CLASSES`): no class, `garage`, `gate`, `door`, `window` and `damper` are sensitive. Closing is never sensitive |
+| Not classifiable | a `switch` (a relay that opens a door), a `script`, `scene`, `button` or `automation`: carried out when exposed to Assist and named exactly |
+| A refusal | `response_type: error`, `error_code: failed_to_handle`, a spoken sentence, nothing changed, **never passed to Assist as words**: `common.action_sensitive_off` (sensitive actions off), `action_sensitive_one` (sensitive on, more than one entity), `action_alarm_code` (disarm without the stored code) |
+| Options | `structured_actions` (on; only `false` is stored), `structured_sensitive` (off), `alarm_code`, `max_volume` (1 to 100, default 100; stored only below 100) |
+| Volume cap (`max_volume`) | every structured `volume` action, on any media player, absolute or relative, is set at most at the cap; when the cap lowered it the answer is `common.action_volume_capped` with the level. A sentence Assist handles itself is not capped |
+| Spoken answers | `common.action_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
+
 ## Music (0.5.0, unreleased)
 
 | Fact | Value |
 | --- | --- |
 | Module | `custom_components/thalovant/music.py`: `async_execute_action()`, `async_execute_music()`, `music_player()`, `best_match()` |
-| Capabilities | `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` (plus shared `volume`, `mute`, `playback`) |
-| Home Assistant actions used | `music_assistant.search`, `get_library`, `get_queue`, `play_media`, `transfer_queue`; `media_player.shuffle_set`, `repeat_set`, `join`, `unjoin` |
+| Music capabilities (`MUSIC_CAPABILITIES`) | `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` |
+| Shared media capabilities (`SHARED_CAPABILITIES`) | `volume`, `mute`, `unmute`, `playback` |
+| Not carried on this route (`NOT_CARRIED`) | `targets` |
+| Home Assistant actions used | `music_assistant.search`, `get_library`, `get_queue`, `play_media`, `transfer_queue`; `media_player.shuffle_set`, `repeat_set`, `join`, `unjoin`, `volume_set`, `volume_mute`, `media_play`, `media_pause`, `media_stop`, `media_next_track`, `media_previous_track` |
 | Players | Music Assistant entities (registry platform `music_assistant`) exposed to Assist |
 | Spoken answers | `common.music_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
-| Shared vectors | `tests/music_vectors.json` (also used by thalovant-music-bridge) |
+| Test vectors | `tests/music_vectors.json`: this repository's own copy, shape `world` + `cases` (a whole `action` per case). It is **not** the connector spec's file, which is organised as `validation` and `behavior` (`verb` + `args`) and has behaviours this route does not carry (`targets`). Kept by hand; compared with the spec's `behavior` only when the spec package is installed (`tests/test_music_contract.py`), which this repository's CI does not do |
+| Verb lists kept true | `tests/test_music_contract.py::test_the_docs_list_exactly_the_verbs_the_code_carries` fails when `music.py` and these three rows (or the table in `docs/music.md`) differ |

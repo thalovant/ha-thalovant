@@ -1,5 +1,5 @@
 {
-  "_": "Shared music action test vectors. The same file is used by ha-thalovant (tests/test_music.py) and by thalovant-music-bridge (tests/test_vectors.py): one action contract, two executors. `effects` are abstract operations on the fake world below; each executor maps its own calls (Home Assistant services or Music Assistant commands) onto them.",
+  "_": "ha-thalovant's own copy of the music action vectors (tests/test_music.py). Shape: `world` and `cases`, each case a whole `action` and the `expect`ed answer; `effects` are abstract operations on the fake world, which the test maps from Home Assistant service calls. It is NOT the connector spec's vector file: that one is organised as `validation` (requests to accept or refuse) and `behavior` (`verb` + `args`), and has since gained behaviours this route does not carry (`targets`). This copy is kept by hand; tests/test_music_contract.py compares its world and cases with the spec's `behavior` when the spec package is installed, and is skipped when it is not.",
   "world": {
     "players": [
       {"name": "Kitchen", "area": "Kitchen", "state": "idle"},
