@@ -530,6 +530,38 @@ async def test_without_a_cap_a_volume_of_100_is_carried_out(
     assert home["calls"][("media_player", "volume_set")][0].data["volume_level"] == 1.0
 
 
+async def test_a_capped_volume_whose_call_fails_is_said_failed_not_handed_to_assist(
+    hass: HomeAssistant,
+) -> None:
+    """A capped ``volume_set`` that failed returned None: the words then reached Assist, uncapped."""
+    home = await _house(hass)
+
+    async def boom(call: ServiceCall) -> None:
+        raise RuntimeError("the player did not answer")
+
+    hass.services.async_register("media_player", "volume_set", boom)
+    loud = {
+        "v": 1,
+        "capability": "volume",
+        "target": {"name": "kitchen speaker"},
+        "value": 100,
+    }
+    result = await async_execute_action(
+        hass, loud, device_id=home["speaker"], max_volume=60
+    )
+    assert refused(result, "action_failed")
+    # a request the cap did not lower keeps the old way out: nothing changed, the words may work
+    assert (
+        await async_execute_action(
+            hass, {**loud, "value": 35}, device_id=home["speaker"], max_volume=60
+        )
+        is None
+    )
+    assert (
+        await async_execute_action(hass, loud, device_id=home["speaker"]) is None
+    )  # no cap set
+
+
 @pytest.mark.parametrize(
     ("current", "value", "mode", "level", "capped"),
     [

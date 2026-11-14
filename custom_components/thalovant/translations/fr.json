@@ -403,6 +403,7 @@
     "action_done": "C'est fait.",
     "action_state": "{name} : {state}.",
     "action_partial": "Désolé, je n'ai pu en faire qu'une partie.",
+    "action_failed": "Désolé, je n'ai pas pu le faire.",
     "action_sensitive_off": "Désolé, je ne l'ai pas fait : les actions sensibles sont désactivées pour ce foyer.",
     "action_sensitive_one": "Désolé, je ne fais cela que sur un seul appareil à la fois. Dites lequel.",
     "action_alarm_code": "Désolé, je ne peux pas désarmer l'alarme : aucun code d'alarme n'est enregistré dans les options Thalovant.",

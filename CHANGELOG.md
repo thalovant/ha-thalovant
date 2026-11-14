@@ -28,7 +28,9 @@ Structured actions and music through the Home Assistant link, and the fixes of t
   `unmute`, `playback`) ([`music.py`](custom_components/thalovant/music.py)).
 - **Highest volume** option (`max_volume`, 1 to 100, default 100 = no cap): every
   structured volume action is set at most at the cap, and the answer says so when the
-  cap lowered what was asked.
+  cap lowered what was asked. If that capped call fails, the answer says it failed
+  (`action_failed`) and the sentence is not passed to Assist, which would set the level
+  that was asked for.
 
 ### Changed (recheck of 2026-11-13)
 

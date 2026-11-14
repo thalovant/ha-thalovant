@@ -70,6 +70,7 @@ _SUBTAG_SEPARATOR = re.compile(r"[-_]")
 # Assist only for an error that says nothing was understood.
 _ACTION_ERROR_SPEECH = {
     "action_partial": "Sorry, I could only do part of that.",
+    "action_failed": "Sorry, I couldn't do that.",
     "action_sensitive_off": "Sorry, I didn't do that: sensitive actions are turned off for this home.",
     "action_sensitive_one": "Sorry, I only do that to one device at a time. Say which one.",
     "action_alarm_code": "Sorry, I can't disarm the alarm: no alarm code is set in the Thalovant options.",

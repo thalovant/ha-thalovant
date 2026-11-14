@@ -342,6 +342,7 @@ first, then fixed with a test that asserts the fixed behaviour.
 | The same after the change, as this repository's CI installs it (no connector spec package) | **986 passed, 4 skipped**, coverage 100 percent. The 4 skipped are the comparisons with the spec ([`tests/test_sensitive_verbs.py`](tests/test_sensitive_verbs.py), [`tests/test_music_contract.py`](tests/test_music_contract.py)) |
 | The same with the connector spec 0.4.0 installed from a copy of its source | **990 passed**, none skipped, coverage 100 percent |
 | The recheck's proofs of concept against the changed tree | 17 fail, 4 pass. Failing: the 3 room and floor cases, the 3 unclassified-cover cases, and 11 "holds" cases that asserted `None` (left to Assist) where the answer is now a refusal or, for the room, its lights. Still passing: the relay switch and the script (H2, open below), volume 100 with no cap set (the cap is an option, default 100), and an unknown capability |
+| The same after the two fixes of the pull request's review (as CI installs it) | **988 passed, 4 skipped**, coverage 100 percent |
 | `ruff check .`, `ruff format --check .`, `mypy` (strict) | clean |
 | Mutation check of the verb-list test | adding a verb to `SHARED_CAPABILITIES`, or removing one from the QUICK_FACTS row, makes `test_the_docs_list_exactly_the_verbs_the_code_carries` fail |
 | `hassfest` (the `ghcr.io/home-assistant/hassfest:latest` image, run with podman, no network, on the tree with these fixes) | Integrations: 1, Invalid integrations: 0 |
@@ -362,7 +363,20 @@ first, then fixed with a test that asserts the fixed behaviour.
 
 Severity: H1 and H2 as the recheck rated them; H3 to H6 were not rated by it and are rated here.
 
+### Review of the pull request (automated review, 2026-11-13)
+
+| Comment | Checked against the code | Change | Test |
+| --- | --- | --- | --- |
+| A capped `volume_set` that fails before anything changed returned `None`, so the words reached Assist, which is not capped | True: [`async_execute()`](custom_components/thalovant/actions.py), the `if not done: return None` of the service-call loop | A request the cap lowered whose call fails is answered as an error (`action_failed`, "Sorry, I couldn't do that."), never `None`; a request the cap did not lower keeps the old way out | [`test_a_capped_volume_whose_call_fails_is_said_failed_not_handed_to_assist`](tests/test_action_bounds.py); `("action_failed", ...)` in [`test_a_refusal_whose_sentence_cannot_be_made_is_still_said_as_what_it_is`](tests/test_structured_handler.py) |
+| The README said a service failure sends the sentence to Assist, without the partial case | True: a failure after part of the action was done answers `action_partial` and never sends the sentence | README, "Structured actions", says both cases | none (text) |
+
 ### What stays open or was decided
+
+- **The volume cap holds on structured actions only.** A request with no `action`, and a structured
+  volume action the integration cannot resolve (no such exposed player, two with the name), still go
+  to Assist as words, and Assist sets the level that was asked for. Refusing every unresolved volume
+  action of a household that set a cap would close that, at the price of Assist no longer finding the
+  player the integration could not; left as an owner decision.
 
 - **Relays and scripts (H2c)** cannot be recognised; see above.
 - **With sensitive actions on**, a sensitive action that names nothing the integration can find, or whose

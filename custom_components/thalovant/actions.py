@@ -22,7 +22,9 @@ integration's options, and an alarm is disarmed only with the code kept in those
 options. A structured action refused for one of those reasons is answered with a
 refusal the hub can speak (``action_sensitive_off``, ``action_sensitive_one``,
 ``action_alarm_code``); it is never handed to Assist as words, where the same
-thing could be done after all. Entities are always limited to those exposed to
+thing could be done after all. The same holds for a volume the household's cap
+lowered whose service call then fails (``action_failed``): as words, Assist would
+set the level that was asked for. Entities are always limited to those exposed to
 Assist.
 """
 
@@ -772,7 +774,8 @@ async def async_execute(
     ``error`` result with a sentence): handed to Assist as words, they could be done after all.
 
     ``max_volume`` is the household's volume cap in percent: a volume above it is set at the cap,
-    and the answer says so.
+    and the answer says so. If that capped call fails before anything changed, the answer is an
+    error (``action_failed``) and not None: the words would reach Assist with the uncapped level.
 
     ``states`` is a resolution already made (the music player a shared control was sent to): it is used
     as it is instead of resolving the action's target again.
@@ -847,6 +850,10 @@ async def async_execute(
                 type(err).__name__,
             )
             if not done:
+                if capped:
+                    # The cap lowered what was asked. As words, Assist would set the level that
+                    # was asked for, above the cap: say it failed instead of handing it on.
+                    return _refusal("action_failed")
                 return None  # nothing changed: the words may still work
             # Part of it is done. Sending the sentence to Assist now would run the intent again on
             # everything, doubling a relative step and undoing a toggle: say it was partial.

@@ -66,7 +66,7 @@ Implementation links and tests are indexed in [documentation](docs/index.md) and
 | Not classifiable | a `switch` (a relay that opens a door), a `script`, `scene`, `button` or `automation`: carried out when exposed to Assist and named exactly |
 | A refusal | `response_type: error`, `error_code: failed_to_handle`, a spoken sentence, nothing changed, **never passed to Assist as words**: `common.action_sensitive_off` (sensitive actions off), `action_sensitive_one` (sensitive on, more than one entity), `action_alarm_code` (disarm without the stored code) |
 | Options | `structured_actions` (on; only `false` is stored), `structured_sensitive` (off), `alarm_code`, `max_volume` (1 to 100, default 100; stored only below 100) |
-| Volume cap (`max_volume`) | every structured `volume` action, on any media player, absolute or relative, is set at most at the cap; when the cap lowered it the answer is `common.action_volume_capped` with the level. A sentence Assist handles itself is not capped |
+| Volume cap (`max_volume`) | every structured `volume` action, on any media player, absolute or relative, is set at most at the cap; when the cap lowered it the answer is `common.action_volume_capped` with the level, and if that capped call fails before anything changed the answer is the error `common.action_failed` (never None: the words would reach Assist uncapped). A sentence Assist handles itself (no structured action, or one that could not be resolved) is not capped |
 | Spoken answers | `common.action_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
 
 ## Music (0.5.0, unreleased)

@@ -358,6 +358,7 @@ async def test_with_sensitive_on_it_is_done_and_a_disarm_without_the_code_is_ref
         ("action_sensitive_one", "one device at a time"),
         ("action_alarm_code", "no alarm code is set"),
         ("action_partial", "only do part of that"),
+        ("action_failed", "Sorry, I couldn't do that."),
         ("music_failed", "Sorry, I couldn't do that."),
     ],
 )

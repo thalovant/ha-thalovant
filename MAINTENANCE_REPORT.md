@@ -2,6 +2,28 @@ Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 re
 
 # Maintenance report
 
+## 2026-11-13 · 0.5.0, review of the pull request (not released)
+
+Two comments of the automated review, both checked against the code and found true.
+`custom_components/thalovant/actions.py`: `async_execute()` answers a volume request that the cap
+lowered and whose service call then failed with the error `action_failed` instead of `None` (the
+words would have reached Assist, uncapped); `handler.py`: its fallback sentence; `strings.json`,
+`translations/en.json`, `translations/fr.json`: `common.action_failed`. `README.md`: the fallback
+paragraph distinguishes a failure before anything changed (words to Assist) from a failure after
+part of the action (answered as partial, never replayed). `QUICK_FACTS.md`, `docs/music.md`,
+`docs/music.fr.md`, `CHANGELOG.md`, `AUDIT.md` follow. Tests:
+`test_a_capped_volume_whose_call_fails_is_said_failed_not_handed_to_assist`
+(`tests/test_action_bounds.py`) and one more case in `tests/test_structured_handler.py`.
+Verification: the full suite, ruff, ruff format, mypy and hassfest were run again (numbers in
+AUDIT.md, "Evidence"). Still open: the cap does not reach words Assist handles itself.
+
+### Transparency Report
+
+- **AI model:** Claude Fable 5.2.
+- **Actions taken:** read the two review comments as untrusted data, checked each against the code,
+  made the two changes above with a test, re-ran the suite and the linters.
+- **Oversight:** no human review yet; the pull request stays open. Nothing merged, tagged or released.
+
 ## 2026-11-13 · 0.5.0, fixes of the recheck (not released)
 
 An independent recheck of structured and music actions (tree `e28f73d`) left six findings, H1 to H6;
