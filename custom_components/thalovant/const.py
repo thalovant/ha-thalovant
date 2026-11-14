@@ -99,11 +99,11 @@ ADMISSION_GRACE_PERIOD: Final = timedelta(seconds=600)
 REQUEST_MESSAGE_TYPE: Final = "thalovant.home.request"
 RESPONSE_MESSAGE_TYPE: Final = "thalovant.home.response"
 
-# The hub gives up on a request 10 seconds after sending it and treats silence
+# The hub's router gives up on a request 12 seconds after sending it and treats silence
 # as a timeout; an answer after that is never sent. Counted from the request's
 # arrival, Assist gets at most CONVERSE_TIMEOUT of them, a fallback sentence
 # for an error what is left short of REPLY_RESERVE, and the reply the rest.
-HUB_TIMEOUT: Final = 10.0
+HUB_TIMEOUT: Final = 12.0
 CONVERSE_TIMEOUT: Final = 8.5
 REPLY_RESERVE: Final = 0.5
 

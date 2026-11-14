@@ -397,7 +397,7 @@ The same link plays and steers your **Music Assistant** players (the *Music Assi
   hub's announcements on your media players.
 - One link per hub for each Thalovant account. A second Home Assistant on the
   same hub and account is refused until you remove the first link.
-- The hub waits 10 seconds for an answer, counted from when it asked. A slow
+- The hub waits 12 seconds for an answer, counted from when it asked. A slow
   agent (a large language model, for example) gets 8.5 of them and is then cut
   off; an answer that would arrive after the hub gave up is not sent at all.
 - The language comes from the request. An agent that does not speak it

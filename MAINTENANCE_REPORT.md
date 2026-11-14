@@ -1,5 +1,9 @@
 # Maintenance report
 
+## 2026-11-14 - the hub's timeout is 12 seconds
+
+From the end-to-end failure run: `HUB_TIMEOUT` was 10 s while the router waits 12 s (contract section 5), so a request was treated as late 2 s early. `const.py` now says 12.0 and its comment says the router; `docs/guide.md` follows; the Assist share (`CONVERSE_TIMEOUT` 8.5 s) is unchanged. `tests/test_handler.py::test_no_time_left` and `::test_late_request_gets_what_is_left` use ages 13 s and 11.6 s. 988 passed, 4 skipped, 100 percent; ruff, format and mypy clean. Transparency: Claude Sonnet 5.5; no human review yet.
+
 ## 2026-11-14 - header lines removed, README shortened
 
 The owner withdrew the first-line header rule: every such line is removed from every file and none is added. The README is now short (what it is, get started, what it does, links); the full text moved to `docs/guide.md` with its links adjusted (`docs/index.md`, `docs/music.md`, `docs/music.fr.md`, `CHANGELOG.md` and `FAQ.md` point there). 988 passed, 4 skipped, 100 percent coverage; ruff, format and mypy clean. Transparency: Claude Sonnet 5.5 made the change; no human review yet.
