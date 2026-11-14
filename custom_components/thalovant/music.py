@@ -25,7 +25,15 @@ from typing import Any
 from homeassistant.core import Context, HomeAssistant, State
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from .actions import ActionResult, async_execute, fold, resolve
+from .actions import (
+    MAX_VOLUME,
+    ActionResult,
+    async_execute,
+    exposed,
+    fold,
+    is_known_action,
+    resolve,
+)
 from .const import LOGGER
 
 MA_DOMAIN = "music_assistant"
@@ -43,6 +51,11 @@ MUSIC_CAPABILITIES = frozenset(
 #: Capabilities the generic media builders already carry out; for them a Music
 #: Assistant player is preferred when the target is the speaker's own room.
 SHARED_CAPABILITIES = frozenset({"volume", "mute", "unmute", "playback"})
+#: Verbs of the connector spec's ``music_assistant`` connector that this route does not carry.
+#: ``targets`` (the list of speakers, spec 0.4.0) is answered by the home bridge; here it is not a
+#: capability, so a request for it goes on as its words. ``tests/test_music_contract.py`` keeps
+#: the three lists equal to the docs' and, when the spec is installed, to the spec's.
+NOT_CARRIED = frozenset({"targets"})
 #: Where a search result lists each media type, best type first.
 RESULT_KEYS = {
     "track": "tracks",
@@ -91,15 +104,7 @@ def music_player(
                 platform=MA_DOMAIN,
             )
     if (found is None or len(found) != 1) and allow_active and _is_here(action):
-        everyone = (
-            resolve(
-                hass,
-                {**action, "target": {"all": True, "domain": "media_player"}},
-                device_id,
-                platform=MA_DOMAIN,
-            )
-            or []
-        )
+        everyone = exposed(hass, ("media_player",), MA_DOMAIN)
         found = [s for s in everyone if s.state in ACTIVE]
     return found[0] if found is not None and len(found) == 1 else None
 
@@ -502,18 +507,9 @@ async def _transfer(
         # No source named: Home Assistant would take the first playing queue of the whole Music Assistant
         # server, exposed to Assist or not, in whatever order it lists them. Name the one exposed player
         # that is playing, or do not guess.
-        exposed = (
-            resolve(
-                hass,
-                {**action, "target": {"all": True, "domain": "media_player"}},
-                device_id,
-                platform=MA_DOMAIN,
-            )
-            or []
-        )
         playing = [
             s
-            for s in exposed
+            for s in exposed(hass, ("media_player",), MA_DOMAIN)
             if s.state == "playing" and s.entity_id != player.entity_id
         ]
         if len(playing) != 1:
@@ -547,17 +543,26 @@ async def async_execute_action(
     device_id: str | None,
     allow_sensitive: bool = False,
     alarm_code: str | None = None,
+    max_volume: int = MAX_VOLUME,
     context: Context | None = None,
     progress: list[str] | None = None,
 ) -> ActionResult | None:
     """Carry out any structured action: music here, everything else in ``actions``.
 
+    The action is checked against the closed capability, target and domain lists
+    first (``actions.is_known_action``); one that fails is not an action, and
+    None sends its words to Assist.
+
     The shared media capabilities (volume, mute, playback) go to the speaker's own
     Music Assistant player first when the target is the speaker's room, so
     "turn the music up" reaches the player named like the speaker even in a
-    house where that speaker has no area.
+    house where that speaker has no area. ``max_volume`` is the household's
+    volume cap in percent; it holds on a Music Assistant player and on any other
+    media player alike.
     """
-    capability = action.get("capability")
+    if not is_known_action(action):
+        return None
+    capability = action["capability"]
     if capability in MUSIC_CAPABILITIES:
         return await async_execute_music(
             hass, action, device_id=device_id, context=context, progress=progress
@@ -575,6 +580,7 @@ async def async_execute_action(
             device_id=device_id,
             allow_sensitive=allow_sensitive,
             alarm_code=alarm_code,
+            max_volume=max_volume,
             context=context,
             progress=progress,
             states=[player],
@@ -585,6 +591,7 @@ async def async_execute_action(
         device_id=device_id,
         allow_sensitive=allow_sensitive,
         alarm_code=alarm_code,
+        max_volume=max_volume,
         context=context,
         progress=progress,
     )

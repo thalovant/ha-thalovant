@@ -241,6 +241,23 @@ def test_only_real_numbers_are_numbers(value) -> None:
         ("power_off", _state("cover.g", device_class="garage"), False),
         ("power_on", _state("cover.b", device_class="blind"), False),
         ("power_on", _state("light.l"), False),
+        # a cover is sensitive to open unless it is known to be a window covering
+        ("power_on", _state("cover.n"), True),
+        ("toggle", _state("cover.n"), True),
+        ("position", _state("cover.n"), True),
+        ("power_off", _state("cover.n"), False),
+        ("power_on", _state("cover.d", device_class="door"), True),
+        ("power_on", _state("cover.t", device_class="gate"), True),
+        ("power_on", _state("cover.w", device_class="window"), True),
+        ("power_on", _state("cover.p", device_class="damper"), True),
+        ("power_on", _state("cover.x", device_class="made_up"), True),
+        ("toggle", _state("cover.a", device_class="awning"), False),
+        ("position", _state("cover.c", device_class="curtain"), False),
+        ("power_on", _state("cover.s", device_class="shade"), False),
+        ("power_on", _state("cover.u", device_class="shutter"), False),
+        # what cannot be told from the entity: a relay is a switch, a script runs anything
+        ("power_on", _state("switch.garage_opener"), False),
+        ("activate", _state("script.open_garage"), False),
     ],
 )
 def test_what_is_sensitive(capability, state, sensitive) -> None:
@@ -275,7 +292,7 @@ async def test_registry_edges(hass: HomeAssistant) -> None:
         ids["speaker"],
         any_domain=True,
     )
-    # no name, area, floor, here or all
+    # no name, area, floor or here
     assert (
         resolve(
             hass,
@@ -284,8 +301,8 @@ async def test_registry_edges(hass: HomeAssistant) -> None:
         )
         is None
     )
-    # "all" of a domain
-    assert resolve(hass, action("power_off", all=True, domain="light"), None)
+    # "all" of a domain is no target any more (0.5.0): nothing asks for everything
+    assert resolve(hass, action("power_off", all=True, domain="light"), None) is None
     # an entity whose area comes from its device; an entity without a registry entry has no area
     ents, devs, areas = er.async_get(hass), dr.async_get(hass), ar.async_get(hass)
     entry = MockConfigEntry(domain="test2")
@@ -337,9 +354,16 @@ async def test_registry_edges(hass: HomeAssistant) -> None:
     )
     # more than MAX_TARGETS entities are never changed at once
     for i in range(60):
-        hass.states.async_set(f"switch.many{i}", "on", {"friendly_name": f"Many {i}"})
-        async_expose_entity(hass, "conversation", f"switch.many{i}", True)
-    assert resolve(hass, action("power_off", all=True, domain="switch"), None) is None
+        many = ents.async_get_or_create(
+            "switch", "test2", f"many{i}", suggested_object_id=f"many{i}"
+        )
+        ents.async_update_entity(many.entity_id, area_id=den.id)
+        hass.states.async_set(many.entity_id, "on", {"friendly_name": f"Many {i}"})
+        async_expose_entity(hass, "conversation", many.entity_id, True)
+    assert (
+        resolve(hass, action("power_off", area="den", domain="switch"), ids["speaker"])
+        is None
+    )
 
 
 async def test_the_whole_house_of_domains_is_known(hass: HomeAssistant) -> None:

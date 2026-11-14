@@ -7,15 +7,23 @@ module resolves the target among the entities exposed to Assist (names and
 aliases, areas, floors, domains) and calls the entity's own services, the way a
 smart-home skill does, instead of leaving a sentence to Assist's parser.
 
-It never guesses. An action it cannot resolve to exactly what was asked (no
+It never guesses. The action is first checked against the closed lists below (a
+known capability, only the target keys and domains the contract has): anything
+else is not an action. An action it cannot resolve to exactly what was asked (no
 exposed entity, two entities with the name, a domain without that capability, a
 service that failed) returns ``None`` and the request goes on as the words it
-carries, through Assist. Sensitive actions (locks, alarm panels, garage doors,
-gates and valves opening, sirens) are only carried out when the household turned
-that on in the integration's options, and an alarm is disarmed only with the
-code kept in those options; otherwise they too go on as words, so Home
-Assistant's own exposure rules decide. Entities are always limited to those
-exposed to Assist.
+carries, through Assist. A bare room or floor means its lights, whether the hub
+called it an area or a name.
+
+Sensitive actions (locks, alarm panels, sirens, valves opening, and every cover
+that is not a window covering: a garage door is often a cover with no device
+class at all) are only carried out when the household turned that on in the
+integration's options, and an alarm is disarmed only with the code kept in those
+options. A structured action refused for one of those reasons is answered with a
+refusal the hub can speak (``action_sensitive_off``, ``action_sensitive_one``,
+``action_alarm_code``); it is never handed to Assist as words, where the same
+thing could be done after all. Entities are always limited to those exposed to
+Assist.
 """
 
 from collections.abc import Callable, Mapping
@@ -37,8 +45,10 @@ from homeassistant.util import color as color_util
 
 from .const import LOGGER
 
-#: Entities one action may change at once ("all the lights upstairs").
+#: Entities one action may change at once ("the lights upstairs").
 MAX_TARGETS = 50
+#: The highest volume a structured action may set, in percent, when the options give none.
+MAX_VOLUME = 100
 #: A relative brightness, position or volume step when the hub gave none, in percent.
 DEFAULT_STEP = 20
 
@@ -105,9 +115,51 @@ CAPABILITY_DOMAINS: dict[str, tuple[str, ...]] = {
     "join": ("media_player",),
     "unjoin": ("media_player",),
 }
+#: The keys a target (``target``, ``other``) may carry. ``all`` was one of them until 0.5.0: no
+#: skill sends it and it reached every entity of a domain, so a target that carries it (or any
+#: other key) is not an action this integration carries out.
+TARGET_KEYS = frozenset({"name", "area", "floor", "domain", "here"})
+#: The domains a target may name: the closed list of the connector spec's ``home_assistant``
+#: target. ``tests/test_sensitive_verbs.py`` keeps it equal to the spec's when the spec is installed.
+TARGET_DOMAINS = frozenset(
+    {
+        "light",
+        "switch",
+        "fan",
+        "cover",
+        "lock",
+        "climate",
+        "humidifier",
+        "water_heater",
+        "valve",
+        "vacuum",
+        "lawn_mower",
+        "siren",
+        "alarm_control_panel",
+        "media_player",
+        "remote",
+        "button",
+        "input_boolean",
+        "input_button",
+        "input_number",
+        "input_select",
+        "number",
+        "select",
+        "scene",
+        "script",
+        "automation",
+        "camera",
+        "sensor",
+        "binary_sensor",
+        "person",
+        "device_tracker",
+    }
+)
 #: The domains a bare area or floor means when the action names none: what a person
 #: means by "turn off the kitchen" is the lights.
 DEFAULT_DOMAINS = ("light",)
+#: The capabilities that default applies to: the ones many domains can carry out.
+DEFAULT_DOMAIN_CAPABILITIES = frozenset({"power_on", "power_off", "toggle"})
 COLOUR_TEMPERATURES = {
     "candle light": 1900,
     "candlelight": 1900,
@@ -133,8 +185,11 @@ ARM_MODES = {
     "home": "alarm_arm_home",
     "night": "alarm_arm_night",
 }
-#: Covers whose opening lets someone in (a window is as much a way in as a door).
-SENSITIVE_COVER_CLASSES = frozenset({"garage", "gate", "door", "window"})
+#: Covers that are window coverings: opening one lets nobody in. Every other cover is sensitive
+#: to open, toggle or position: ``garage``, ``gate``, ``door`` and ``window`` (a window is as much
+#: a way in as a door), ``damper``, and a cover with NO device class, which is what a garage door
+#: from MQTT, ESPHome or a template usually is.
+SAFE_COVER_CLASSES = frozenset({"awning", "blind", "curtain", "shade", "shutter"})
 #: Domains that run something rather than change a state: never more than one at a time.
 RUNNABLE_DOMAINS = frozenset(
     {"scene", "script", "automation", "button", "input_button"}
@@ -145,7 +200,7 @@ RUNNABLE_DOMAINS = frozenset(
 class ActionResult:
     """What was done: a translation key for the spoken answer and its placeholders."""
 
-    response_type: str  # "action_done" or "query_answer"
+    response_type: str  # "action_done", "query_answer" or "error"
     speech_key: str
     placeholders: dict[str, str] = field(default_factory=dict)
     changed: list[str] = field(default_factory=list)
@@ -158,6 +213,41 @@ def fold(text: Any) -> str:
     text = unicodedata.normalize("NFKD", text)
     text = "".join(c for c in text if not unicodedata.combining(c))
     return " ".join(re.sub(r"[^\w\s]", " ", text.casefold()).split())
+
+
+def is_known_action(action: Any) -> bool:
+    """Whether the action stays inside the closed lists; checked before anything else.
+
+    A capability of ``CAPABILITY_DOMAINS`` and, in ``target`` and ``other``, only the keys of
+    ``TARGET_KEYS`` and a domain of ``TARGET_DOMAINS``. Nothing is read, resolved or created for
+    an action that fails this: it is not carried out, and the words it came with go to Assist.
+    """
+    if not isinstance(action, Mapping):
+        return False
+    capability = action.get("capability")
+    if not isinstance(capability, str) or capability not in CAPABILITY_DOMAINS:
+        return False
+    for key in ("target", "other"):
+        target = action.get(key)
+        if target is None:
+            continue
+        if not isinstance(target, Mapping) or not TARGET_KEYS.issuperset(target):
+            return False
+        domain = target.get("domain")
+        if domain is not None and (
+            not isinstance(domain, str) or domain not in TARGET_DOMAINS
+        ):
+            return False
+    return True
+
+
+def max_volume_of(value: Any) -> int:
+    """The volume cap an option value means: an integer from 1 to 100, else no cap (100)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return MAX_VOLUME
+    if math.isnan(value) or not 1 <= value <= MAX_VOLUME:
+        return MAX_VOLUME
+    return int(value)
 
 
 class _Registries:
@@ -215,6 +305,45 @@ class _Registries:
         return device.area_id
 
 
+def exposed(
+    hass: HomeAssistant, domains: tuple[str, ...], platform: str | None = None
+) -> list[State]:
+    """Every entity exposed to Assist, of ``domains`` when given and of ``platform`` when given.
+
+    For this integration's own use (the Music Assistant players there are): no hub request can
+    ask for "everything", since a target has no ``all`` key.
+    """
+    entities = er.async_get(hass)
+    pool: list[State] = []
+    for state in hass.states.async_all():
+        domain = state.entity_id.split(".", 1)[0]
+        if domains and domain not in domains:
+            continue
+        if not async_should_expose(hass, "conversation", state.entity_id):
+            continue
+        if platform is not None and (
+            (entry := entities.async_get(state.entity_id)) is None
+            or entry.platform != platform
+        ):
+            continue
+        pool.append(state)
+    return pool
+
+
+def _room_default(
+    states: list[State], capability: str, target: Mapping[str, Any]
+) -> list[State]:
+    """What a bare room or floor means for a power action that names no domain: its lights.
+
+    "Toggle the garage" is the garage's lights, never its freezer plug, its door opener relay
+    and its door, whether the hub called the garage an ``area`` or (it cannot tell a room from a
+    device) a ``name``.
+    """
+    if target.get("domain") or capability not in DEFAULT_DOMAIN_CAPABILITIES:
+        return states
+    return [s for s in states if s.entity_id.split(".", 1)[0] in DEFAULT_DOMAINS]
+
+
 def resolve(
     hass: HomeAssistant,
     action: Mapping[str, Any],
@@ -230,13 +359,11 @@ def resolve(
     players: a Chromecast called "Kitchen" is not the "Kitchen" to play music on).
     ``key`` is where the target is read from (``other`` names a second speaker).
     """
-    capability = action.get("capability")
+    if not is_known_action(action):
+        return None
+    capability: str = action["capability"]
     target = action.get(key) or {}
-    if not isinstance(capability, str):
-        return None
-    domains = CAPABILITY_DOMAINS.get(capability)
-    if domains is None:
-        return None
+    domains = CAPABILITY_DOMAINS[capability]
     if any_domain:
         domains = (target["domain"],) if target.get("domain") else ()
     elif target.get("domain"):
@@ -254,19 +381,7 @@ def resolve(
     if here and area_id_here is None:
         return None  # the speaker has no room: Assist asks which
 
-    pool: list[State] = []
-    for state in hass.states.async_all():
-        domain = state.entity_id.split(".", 1)[0]
-        if domains and domain not in domains:
-            continue
-        if not async_should_expose(hass, "conversation", state.entity_id):
-            continue
-        if platform is not None and (
-            (entry := reg.entities.async_get(state.entity_id)) is None
-            or entry.platform != platform
-        ):
-            continue
-        pool.append(state)
+    pool = exposed(hass, domains, platform)
 
     # A name two rooms share ("guest") is not a room: ask, do not change both.
     area_set = reg.area_ids(area) if area else None
@@ -295,26 +410,27 @@ def resolve(
         if not found and not (area or floor or here):
             # "make the living room warmer": the hub cannot tell a room from a device, so a name
             # that is no entity's is read as an area, then as a floor
+            # ... and a room named that way means what a room means: its lights (DEFAULT_DOMAINS)
             if len(areas_named := reg.area_ids(name)) == 1:
-                found = [s for s in scoped if reg.area_id(s.entity_id) in areas_named]
+                found = _room_default(
+                    [s for s in scoped if reg.area_id(s.entity_id) in areas_named],
+                    capability,
+                    target,
+                )
             elif not areas_named and len(floors_named := reg.floor_ids(name)) == 1:
-                found = [
-                    s
-                    for s in scoped
-                    if reg.floor_of(reg.area_id(s.entity_id)) in floors_named
-                ]
+                found = _room_default(
+                    [
+                        s
+                        for s in scoped
+                        if reg.floor_of(reg.area_id(s.entity_id)) in floors_named
+                    ],
+                    capability,
+                    target,
+                )
     else:
-        if not (area or floor or here or target.get("all")):
+        if not (area or floor or here):
             return None
-        if not target.get("domain") and capability in (
-            "power_on",
-            "power_off",
-            "toggle",
-        ):
-            scoped = [
-                s for s in scoped if s.entity_id.split(".", 1)[0] in DEFAULT_DOMAINS
-            ]
-        found = scoped
+        found = _room_default(scoped, capability, target)
     if not found or len(found) > MAX_TARGETS:
         return None
     return found
@@ -336,20 +452,22 @@ def _is_sensitive(capability: str, state: State) -> bool:
         return True
     if (
         domain == "cover"
-        and state.attributes.get("device_class") in SENSITIVE_COVER_CLASSES
+        and state.attributes.get("device_class") not in SAFE_COVER_CLASSES
     ):
+        # Sensitive unless known to be a window covering: a cover with no class is refused, where
+        # recognising a garage door by its class let every unclassified one open.
         return capability in ("power_on", "position", "toggle")
     return False
 
 
-def _one_at_a_time(capability: str, state: State) -> bool:
-    """Whether this entity is only ever acted on alone, never as part of a room, a floor or "all".
+def _is_runnable(state: State) -> bool:
+    """Whether this entity runs something (a scene, a script, an automation, a button).
 
-    "unlock the kitchen" must not unlock every lock in it, and "turn off all the automations" must
-    not disable the household's automations: a sensitive action or a runnable one is named exactly.
+    Like a sensitive entity it is only ever acted on alone, never as part of a room or a floor:
+    "turn off the automations upstairs" must not disable them. Unlike a sensitive one, several at
+    once are left to Assist as words rather than refused.
     """
-    domain = state.entity_id.split(".", 1)[0]
-    return _is_sensitive(capability, state) or domain in RUNNABLE_DOMAINS
+    return state.entity_id.split(".", 1)[0] in RUNNABLE_DOMAINS
 
 
 def _num(value: Any) -> float | None:
@@ -374,7 +492,13 @@ type Call = tuple[str, str, dict[str, Any]]
 class _Request:
     """One entity and what is asked of it, for the builders below."""
 
-    def __init__(self, action: Mapping[str, Any], state: State, alarm_code: str | None):
+    def __init__(
+        self,
+        action: Mapping[str, Any],
+        state: State,
+        alarm_code: str | None,
+        max_volume: int = MAX_VOLUME,
+    ):
         self.capability: str = action["capability"]
         self.value = action.get("value")
         self.relative = action.get("mode") == "relative"
@@ -382,6 +506,9 @@ class _Request:
         self.domain = state.entity_id.split(".", 1)[0]
         self.attrs = state.attributes
         self.alarm_code = alarm_code
+        #: the household's volume cap, in percent, and whether it lowered what was asked
+        self.max_volume = max_volume
+        self.capped = False
 
 
 def _power(r: _Request) -> Call | None:
@@ -520,11 +647,12 @@ def _volume(r: _Request) -> Call | None:
         if number < 0:
             return None
         level = number / 100
-    return (
-        "media_player",
-        "volume_set",
-        {"volume_level": max(0.0, min(1.0, round(level, 2)))},
-    )
+    level = max(0.0, min(1.0, round(level, 2)))
+    # The household's cap, on an absolute level and on a step alike: a request for more is
+    # carried out at the cap (and the answer says so), never above it.
+    if level > (cap := r.max_volume / 100):
+        level, r.capped = cap, True
+    return "media_player", "volume_set", {"volume_level": level}
 
 
 def _mute(r: _Request) -> Call | None:
@@ -603,12 +731,25 @@ BUILDERS: dict[str, Callable[[_Request], Call | None]] = {
 }
 
 
+def _build(request: _Request) -> Call | None:
+    """The one service call that does what is asked of one entity, or None."""
+    builder = BUILDERS.get(request.capability)
+    return builder(request) if builder else None
+
+
 def _calls(
-    action: Mapping[str, Any], state: State, alarm_code: str | None
+    action: Mapping[str, Any],
+    state: State,
+    alarm_code: str | None,
+    max_volume: int = MAX_VOLUME,
 ) -> Call | None:
     """The one service call that does the action on one entity, or None."""
-    builder = BUILDERS.get(action["capability"])
-    return builder(_Request(action, state, alarm_code)) if builder else None
+    return _build(_Request(action, state, alarm_code, max_volume))
+
+
+def _refusal(speech_key: str) -> ActionResult:
+    """A refusal the hub can speak; nothing was changed and the words do not go to Assist."""
+    return ActionResult("error", speech_key)
 
 
 async def async_execute(
@@ -618,11 +759,20 @@ async def async_execute(
     device_id: str | None,
     allow_sensitive: bool = False,
     alarm_code: str | None = None,
+    max_volume: int = MAX_VOLUME,
     context: Context | None = None,
     progress: list[str] | None = None,
     states: list[State] | None = None,
 ) -> ActionResult | None:
-    """Carry the action out, or return None so the words go on to Assist.
+    """Carry the action out, refuse it aloud, or return None so the words go on to Assist.
+
+    None is for an action that is not one (outside the closed lists) or that cannot be resolved
+    to exactly what was asked. A sensitive action the household did not allow, one that would
+    spread over several entities, and a disarm without the stored code are refusals instead (an
+    ``error`` result with a sentence): handed to Assist as words, they could be done after all.
+
+    ``max_volume`` is the household's volume cap in percent: a volume above it is set at the cap,
+    and the answer says so.
 
     ``states`` is a resolution already made (the music player a shared control was sent to): it is used
     as it is instead of resolving the action's target again.
@@ -630,9 +780,13 @@ async def async_execute(
     ``progress`` collects the entity ids already changed, so a caller that cancels this (a
     deadline) knows whether part of the action was done.
     """
-    capability = action.get("capability")
-    if capability not in CAPABILITY_DOMAINS:
+    if not is_known_action(action):
         return None
+    capability: str = action["capability"]
+    if not allow_sensitive and capability in SENSITIVE_VERBS:
+        # the verb alone says it: refused before anything is resolved, whatever it names
+        LOGGER.debug("Structured %s refused: sensitive actions are off", capability)
+        return _refusal("action_sensitive_off")
     if states is None:
         states = resolve(hass, action, device_id, any_domain=capability == "state")
     if not states:
@@ -640,20 +794,34 @@ async def async_execute(
     if capability == "state":
         # one entity: an area's worth of states would answer with the first and drop the rest
         return _answer_state(hass, states) if len(states) == 1 else None
-    if not allow_sensitive and any(_is_sensitive(capability, s) for s in states):
+    sensitive = any(_is_sensitive(capability, s) for s in states)
+    if sensitive and not allow_sensitive:
         LOGGER.debug(
-            "Structured %s on %s left to Assist: sensitive actions are off",
+            "Structured %s on %s refused: sensitive actions are off",
             capability,
             states[0].entity_id,
         )
-        return None
+        return _refusal("action_sensitive_off")
+    if sensitive and len(states) > 1:
+        LOGGER.debug(
+            "Structured %s on %d entities refused: it needs exactly one",
+            capability,
+            len(states),
+        )
+        return _refusal("action_sensitive_one")
+    if capability == "disarm" and not alarm_code:
+        LOGGER.debug("Structured disarm refused: no alarm code is kept in the options")
+        return _refusal("action_alarm_code")
     calls = []
+    capped = False
     for state in states:
-        call = _calls(action, state, alarm_code)
+        request = _Request(action, state, alarm_code, max_volume)
+        call = _build(request)
         if call is None or not hass.services.has_service(call[0], call[1]):
             return None  # one entity it cannot do: do none of it, let Assist answer
         calls.append((state, call))
-    if len(states) > 1 and any(_one_at_a_time(capability, s) for s in states):
+        capped = capped or request.capped
+    if len(states) > 1 and any(_is_runnable(s) for s in states):
         LOGGER.debug(
             "Structured %s on %d entities left to Assist: it needs exactly one",
             capability,
@@ -685,11 +853,17 @@ async def async_execute(
             return ActionResult("error", "action_partial", {"name": state.name}, done)
         done.append(state.entity_id)
     names = [s.name for s in states]
+    placeholders = {"name": names[0] if len(names) == 1 else str(len(names))}
+    if capped:
+        # the cap lowered what was asked: say the level it was set to
+        return ActionResult(
+            "action_done",
+            "action_volume_capped",
+            {**placeholders, "level": str(max_volume)},
+            [s.entity_id for s in states],
+        )
     return ActionResult(
-        "action_done",
-        "action_done",
-        {"name": names[0] if len(names) == 1 else str(len(names))},
-        [s.entity_id for s in states],
+        "action_done", "action_done", placeholders, [s.entity_id for s in states]
     )
 
 

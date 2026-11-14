@@ -114,17 +114,19 @@
           "allow_urgent": "Autoriser les annonces urgentes",
           "allow_receive": "Jouer les annonces sur ce Home Assistant",
           "structured_actions": "Exécuter les demandes structurées",
-          "structured_sensitive": "Autoriser serrures, alarmes, portes de garage, portails, vannes et sirènes",
-          "alarm_code": "Code de l'alarme (pour désarmer)"
+          "structured_sensitive": "Autoriser serrures, alarmes, sirènes, vannes, ainsi que portes de garage, portails et autres ouvrants qui ne sont pas des protections de fenêtre",
+          "alarm_code": "Code de l'alarme (pour désarmer)",
+          "max_volume": "Volume maximal (pour cent)"
         },
         "data_description": {
           "agent_id": "L'agent qui répond aux demandes du hub. L'agent de Home Assistant n'agit que sur les entités exposées à Assist.",
           "allow_announcements": "Ajoute les actions `announce`, `cancel_announcement` et `list_speakers`, et une entité de notification Intercom, désactivée tant que vous ne l'activez pas. Cocher cette case demande d'abord une autorisation supplémentaire à Thalovant ; si vous refusez, elle reste désactivée. Votre forfait Thalovant doit inclure Intercom, et le propriétaire du hub active Intercom pour ce hub dans le tableau de bord Thalovant.",
           "allow_urgent": "Permet qu'une annonce soit urgente : elle ignore Ne pas déranger et peut se répéter jusqu'à ce que quelqu'un l'acquitte. Demande sa propre autorisation. Nécessite que les annonces soient activées.",
           "allow_receive": "Permet au hub de jouer des annonces sur ce Home Assistant, sur les lecteurs multimédias que vous choisirez ensuite. Home Assistant indique à Thalovant que cette connexion peut jouer des annonces, et le propriétaire du hub doit aussi activer la réception pour elle dans le tableau de bord Thalovant, onglet Intercom.",
-          "structured_actions": "Le hub peut nommer ce qu'il veut (alimentation, luminosité, position, température...) au lieu d'une phrase, et Home Assistant l'exécute sur les entités exposées à Assist. Ce qui n'est pas résolu exactement part vers Assist en mots.",
-          "structured_sensitive": "Désactivé par défaut. Désactivé, ces demandes partent vers Assist en mots, et les règles d'exposition de Home Assistant décident.",
-          "alarm_code": "Conservé ici, jamais envoyé par le hub. Nécessaire pour désarmer une centrale d'alarme à la voix."
+          "structured_actions": "Le hub peut nommer ce qu'il veut (alimentation, luminosité, position, température...) au lieu d'une phrase, et Home Assistant l'exécute sur les entités exposées à Assist. Une pièce ou un étage nommé seul désigne ses lumières. Ce qui n'est pas résolu exactement part vers Assist en mots.",
+          "structured_sensitive": "Désactivé par défaut. Désactivé, une demande structurée de ce type est refusée à voix haute et n'est pas transmise à Assist. Un ouvrant compte sauf si sa classe d'appareil est awning, blind, curtain, shade ou shutter : une porte de garage sans classe d'appareil est donc couverte. Une phrase que le hub envoie en simples mots part toujours vers Assist, où les règles d'exposition de Home Assistant décident.",
+          "alarm_code": "Conservé ici, jamais envoyé par le hub. Nécessaire pour désarmer une centrale d'alarme à la voix.",
+          "max_volume": "Le volume le plus fort qu'une demande structurée peut régler sur un lecteur multimédia, musique comprise. Une demande plus forte est exécutée à ce niveau et le dit. 100 signifie aucune limite. Une phrase qu'Assist traite lui-même n'est pas limitée."
         }
       },
       "receive": {
@@ -401,6 +403,10 @@
     "action_done": "C'est fait.",
     "action_state": "{name} : {state}.",
     "action_partial": "Désolé, je n'ai pu en faire qu'une partie.",
+    "action_sensitive_off": "Désolé, je ne l'ai pas fait : les actions sensibles sont désactivées pour ce foyer.",
+    "action_sensitive_one": "Désolé, je ne fais cela que sur un seul appareil à la fois. Dites lequel.",
+    "action_alarm_code": "Désolé, je ne peux pas désarmer l'alarme : aucun code d'alarme n'est enregistré dans les options Thalovant.",
+    "action_volume_capped": "Le volume est à {level} pour cent, le maximum autorisé ici.",
     "music_playing": "Je lance {title} sur {player}.",
     "music_playing_by": "Je lance {title} de {artist} sur {player}.",
     "music_queued_next": "{title} sera joué ensuite sur {player}.",

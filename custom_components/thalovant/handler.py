@@ -20,12 +20,13 @@ from homeassistant.helpers import (
 from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util, language as language_util
 
-from .actions import ActionResult
+from .actions import ActionResult, is_known_action, max_volume_of
 from .api import HubConnection, HubMessage, plain_speech
 from .const import (
     CONF_AGENT_ID,
     CONF_ALARM_CODE,
     CONF_HUB_ID,
+    CONF_MAX_VOLUME,
     CONF_SELF_HOSTED,
     CONF_STRUCTURED_ACTIONS,
     CONF_STRUCTURED_SENSITIVE,
@@ -63,6 +64,16 @@ ERROR_CODES = frozenset(
 )
 
 _SUBTAG_SEPARATOR = re.compile(r"[-_]")
+
+# What a structured action's error answer says when its translated sentence could not be made.
+# A refusal is said as a refusal: the hub speaks the sentence, and its skill sends the words to
+# Assist only for an error that says nothing was understood.
+_ACTION_ERROR_SPEECH = {
+    "action_partial": "Sorry, I could only do part of that.",
+    "action_sensitive_off": "Sorry, I didn't do that: sensitive actions are turned off for this home.",
+    "action_sensitive_one": "Sorry, I only do that to one device at a time. Say which one.",
+    "action_alarm_code": "Sorry, I can't disarm the alarm: no alarm code is set in the Thalovant options.",
+}
 
 
 def agent_issue_id(entry_id: str) -> str:
@@ -363,8 +374,15 @@ class HomeRequestHandler:
         """Carry out the request's structured action, or None to go on with its words.
 
         Only a fresh request (a follow-up to Assist's question is words), only on
-        a link to the household's own Home Assistant, and only when the options
-        leave structured actions on (the default).
+        a link to the household's own Home Assistant, only when the options
+        leave structured actions on (the default), and only an action inside the
+        closed capability, target and domain lists: that is checked before
+        anything is read or created for it.
+
+        An action that is refused (a sensitive one the household did not allow,
+        one that would spread over several entities, a disarm without the code)
+        is answered here, as an error with a sentence to speak. It never goes on
+        to Assist as words, where the same thing could be done after all.
         """
         action = data.get("action")
         options = self._entry.options
@@ -373,6 +391,7 @@ class HomeRequestHandler:
             or conversation_id
             or self._self_hosted
             or options.get(CONF_STRUCTURED_ACTIONS, True) is False
+            or not is_known_action(action)
         ):
             return None
         if budget <= 0:
@@ -386,6 +405,7 @@ class HomeRequestHandler:
                     device_id=self._async_device_id(data.get("device")),
                     allow_sensitive=options.get(CONF_STRUCTURED_SENSITIVE) is True,
                     alarm_code=options.get(CONF_ALARM_CODE) or None,
+                    max_volume=max_volume_of(options.get(CONF_MAX_VOLUME)),
                     progress=changed,
                 )
         except TimeoutError:
@@ -418,7 +438,9 @@ class HomeRequestHandler:
             speech = (
                 "Done."
                 if result.response_type != "error"
-                else "Sorry, I could only do part of that."
+                else _ACTION_ERROR_SPEECH.get(
+                    result.speech_key, "Sorry, I couldn't do that."
+                )
             )
         LOGGER.debug("Request %s answered by a structured action", request_id)
         response: dict[str, Any] = {
@@ -428,6 +450,8 @@ class HomeRequestHandler:
             "response_type": result.response_type,
         }
         if result.response_type == "error":
+            # Partial, failed or refused: "failed_to_handle" with a sentence is the one error the
+            # hub's skills speak as it is and never follow with the same request in words.
             response["error_code"] = ERROR_FAILED_TO_HANDLE
         return response
 

@@ -32,7 +32,7 @@ from custom_components.thalovant.const import (
 from homeassistant.components import conversation
 from homeassistant.config_entries import SOURCE_USER
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from homeassistant.helpers import config_entry_oauth2_flow
 from homeassistant.setup import async_setup_component
 
@@ -92,9 +92,12 @@ async def test_the_form(
         "structured_actions",
         "structured_sensitive",
         "alarm_code",
+        "max_volume",
     ]
     # Intercom switches off; structured actions on, their sensitive half off.
     assert [key.default() for key in keys[1:6]] == [False, False, False, True, False]
+    # no volume cap until one is set
+    assert keys[7].default() == 100
 
 
 async def test_options_without_intercom_are_stored_as_before(
@@ -114,6 +117,33 @@ async def test_options_without_intercom_are_stored_as_before(
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert mock_config_entry.options == {CONF_AGENT_ID: AGENT}
+
+
+async def test_the_volume_cap_is_stored_only_when_it_is_one(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry
+) -> None:
+    """A cap below 100 is stored as an integer and shown again; 100 is no cap and is not stored."""
+    result = await _options(hass, mock_config_entry)
+    result = await _submit(hass, result, {CONF_AGENT_ID: AGENT, "max_volume": 60.0})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options == {CONF_AGENT_ID: AGENT, "max_volume": 60}
+    assert type(mock_config_entry.options["max_volume"]) is int
+    result = await hass.config_entries.options.async_init(mock_config_entry.entry_id)
+    keys = {str(key): key for key in result["data_schema"].schema}
+    assert keys["max_volume"].default() == 60
+    result = await _submit(hass, result, {CONF_AGENT_ID: AGENT, "max_volume": 100})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert mock_config_entry.options == {CONF_AGENT_ID: AGENT}
+
+
+@pytest.mark.parametrize("value", [0, 101, -3])
+async def test_a_volume_cap_outside_1_to_100_is_not_accepted(
+    hass: HomeAssistant, mock_config_entry: MockConfigEntry, value: int
+) -> None:
+    result = await _options(hass, mock_config_entry)
+    with pytest.raises(InvalidData):
+        await _submit(hass, result, {CONF_AGENT_ID: AGENT, "max_volume": value})
+    assert "max_volume" not in mock_config_entry.options
 
 
 async def test_urgent_needs_announcements(
