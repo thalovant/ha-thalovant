@@ -1,5 +1,3 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: follow-ups of the 2026-11-13 recheck: household-marked sensitive entities, `all` out of the spec, vectors generated from the spec, the cap for Assist's own path.
-
 # Suggestions
 
 ## Intercom (0.4.0)

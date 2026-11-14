@@ -1,5 +1,3 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 après la revérification du 2026-11-13 : `unmute` nommé, plafond de volume, `targets` non porté, et ce que sont les vecteurs de test.
-
 # Musique via Home Assistant
 
 Si votre foyer utilise Music Assistant derrière Home Assistant (intégration *Music Assistant*), vos appareils Thalovant peuvent le piloter **par le lien Home Assistant déjà en place** : pas de seconde connexion, pas de port ouvert, aucun jeton Music Assistant sur le hub.

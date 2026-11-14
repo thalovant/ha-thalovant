@@ -1,5 +1,3 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: the spec's two music_player_unavailable behaviours are listed as not carried on this route; earlier: 0.5.0 after the 2026-11-13 recheck: the verb table matches music.py (one verb group per row, `unmute` listed), the volume cap, `targets` not carried, and what tests/music_vectors.json is and is not.
-
 # Music through Home Assistant
 
 If your household runs Music Assistant behind Home Assistant (the *Music Assistant* integration), your Thalovant devices can play and steer it **through the Home Assistant link you already have**: no second connection, no open port, no Music Assistant token on the hub.
@@ -24,7 +22,7 @@ device -> hub -> thalovant-skill-music-assistant -> thalovant.home.request {acti
 | `transfer` (`other` = the source; without it, the one exposed player that is playing) | `music_assistant.transfer_queue` with that source named |
 | `join` (`other` = the speaker that joins) | `media_player.join` |
 | `unjoin` | `media_player.unjoin` |
-| `volume`, `mute`, `unmute`, `playback` (pause/play/next/previous/stop) | the shared media actions (see [Structured actions](../README.md#structured-actions)): `media_player.volume_set`, `volume_mute`, `media_play`, `media_pause`, `media_stop`, `media_next_track`, `media_previous_track` |
+| `volume`, `mute`, `unmute`, `playback` (pause/play/next/previous/stop) | the shared media actions (see [Structured actions](guide.md#structured-actions)): `media_player.volume_set`, `volume_mute`, `media_play`, `media_pause`, `media_stop`, `media_next_track`, `media_previous_track` |
 
 These are exactly `MUSIC_CAPABILITIES` and `SHARED_CAPABILITIES` in `custom_components/thalovant/music.py`; a test fails when this table and the code differ (`tests/test_music_contract.py`).
 

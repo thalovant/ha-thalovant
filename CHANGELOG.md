@@ -1,5 +1,3 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: new file: the docs called the structured and music work 0.5.0 while the manifest said 0.4.0; one place now says what each version holds, and a test keeps the version the same in the manifest, here, in QUICK_FACTS.md and in pyproject.toml.
-
 # Changelog
 
 The version Home Assistant and HACS read is `version` in
@@ -12,7 +10,7 @@ and of the git history; details and verification are there.
 ## 0.5.0 (unreleased)
 
 Structured actions and music through the Home Assistant link, and the fixes of the
-2026-11-13 recheck. See [README.md](README.md#structured-actions),
+2026-11-13 recheck. See [the guide](docs/guide.md#structured-actions),
 [docs/music.md](docs/music.md) and [AUDIT.md](AUDIT.md).
 
 ### Added

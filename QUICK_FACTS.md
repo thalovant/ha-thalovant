@@ -1,5 +1,3 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: the spec's two music_player_unavailable behaviours are listed as not carried on this route; earlier: 0.5.0 after the 2026-11-13 recheck: version, structured action bounds (closed lists first, a room means its lights, covers sensitive unless a window covering, refusals answered, no `all`, volume cap), the music verb lists as the code has them, what the private vectors are.
-
 # Quick facts
 
 | Fact | Value |

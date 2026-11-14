@@ -1,9 +1,7 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: a section for structured actions and music (what is checked first, what a room means, sensitive covers, refusals, the volume cap) with where each lives in the code and its tests; the changelog.
-
 # Thalovant for Home Assistant
 
 The integration receives home requests from a Thalovant hub and passes them
-to Assist. See the [setup guide](../README.md) and [configuration facts](../QUICK_FACTS.md).
+to Assist. See the [guide](guide.md) and [configuration facts](../QUICK_FACTS.md).
 Since 0.4.0, and only when its options turn it on, it also sends announcements to
 your hub's speakers and plays the hub's announcements on media players: see the
 [announcements guide](announcements.md). Intercom is rolling out on Thalovant and
@@ -80,7 +78,7 @@ Repairs notice, no crash and no retry
 
 ## Structured actions and music (0.5.0, unreleased)
 
-A request can carry an `action` beside its sentence. The [README](../README.md#structured-actions) says what a
+A request can carry an `action` beside its sentence. The [guide](guide.md#structured-actions) says what a
 household sees; [QUICK_FACTS.md](../QUICK_FACTS.md) has the lists; [CHANGELOG.md](../CHANGELOG.md) what changed.
 
 | Rule | Where |

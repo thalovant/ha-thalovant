@@ -1,5 +1,3 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: spec 2813804 behaviours listed as not carried; earlier: recheck of 2026-11-13 (0.5.0): six findings on structured and music actions with their fixes, tests and what stays open; two earlier rows brought up to the code as it now is.
-
 # Audit
 
 ## Intercom (0.4.0)

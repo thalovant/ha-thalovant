@@ -1,5 +1,3 @@
-Last Edit: Claude Sonnet 5.5 - 2026-11-12 - Motive: 0.4.0 guide for Intercom, aligned with the released thalovant 0.12.0 SDK and the final platform API (urgent scope, speaker kind and can_play, new problem codes, the platform switch); says plainly that Intercom is rolling out and may not be enabled yet.
-
 # Announcements (Intercom)
 
 > **Safety notice.** Intercom is a convenience, **not a certified safety

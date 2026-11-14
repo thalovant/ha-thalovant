@@ -1,5 +1,3 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: what changed, why a room toggles only its lights, why a cover or a lock is refused aloud, the volume cap, relays and scripts, the removed `all` target, the test vectors.
-
 # FAQ
 
 **Is Intercom a safety system?** No. It is a convenience: it is not a certified
@@ -143,7 +141,7 @@ keeps its credentials and Voice ID when the integration is updated.
 
 **Who revokes private credentials?** The hub operator revokes the dedicated
 client. [`async_remove_entry()`](custom_components/thalovant/__init__.py)
-removes the local entry and its Noise state. See the [setup guide](README.md).
+removes the local entry and its Noise state. See the [setup guide](docs/guide.md).
 
 **Can I play music from a Thalovant device through Home Assistant?** Yes, if Home Assistant has the Music Assistant integration and its players are exposed to Assist: "play Adam's Song on the kitchen speaker". See [docs/music.md](docs/music.md).
 
