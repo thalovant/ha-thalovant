@@ -34,8 +34,10 @@ Home Assistant `custom_components` folder.
   and no Home Assistant token leaves your home.
 - **Assist decides.** Only entities you have exposed to Assist can be controlled.
 - **Lights, climate, covers, locks and more** by name, room or floor, and your
-  Music Assistant players by voice. Anything sensitive (locks, alarms, garage doors)
-  stays off until you turn it on in the options.
+  Music Assistant players by voice. Locks, alarms and garage doors are off by
+  default for structured requests; the options cover those only. Assist's own
+  exposure settings decide the rest, so expose them to Assist only if you want
+  voice control of them.
 - **Optional announcements** to your hub's speakers and from the hub to your
   Home Assistant media players, only if you turn them on.
 
