@@ -2,7 +2,7 @@
 
 ## 2026-11-14 - header lines removed, README shortened
 
-The owner withdrew the `Last Edit:` header rule: every such line is removed from every file and none is added. The README is now short (what it is, get started, what it does, links); the full text moved to `docs/guide.md` with its links adjusted (`docs/index.md`, `docs/music.md`, `docs/music.fr.md`, `CHANGELOG.md` and `FAQ.md` point there). 988 passed, 4 skipped, 100 percent coverage; ruff, format and mypy clean. Transparency: Claude Sonnet 5.5 made the change; no human review yet.
+The owner withdrew the first-line header rule: every such line is removed from every file and none is added. The README is now short (what it is, get started, what it does, links); the full text moved to `docs/guide.md` with its links adjusted (`docs/index.md`, `docs/music.md`, `docs/music.fr.md`, `CHANGELOG.md` and `FAQ.md` point there). 988 passed, 4 skipped, 100 percent coverage; ruff, format and mypy clean. Transparency: Claude Sonnet 5.5 made the change; no human review yet.
 
 ## 2026-11-13 · 0.5.0, review of the pull request (not released)
 
