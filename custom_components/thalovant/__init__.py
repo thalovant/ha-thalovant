@@ -47,6 +47,7 @@ from .rooms import PlayerChecker, async_delete_entry_issues
 from .self_hosted import async_create_session, validate_credentials
 from .services import async_setup_services
 from .speaker import IntercomSpeakerHandler
+from .text import escape_markdown
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -143,7 +144,7 @@ def _async_hub_key_changed(hass: HomeAssistant, entry: ThalovantConfigEntry) -> 
         is_fixable=False,
         severity=ir.IssueSeverity.ERROR,
         translation_key="hub_key_changed",
-        translation_placeholders={"hub": entry.title},
+        translation_placeholders={"hub": escape_markdown(entry.title)},
     )
 
 
@@ -164,7 +165,7 @@ def _async_client_key_rejected(
         is_fixable=False,
         severity=ir.IssueSeverity.ERROR,
         translation_key="client_key_rejected",
-        translation_placeholders={"hub": entry.title},
+        translation_placeholders={"hub": escape_markdown(entry.title)},
     )
 
 
@@ -198,7 +199,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="credentials_invalid",
-            translation_placeholders={"hub": entry.title},
+            translation_placeholders={"hub": escape_markdown(entry.title)},
         ) from err
     controller = None if self_hosted else IntercomController(hass, entry)
     entry.runtime_data = ThalovantRuntimeData(
@@ -241,14 +242,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="hub_key_changed",
-            translation_placeholders={"hub": entry.title},
+            translation_placeholders={"hub": escape_markdown(entry.title)},
         ) from err
     except ThalovantAuthError as err:
         if _recently_linked(entry):
             raise ConfigEntryNotReady(
                 translation_domain=DOMAIN,
                 translation_key="not_admitted_yet",
-                translation_placeholders={"hub": entry.title},
+                translation_placeholders={"hub": escape_markdown(entry.title)},
             ) from err
         key_rejected = isinstance(err, ThalovantClientKeyRejectedError)
         if key_rejected:
@@ -256,13 +257,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ThalovantConfigEntry) ->
         raise ConfigEntryAuthFailed(
             translation_domain=DOMAIN,
             translation_key="client_key_rejected" if key_rejected else "auth_failed",
-            translation_placeholders={"hub": entry.title},
+            translation_placeholders={"hub": escape_markdown(entry.title)},
         ) from err
     except ThalovantConnectionError as err:
         raise ConfigEntryNotReady(
             translation_domain=DOMAIN,
             translation_key="cannot_connect",
-            translation_placeholders={"hub": entry.title},
+            translation_placeholders={"hub": escape_markdown(entry.title)},
         ) from err
     state_logger(connection.connected)
     _async_delete_key_issues(hass, entry.entry_id)

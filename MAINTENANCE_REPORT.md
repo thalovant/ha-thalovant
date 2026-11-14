@@ -1,5 +1,9 @@
 # Maintenance report
 
+## 2026-11-14 - final review: link guard, Markdown in names
+
+From the final independent review. `config_flow.py`: the guard that stops a second link while one waits to be let in now expires after `PENDING_LINK_MAX_AGE` (5 minutes, `const.py`), using a start time the flow records when it begins waiting (`link_started_at`); an expired or untimed flow is closed (which also deletes its unused connection) and no longer blocks new links until Home Assistant restarts; a finished or aborted flow was never counted (the flow leaves Home Assistant's list). New `text.py`, `escape_markdown()`: `[ ] ( ) ` < >` and `://` become spaces, so `x](http://evil)` is no link; applied to every placeholder passed to a repair issue (`__init__.py`, `handler.py`, `intercom.py`, `rooms.py`), to the flow's descriptions (hub, account, code) and to the values formatted into a spoken answer (`async_action_speech`). Tests: `tests/test_text.py`, three in `tests/test_config_flow.py`. 1014 passed, 4 skipped, 100 percent; ruff, format, mypy clean. Transparency: Claude Sonnet 5.5; no human review yet.
+
 ## 2026-11-14 - the hub's timeout is 12 seconds
 
 From the end-to-end failure run: `HUB_TIMEOUT` was 10 s while the router waits 12 s (contract section 5), so a request was treated as late 2 s early. `const.py` now says 12.0 and its comment says the router; `docs/guide.md` follows; the Assist share (`CONVERSE_TIMEOUT` 8.5 s) is unchanged. `tests/test_handler.py::test_no_time_left` and `::test_late_request_gets_what_is_left` use ages 13 s and 11.6 s. 988 passed, 4 skipped, 100 percent; ruff, format and mypy clean. Transparency: Claude Sonnet 5.5; no human review yet.

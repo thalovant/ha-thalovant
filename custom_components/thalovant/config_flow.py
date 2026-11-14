@@ -4,6 +4,7 @@ import asyncio
 from collections.abc import Mapping
 from contextlib import suppress
 import logging
+import time
 from typing import TYPE_CHECKING, Any, Final, override
 
 import probatio
@@ -89,6 +90,7 @@ from .const import (
     LINK_TOKEN_TIMEOUT,
     LOGGER,
     LOGIN_SCOPES,
+    PENDING_LINK_MAX_AGE,
 )
 from .handler import agent_issue_id
 from .intercom import scopes_for_options
@@ -99,6 +101,7 @@ from .self_hosted import (
     credentials_for,
     normalize_endpoint,
 )
+from .text import escape_markdown
 
 # Never poll faster than this, whatever the server says.
 MIN_POLL_INTERVAL: Final = 1
@@ -202,10 +205,24 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
     @callback
     def _async_pending_link(self) -> str | None:
         """The hub another flow of ours is waiting to be let in to, if there is one."""
+        now = time.monotonic()
         for flow in self.hass.config_entries.flow.async_progress_by_handler(DOMAIN):
             if flow["flow_id"] != self.flow_id and flow["step_id"] == "admission":
+                started = flow["context"].get("link_started_at")
+                if (
+                    not isinstance(started, float)
+                    or now - started > PENDING_LINK_MAX_AGE
+                ):
+                    # Abandoned (the dialog was closed, the person walked away): it must not block every new
+                    # link until Home Assistant restarts. Closing it also deletes its unused connection.
+                    LOGGER.debug(
+                        "Closing an abandoned link that waited more than %d s",
+                        PENDING_LINK_MAX_AGE,
+                    )
+                    self.hass.config_entries.flow.async_abort(flow["flow_id"])
+                    continue
                 titles = flow["context"].get("title_placeholders") or {}
-                return str(titles.get("hub", ""))
+                return escape_markdown(str(titles.get("hub", "")))
         return None
 
     async def async_step_reauth(
@@ -405,7 +422,7 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
                 description_placeholders={
                     "url": self._login.verification_uri_complete
                     or self._login.verification_uri,
-                    "code": self._login.user_code,
+                    "code": escape_markdown(self._login.user_code),
                 },
                 progress_task=self._login_task,
             )
@@ -559,7 +576,7 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
             return self.async_show_progress(
                 step_id="admission",
                 progress_action="wait_for_admission",
-                description_placeholders={"hub": self._hub.name},
+                description_placeholders={"hub": escape_markdown(self._hub.name)},
                 progress_task=self._admission_task,
             )
 
@@ -759,9 +776,11 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
             ),
             errors=errors,
             description_placeholders={
-                "account": self._account.display_name
-                or self._account.email
-                or self._account.id
+                "account": escape_markdown(
+                    self._account.display_name
+                    or self._account.email
+                    or self._account.id
+                )
             },
         )
 
@@ -835,6 +854,7 @@ class ThalovantConfigFlow(AbstractOAuth2FlowHandler, domain=DOMAIN):
         """Create this installation's connection on the hub, then wait for it."""
         self._hub = hub
         # Named for the hub while it waits, so a second attempt can say which link is pending.
+        self.context["link_started_at"] = time.monotonic()  # type: ignore[typeddict-unknown-key]
         self.context["title_placeholders"] = {
             **self.context.get("title_placeholders", {}),
             "hub": hub.name,

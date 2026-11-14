@@ -91,6 +91,10 @@ CONNECTION_KIND: Final = "home_assistant"
 # The hub admits a new connection in about 90 seconds.
 ADMISSION_TIMEOUT: Final = 180
 
+# A link waiting to be let in blocks a second one only this long: a flow nobody finished (the dialog was closed)
+# must not block every new link until Home Assistant restarts.
+PENDING_LINK_MAX_AGE: Final = 300
+
 # For this long after a connection is made, the hub refusing it means "not
 # admitted yet" rather than bad credentials: setup retries instead of asking
 # the user to reauthenticate. The SDK's run() waits the same 600 s.

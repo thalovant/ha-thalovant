@@ -24,6 +24,7 @@ from homeassistant.helpers.start import async_at_started
 from .actions import exposed, fold
 from .const import DOMAIN, MA_DOMAIN, PLAYER_CHECK_DELAY
 from .models import ThalovantConfigEntry
+from .text import escape_markdown
 
 NO_AREA_PREFIX = "music_player_no_area"
 CLASH_PREFIX = "music_name_clash"
@@ -199,7 +200,9 @@ class PlayerChecker:
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
             translation_key=translation_key,
-            translation_placeholders=placeholders,
+            translation_placeholders={
+                key: escape_markdown(value) for key, value in placeholders.items()
+            },
         )
 
     @callback

@@ -80,6 +80,7 @@ from .const import (
 )
 from .handler import canonical_language
 from .models import ThalovantConfigEntry
+from .text import escape_markdown
 
 # The unicode categories no announcement may hold, as the platform's own rule
 # has them: control (Cc), format (Cf: every bidirectional mark, the zero-width
@@ -325,7 +326,7 @@ class IntercomController:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="token_unreadable",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             ) from None
         return ThalovantApi(async_get_clientsession(self._hass), tokens)
 
@@ -346,9 +347,11 @@ class IntercomController:
 
         kind is announce, cancel or read. No message holds a text or a name.
         """
-        placeholders: dict[str, str] = {"hub": self._entry.title}
+        placeholders: dict[str, str] = {"hub": escape_markdown(self._entry.title)}
         if isinstance(err, ThalovantNotCancellableError):
-            placeholders["status"] = err.announcement_status or "unknown"
+            placeholders["status"] = escape_markdown(
+                err.announcement_status or "unknown"
+            )
             return ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="not_cancellable",
@@ -383,7 +386,9 @@ class IntercomController:
         elif isinstance(err, ThalovantHubLockedError):
             key = "hub_locked"
         elif isinstance(err, ThalovantHubUnreachableError):
-            placeholders["announcement"] = err.announcement_id or "unknown"
+            placeholders["announcement"] = escape_markdown(
+                err.announcement_id or "unknown"
+            )
             key = "hub_unreachable"
         elif isinstance(err, ThalovantIntercomUnavailableError):
             self._async_update_issue(err.reason)
@@ -415,8 +420,8 @@ class IntercomController:
             # A plain member of the account may read but not announce.
             key = "manager_required"
         else:
-            placeholders["status"] = str(err.status or "unknown")
-            placeholders["code"] = err.code or "unknown"
+            placeholders["status"] = escape_markdown(err.status or "unknown")
+            placeholders["code"] = escape_markdown(err.code or "unknown")
             key = "request_refused"
         return HomeAssistantError(
             translation_domain=DOMAIN,
@@ -430,7 +435,7 @@ class IntercomController:
         return HomeAssistantError(
             translation_domain=DOMAIN,
             translation_key="unexpected",
-            translation_placeholders={"hub": self._entry.title},
+            translation_placeholders={"hub": escape_markdown(self._entry.title)},
         )
 
     def require_announcements(self) -> None:
@@ -439,13 +444,13 @@ class IntercomController:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="announcements_disabled",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             )
         if not set(INTERCOM_SCOPES) <= self._scopes():
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="scope_missing",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             )
 
     async def async_announce(
@@ -472,7 +477,7 @@ class IntercomController:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="urgent_disabled",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             )
         if not (self._urgent if urgent else self._normal).allow():
             self._entry.runtime_data.intercom_stats.record_send_error(
@@ -514,7 +519,7 @@ class IntercomController:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_request",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             ) from None
         except ThalovantError as err:
             stats.record_send_error(type(err).__name__)
@@ -580,7 +585,7 @@ class IntercomController:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="scope_missing",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             )
         api = self._api()
         try:
@@ -589,7 +594,7 @@ class IntercomController:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="invalid_request",
-                translation_placeholders={"hub": self._entry.title},
+                translation_placeholders={"hub": escape_markdown(self._entry.title)},
             ) from None
         except ThalovantError as err:
             raise self._error(err, "cancel") from err
@@ -648,7 +653,9 @@ class IntercomController:
                 raise ServiceValidationError(
                     translation_domain=DOMAIN,
                     translation_key="ambiguous_speaker",
-                    translation_placeholders={"hub": self._entry.title},
+                    translation_placeholders={
+                        "hub": escape_markdown(self._entry.title)
+                    },
                 )
             resolved.append(
                 (matches[0].slug or matches[0].client_id) if matches else name
@@ -684,7 +691,7 @@ class IntercomController:
             is_fixable=False,
             severity=ir.IssueSeverity.WARNING,
             translation_key=f"intercom_unavailable_{_ISSUE_REASONS.get(reason, 'unknown')}",
-            translation_placeholders={"hub": self._entry.title},
+            translation_placeholders={"hub": escape_markdown(self._entry.title)},
         )
 
     def async_clear_issue(self) -> None:
@@ -718,7 +725,9 @@ class IntercomController:
                     is_fixable=False,
                     severity=ir.IssueSeverity.WARNING,
                     translation_key="intercom_can_play",
-                    translation_placeholders={"hub": self._entry.title},
+                    translation_placeholders={
+                        "hub": escape_markdown(self._entry.title)
+                    },
                 )
             return
         ir.async_delete_issue(self._hass, DOMAIN, issue_id)
