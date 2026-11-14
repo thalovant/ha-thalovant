@@ -1,4 +1,4 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: recheck of 2026-11-13 (0.5.0): six findings on structured and music actions with their fixes, tests and what stays open; two earlier rows brought up to the code as it now is.
+Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: spec 2813804 behaviours listed as not carried; earlier: recheck of 2026-11-13 (0.5.0): six findings on structured and music actions with their fixes, tests and what stays open; two earlier rows brought up to the code as it now is.
 
 # Audit
 
@@ -369,6 +369,10 @@ Severity: H1 and H2 as the recheck rated them; H3 to H6 were not rated by it and
 | --- | --- | --- | --- |
 | A capped `volume_set` that fails before anything changed returned `None`, so the words reached Assist, which is not capped | True: [`async_execute()`](custom_components/thalovant/actions.py), the `if not done: return None` of the service-call loop | A request the cap lowered whose call fails is answered as an error (`action_failed`, "Sorry, I couldn't do that."), never `None`; a request the cap did not lower keeps the old way out | [`test_a_capped_volume_whose_call_fails_is_said_failed_not_handed_to_assist`](tests/test_action_bounds.py); `("action_failed", ...)` in [`test_a_refusal_whose_sentence_cannot_be_made_is_still_said_as_what_it_is`](tests/test_structured_handler.py) |
 | The README said a service failure sends the sentence to Assist, without the partial case | True: a failure after part of the action was done answers `action_partial` and never sends the sentence | README, "Structured actions", says both cases | none (text) |
+
+### Spec head 2813804 (2026-11-14)
+
+The spec gained two behaviours of "a named speaker nobody has" (the bridge answers with the key `music_player_unavailable` and the speaker's name). With the spec installed, `test_the_private_vectors_still_match_the_specs_behaviours` failed on them. They are listed in `NOT_CARRIED_BEHAVIOURS` ([`music.py`](custom_components/thalovant/music.py)) as not carried on this route (an unresolved target returns `None` and the words go to Assist), in QUICK_FACTS and `docs/music.md`, and the test accepts a missing behaviour only by verb (`NOT_CARRIED`) or by that name. Run: 992 passed with the spec installed, 988 passed and 4 skipped without it, 100 percent, ruff, format and mypy clean.
 
 ### What stays open or was decided
 

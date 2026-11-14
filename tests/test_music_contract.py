@@ -19,6 +19,7 @@ from custom_components.thalovant.music import (
     _RUNNERS,
     MUSIC_CAPABILITIES,
     NOT_CARRIED,
+    NOT_CARRIED_BEHAVIOURS,
     SHARED_CAPABILITIES,
 )
 
@@ -127,7 +128,9 @@ def test_the_private_vectors_still_match_the_specs_behaviours() -> None:
         assert case["expect"] == theirs["expect"], case["name"]
         assert case.get("device_name") == theirs.get("device_name"), case["name"]
     # what the spec has and this copy lacks is only what the route does not carry
-    assert {b["verb"] for b in behaviours.values()} <= NOT_CARRIED
+    # (by verb, or by name for the two behaviours of a speaker nobody has)
+    for name, behaviour in behaviours.items():
+        assert behaviour["verb"] in NOT_CARRIED or name in NOT_CARRIED_BEHAVIOURS, name
 
 
 def test_the_version_is_the_same_everywhere() -> None:

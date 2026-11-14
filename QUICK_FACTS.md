@@ -1,4 +1,4 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: version, structured action bounds (closed lists first, a room means its lights, covers sensitive unless a window covering, refusals answered, no `all`, volume cap), the music verb lists as the code has them, what the private vectors are.
+Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: the spec's two music_player_unavailable behaviours are listed as not carried on this route; earlier: 0.5.0 after the 2026-11-13 recheck: version, structured action bounds (closed lists first, a room means its lights, covers sensitive unless a window covering, refusals answered, no `all`, volume cap), the music verb lists as the code has them, what the private vectors are.
 
 # Quick facts
 
@@ -76,7 +76,7 @@ Implementation links and tests are indexed in [documentation](docs/index.md) and
 | Module | `custom_components/thalovant/music.py`: `async_execute_action()`, `async_execute_music()`, `music_player()`, `best_match()` |
 | Music capabilities (`MUSIC_CAPABILITIES`) | `play_media`, `now_playing`, `shuffle`, `repeat`, `transfer`, `join`, `unjoin` |
 | Shared media capabilities (`SHARED_CAPABILITIES`) | `volume`, `mute`, `unmute`, `playback` |
-| Not carried on this route (`NOT_CARRIED`) | `targets` |
+| Not carried on this route (`NOT_CARRIED`, `NOT_CARRIED_BEHAVIOURS`) | the verb `targets`; and the spec's two behaviours of "a named speaker nobody has" (the speech key music_player_unavailable: the bridge's answer names the speaker; here an unresolved target returns `None` and the words go to Assist) |
 | Home Assistant actions used | `music_assistant.search`, `get_library`, `get_queue`, `play_media`, `transfer_queue`; `media_player.shuffle_set`, `repeat_set`, `join`, `unjoin`, `volume_set`, `volume_mute`, `media_play`, `media_pause`, `media_stop`, `media_next_track`, `media_previous_track` |
 | Players | Music Assistant entities (registry platform `music_assistant`) exposed to Assist |
 | Spoken answers | `common.music_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |

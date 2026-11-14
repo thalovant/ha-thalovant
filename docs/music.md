@@ -1,4 +1,4 @@
-Last Edit: Claude Fable 5.2 - 2026-11-13 - Motive: 0.5.0 after the 2026-11-13 recheck: the verb table matches music.py (one verb group per row, `unmute` listed), the volume cap, `targets` not carried, and what tests/music_vectors.json is and is not.
+Last Edit: Claude Sonnet 5.5 - 2026-11-14 - Motive: the spec's two music_player_unavailable behaviours are listed as not carried on this route; earlier: 0.5.0 after the 2026-11-13 recheck: the verb table matches music.py (one verb group per row, `unmute` listed), the volume cap, `targets` not carried, and what tests/music_vectors.json is and is not.
 
 # Music through Home Assistant
 
@@ -39,6 +39,7 @@ Answers are spoken from this integration's translations (English and French; oth
 - No genre play and no "add the current track to favorites": use the direct or bridge transport of the skill.
 - Search is through `music_assistant.search`, which spans your providers; a result that is not in the library is still played if the provider has it. The artist you name narrows the search and rules out a result whose listed artists do not contain it (or are not contained in it: a substring match, so "Muse" can match "Muse Tribute Band"); a result with no artist information, such as a playlist or a station, is not ruled out.
 - Favorites are limited to 50 tracks per request.
+- A named speaker nobody has: the bridge answers with the key `music_player_unavailable` and the speaker's name (spec 0.4.0). This route does not: an unresolved target returns `None` and the words go to Assist (`NOT_CARRIED_BEHAVIOURS` in `music.py`).
 - Speakers list ("which speakers do I have") is not an action here. The connector spec's `music_assistant` connector has a `targets` verb for it since spec 0.4.0; this route does not carry it (`NOT_CARRIED` in `music.py`), so the question goes on as its words.
 
 ## Test vectors: what they are

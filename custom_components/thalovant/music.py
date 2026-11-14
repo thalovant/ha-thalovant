@@ -56,6 +56,16 @@ SHARED_CAPABILITIES = frozenset({"volume", "mute", "unmute", "playback"})
 #: capability, so a request for it goes on as its words. ``tests/test_music_contract.py`` keeps
 #: the three lists equal to the docs' and, when the spec is installed, to the spec's.
 NOT_CARRIED = frozenset({"targets"})
+#: Behaviours of the connector spec's shared vectors (by name) that this route does not carry: a named speaker
+#: nobody has is answered by the bridge with the key ``music_player_unavailable`` (the speaker's name in the
+#: answer). Here a target that resolves to no player returns ``None`` and the words go to Assist, which says
+#: it in its own way, so the answer does not name the speaker.
+NOT_CARRIED_BEHAVIOURS = frozenset(
+    {
+        "a named speaker nobody has: the answer says which one",
+        "playing on a named speaker nobody has plays nowhere and says which one",
+    }
+)
 #: Where a search result lists each media type, best type first.
 RESULT_KEYS = {
     "track": "tracks",
