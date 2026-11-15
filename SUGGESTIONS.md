@@ -1,5 +1,13 @@
 # Suggestions
 
+## 2026-11-15 - A wake-phrase filter and a marker for announcements
+
+**Problem.** Announcement text is spoken on media players that a voice satellite may hear (AUDIT H1).
+
+**Proposed solution.** An option listing the household's wake words (default empty) that the speaker path removes from the text before `tts.speak`, and a `meta` marker on the spoken message that the OVOS side uses to ignore its own echo.
+
+**Estimated impact.** Closes the remote-text-to-command loop for households that list their wake words; small code, one option and its translations.
+
 ## Intercom (0.4.0)
 
 **Cut the 0.4.0 release when the platform is ready to switch Intercom on.** Problem:

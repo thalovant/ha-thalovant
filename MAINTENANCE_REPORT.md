@@ -1,5 +1,15 @@
 # Maintenance report
 
+## 2026-11-15 - Security review: open items recorded (`docs/security-review-open-items`)
+
+`AUDIT.md`, `SUGGESTIONS.md` only. No code.
+
+### Transparency Report
+
+- **AI Model**: Claude Sonnet 5.5 (`claude-sonnet-5-5`) in Claude Code.
+- **Actions Taken**: Recorded two findings of a delegated read-only review.
+- **Oversight**: Directed by the owner's lead agent. No human has reviewed these commits.
+
 ## 2026-11-15 - documentation fixes after a new-user validation (`fix/docs-validation`)
 
 - 0.5.0 is tagged (`v0.5.0` = `0e26db0`, 2026-11-15): `CHANGELOG.md`, `QUICK_FACTS.md` and `docs/index.md` no longer say "unreleased". Older dated entries below keep their history.

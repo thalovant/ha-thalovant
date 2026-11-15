@@ -1,5 +1,12 @@
 # Audit
 
+## 2026-11-15 security review: open items
+
+| # | Finding | Where | Why open |
+| --- | --- | --- | --- |
+| H1 | A received announcement is cleaned of control and bidi characters and angle brackets and spoken with `tts.speak` on the household's media players; nothing strips a wake phrase or a command sentence, so text from a remote sender can wake a satellite or an Alexa-class device in earshot (speak, microphone, STT loop). Guards present: authenticated hub link only, `meta.dialog` check, 280-character cap, per-minute and repeat limits | `intercom.py:167-183`, `speaker.py:281-300` | The integration cannot know the household's wake words; needs a configurable filter and an "announcement is not a command" marker the satellites honour |
+| H2 | With a conversation agent that is an LLM (`CONF_AGENT_ID`), entity names, aliases and media titles from Home Assistant core are in its context and its tool results; `refused_words` only sees the utterance | `handler.py:515-566`, `config_flow.py:1053-1060` | Outside this repository; the demo and a sensitive household keep the built-in agent and expose nothing sensitive |
+
 ## 2026-11-15 - Documentation drift found by a new-user validation
 
 | # | Finding | State |
