@@ -14,6 +14,17 @@
 - **AI Model**: Claude Sonnet 5.5 (`claude-sonnet-5-5`) in Claude Code.
 - **Actions Taken**: Compared the guides with `strings.json`, `config_flow.py` and the tags; edited the documents, two strings and one docstring; ran the suite.
 - **Oversight**: Requested by the owner after a validation; no human has reviewed the changes.
+||||||| parent of c7dce0f (Refuse sensitive words before Assist is asked: names, nouns and let-me-in for exposed locks, alarms, sirens, valves and covers)
+
+## 2026-11-15 - sensitive words are guarded on the Home Assistant side (`fix/sensitive-words`)
+
+`custom_components/thalovant/sensitive_words.py` (new, `refused_words`), `handler.py` (`_async_converse`, `_async_refused`), `tests/test_sensitive_words.py` (new), `AUDIT.md`, `CHANGELOG.md`, `FAQ.md`. Verification: `pytest` 1095 passed, 4 skipped; `ruff check .` and `ruff format --check .` clean (the 34 failures seen before installing the `thalovant` SDK were an environment gap, not a regression).
+
+### Transparency Report
+
+- **AI Model**: Claude Sonnet 5.5 (`claude-sonnet-5-5`) in Claude Code.
+- **Actions Taken**: Wrote `refused_words` and its seven-language noun tables, wired it into `_async_converse`, wrote 120 tests, updated the docs.
+- **Oversight**: Directed by the owner's lead agent. No human has reviewed these commits. The nouns are machine-written and not native-reviewed. Nothing was run against a live Home Assistant.
 
 ## 2026-11-14 - require thalovant>=0.13.0
 
