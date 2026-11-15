@@ -10,6 +10,18 @@
 | H4 | The repair `music_player_no_area` example ("play jazz in the kitchen") named a genre, which `music.py` does not carry (`NOT_CARRIED_BEHAVIOURS`) | **Fixed** (strings, en, fr, docstring) |
 
 Evidence: `pytest` 1014 passed, 4 skipped; setup steps compared with `custom_components/thalovant/strings.json`.
+||||||| parent of c7dce0f (Refuse sensitive words before Assist is asked: names, nouns and let-me-in for exposed locks, alarms, sirens, valves and covers)
+
+## 2026-11-15 security review: words were unguarded (sensitive_words.py)
+
+Evidence: `pytest` 1095 passed, 4 skipped (Python 3.14, Home Assistant 2026.10.4, `thalovant` SDK from PyPI), `ruff check` and `ruff format --check` clean.
+
+| # | Finding | State | Test |
+| --- | --- | --- | --- |
+| W1 | [`ThalovantHandler._async_structured`](custom_components/thalovant/handler.py) only guards a structured action; the words of the same request went to `conversation.async_converse`, where Assist acts on any exposed entity ("toggle the front door", "let me in", "silence the alarm", "open the water valve") | **Fixed**: [`refused_words`](custom_components/thalovant/sensitive_words.py) runs before the agent is asked (follow-ups included) unless the household turned on `CONF_STRUCTURED_SENSITIVE`; the answer is the same `action_sensitive_off` error the structured path gives | `tests/test_sensitive_words.py` (REFUSED set, `test_the_refusal_reaches_the_hub_and_assist_is_never_asked`, `test_a_follow_up_is_guarded_too`) |
+| W2 | Language | The rule matches the NAMES and aliases of exposed lock, alarm, siren, valve, non-window cover and sensitive-named switch entities (any language), then the nouns of the KINDS that are exposed (en, fr, de, es, it, pt, nl only), then "let me in" phrases when a lock is exposed | `test_a_sentence_about_a_sensitive_entity_is_refused[...]`, `test_a_household_that_exposes_nothing_sensitive_is_never_refused[...]`, `test_ordinary_sentences_pass[...]` |
+
+Limits: (1) a custom conversation agent (an LLM) is guarded by the same words, not by what it resolves; a sentence that names no exposed sensitive entity and holds none of the nouns (an Estonian "ava välisuks" with a lock named "Esik") is NOT caught. The complete fix is not to expose sensitive entities to Assist. (2) A household that exposes a lock is refused any sentence with "door" while the option is off: the false-refusal price, stated in the guide. (3) The Thalovant hub setting `sensitive_actions` lives in the skill; this integration's equivalent is the options switch `structured_sensitive`, which now also governs words. Nothing was run against a live Home Assistant.
 
 ## Intercom (0.4.0)
 

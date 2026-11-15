@@ -15,6 +15,7 @@ Structured actions and music through the Home Assistant link, and the fixes of t
 
 ### Changed
 
+- Plain words that name an exposed lock, alarm, siren, valve, non-window cover or sensitive-named switch (by name or alias, any language), or hold the noun of an exposed kind (en, fr, de, es, it, pt, nl), or ask to be let in, are refused before Assist is asked, unless the `structured_sensitive` option is on. See [AUDIT.md](AUDIT.md).
 - The manifest requires `thalovant>=0.13.0` (was `==0.12.0`).
 
 ### Added

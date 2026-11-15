@@ -44,6 +44,7 @@ from .const import (
 from .models import ThalovantConfigEntry
 from .music import async_execute_action
 from .self_hosted import permits_lighting_request
+from .sensitive_words import refused_words
 from .text import escape_markdown
 
 # Error codes this integration adds to the ones Assist reports.
@@ -470,6 +471,25 @@ class HomeRequestHandler:
             response["error_code"] = ERROR_FAILED_TO_HANDLE
         return response
 
+    async def _async_refused(
+        self, request_id: str, data: Mapping[str, Any], speech_key: str
+    ) -> dict[str, Any]:
+        """Answer with a refusal sentence, as an error the hub speaks and never follows with the same words."""
+        try:
+            speech = await async_action_speech(
+                self._hass, data.get("lang"), ActionResult("error", speech_key)
+            )
+        except Exception:  # noqa: BLE001 - a refusal is still a refusal without its translation
+            speech = ""
+        return {
+            "request_id": request_id,
+            "speech": speech
+            or _ACTION_ERROR_SPEECH.get(speech_key, "Sorry, I can't do that."),
+            "continue_conversation": False,
+            "response_type": "error",
+            "error_code": ERROR_FAILED_TO_HANDLE,
+        }
+
     async def _async_converse(
         self, request_id: str, data: Mapping[str, Any], budget: float
     ) -> dict[str, Any]:
@@ -491,6 +511,14 @@ class HomeRequestHandler:
         ) is not None:
             return structured
         budget -= time.monotonic() - started  # what the structured attempt used is gone
+
+        if self._entry.options.get(CONF_STRUCTURED_SENSITIVE) is not True and (
+            reason := refused_words(self._hass, utterance)
+        ):
+            # Words reach every exposed entity, so a sentence about a lock, alarm, siren, valve, garage door or
+            # gate is refused here, aloud, exactly like the structured action the household did not allow.
+            LOGGER.debug("Request %s: sensitive words refused (%s)", request_id, reason)
+            return await self._async_refused(request_id, data, "action_sensitive_off")
 
         agent_id: str = conversation.HOME_ASSISTANT_AGENT
         if not self._self_hosted:

@@ -162,3 +162,5 @@ removes the local entry and its Noise state. See the [setup guide](docs/guide.md
 **Does "turn off everything" work?** Not as a structured action: the `all` target was removed in 0.5.0 (no Thalovant skill used it, and it reached up to 50 entities of a domain). The sentence goes to Assist, which decides.
 
 **Are the music tests the same as the bridge's?** No. [`tests/music_vectors.json`](tests/music_vectors.json) is this repository's own copy, in the shape `world` + `cases`; the connector spec's vectors are organised as `validation` and `behavior`. See [docs/music.md](docs/music.md#test-vectors-what-they-are).
+
+**Why was "open the front door" refused when I never asked for a structured action?** Words reach every entity exposed to Assist, so with `structured_sensitive` off the integration refuses a sentence that names an exposed lock, alarm, siren, valve, garage door or gate before Assist is asked (`sensitive_words.refused_words`). Un-expose the entity or turn the option on if you want it.
