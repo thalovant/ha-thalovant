@@ -3,7 +3,7 @@
 | Fact | Value |
 | --- | --- |
 | Project | `ha-thalovant` |
-| Home Assistant integration domain and version | `thalovant`, `0.5.0` (`custom_components/thalovant/manifest.json`; unreleased: the last tag is `v0.4.0`) |
+| Home Assistant integration domain and version | `thalovant`, `0.5.0` (`custom_components/thalovant/manifest.json`; tag `v0.5.0`, 2026-11-15) |
 | SDK requirement | `thalovant>=0.13.0` (released on PyPI; Intercom arrived in 0.12.0; `manifest.json`, enforced by `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin`) |
 | Config entry points | `ThalovantConfigFlow.async_step_user()`, `async_step_self_hosted()`, `async_step_reauth()` |
 | Sign-in methods | Link account (default): `AbstractOAuth2FlowHandler` steps `auth` and `creation` with `ThalovantOAuth2Implementation`; Link with a code instead: `async_step_login()` (device login) |
@@ -51,7 +51,7 @@ services.
 Implementation links and tests are indexed in [documentation](docs/index.md) and
 [the announcements guide](docs/announcements.md).
 
-## Structured actions (0.5.0, unreleased)
+## Structured actions (0.5.0)
 
 | Fact | Value |
 | --- | --- |
@@ -67,7 +67,7 @@ Implementation links and tests are indexed in [documentation](docs/index.md) and
 | Volume cap (`max_volume`) | every structured `volume` action, on any media player, absolute or relative, is set at most at the cap; when the cap lowered it the answer is `common.action_volume_capped` with the level, and if that capped call fails before anything changed the answer is the error `common.action_failed` (never None: the words would reach Assist uncapped). A sentence Assist handles itself (no structured action, or one that could not be resolved) is not capped |
 | Spoken answers | `common.action_*` in `strings.json`, `translations/en.json`, `translations/fr.json` |
 
-## Music (0.5.0, unreleased)
+## Music (0.5.0)
 
 | Fact | Value |
 | --- | --- |

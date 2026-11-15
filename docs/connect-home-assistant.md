@@ -30,7 +30,7 @@ This takes about five minutes, and one of them is waiting. Steps 1, 7, 8 and 9 h
 
    ![The Select brand window with Thalovant typed in the search box and the result circled.](images/ha-04-search-thalovant.png)
 
-6. **Leave Link account selected and select Submit.** A new browser tab opens.
+6. **Leave Link account selected and select Submit.** A new browser tab opens. Leave the switch **Link a self-hosted Christmas hub** off: it is only for a private hub whose operator gave you a dedicated connection, and with it off you sign in to your Thalovant account.
 
    ![The Link your hub window with Link account selected and the Submit button circled.](images/ha-05-link-your-hub.png)
 
@@ -57,7 +57,7 @@ Pick one device from the Expose list in step 10, for example a light called **Ce
 - **Home Assistant says "Failed setup, will retry".** The hub is still letting Home Assistant in. Wait two minutes. If it stays, check that the hub is online in your Thalovant account.
 - **Home Assistant says "A link ... is already waiting to be let in".** A first link is still being set up. Wait up to a minute and a half for it; do not start another.
 - **The approval page refuses.** Open the link on a phone or computer on the same network as Home Assistant, with the VPN off.
-- **"I can't find that device".** The device is not exposed. Do step 10 for it, and give the device a room so "in the kitchen" works. For a Music Assistant speaker with no room, **Settings**, **Repairs** says "Give ... a room".
+- **"Sorry, Home Assistant couldn't find that device."** The device is not exposed. Do step 10 for it, and give the device a room so "in the kitchen" works. For a Music Assistant speaker with no room, **Settings**, **Repairs** says "Give ... a room".
 
 ## More
 

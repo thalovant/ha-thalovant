@@ -78,7 +78,7 @@ the integration treats "not switched on yet" as a normal state: a clear error, a
 Repairs notice, no crash and no retry
 (`ThalovantApi._translate_intercom()`, `IntercomController._error()`).
 
-## Structured actions and music (0.5.0, unreleased)
+## Structured actions and music (0.5.0)
 
 A request can carry an `action` beside its sentence. The [guide](guide.md#structured-actions) says what a
 household sees; [QUICK_FACTS.md](../QUICK_FACTS.md) has the lists; [CHANGELOG.md](../CHANGELOG.md) what changed.

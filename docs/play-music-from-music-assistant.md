@@ -4,7 +4,7 @@ Say "play Adam's Song in the kitchen" to a Thalovant device, and your Music Assi
 
 **What you need**
 
-- Home Assistant linked to Thalovant ([Connect Home Assistant to Thalovant](connect-home-assistant.md)).
+- Home Assistant linked to Thalovant ([Connect Home Assistant to Thalovant](connect-home-assistant.md)), with the Thalovant integration at version 0.5.0 or later (earlier versions do not carry music).
 - Music Assistant running at home, with its username and password.
 - Your speakers already showing in Music Assistant.
 
@@ -30,7 +30,7 @@ Say "play Adam's Song in the kitchen" to a Thalovant device, and your Music Assi
 
    ![The Music Assistant sign-in page, with the Sign In button circled.](images/ha-m05-sign-in-to-music-assistant.png)
 
-6. **Give each speaker a room.** Under **Area**, pick the room each speaker is in, then select **Finish**. This is what makes "in the kitchen" work.
+6. **Give each speaker a room.** Under **Area**, pick the room each speaker is in, then select the blue button at the bottom right: it reads **Skip and finish** in the picture below, before any area is chosen. This is what makes "in the kitchen" work.
 
    ![The Name and assign window listing Kitchen, Living Room and Mark II, with the Area box circled.](images/ha-m06-name-and-assign.png)
 
@@ -48,7 +48,7 @@ Say: "Play" and the name of a track you own, then "in the kitchen", such as "Pla
 
 ## If it doesn't work
 
-- **"I couldn't find that in your music".** The title is not in Music Assistant or its services. Try an artist you know is there.
+- **"I couldn't find Adam's Song in your music."** (with the name you said) The title is not in Music Assistant or its services. Try an artist you know is there.
 - **"in the kitchen" is not understood.** Open **Settings**, then **Repairs**. "Give Kitchen a room" means the speaker has no Area: open its device and choose one.
 - **The wrong speaker plays.** Two devices share a name, for example a Chromecast and a Music Assistant speaker. **Repairs** says "Two devices are called Kitchen", and when you name it, Thalovant says it used the Music Assistant one. Rename the other in Home Assistant.
 - **A speaker is missing.** In Music Assistant, open the player's settings and tick **Expose this player to Home Assistant**.

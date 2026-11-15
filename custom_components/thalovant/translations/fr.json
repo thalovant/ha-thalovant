@@ -375,7 +375,7 @@
     },
     "music_player_no_area": {
       "title": "Donnez une pièce à {player}",
-      "description": "{player} est un lecteur Music Assistant que Assist peut utiliser, mais il n'a pas de pièce : « mets du jazz dans la cuisine » ne peut donc pas le trouver. [Ouvrez son appareil]({device_url}) et choisissez une pièce."
+      "description": "{player} est un lecteur Music Assistant que Assist peut utiliser, mais il n'a pas de pièce : « joue Adam's Song dans la cuisine » ne peut donc pas le trouver. [Ouvrez son appareil]({device_url}) et choisissez une pièce."
     },
     "music_name_clash": {
       "title": "Deux appareils s'appellent {name}",
