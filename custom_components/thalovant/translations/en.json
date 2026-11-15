@@ -375,7 +375,7 @@
     },
     "music_player_no_area": {
       "title": "Give {player} a room",
-      "description": "{player} is a Music Assistant player that Assist may use, but it has no area, so \"play jazz in the kitchen\" cannot find it. [Open its device]({device_url}) and choose an area."
+      "description": "{player} is a Music Assistant player that Assist may use, but it has no area, so \"play Adam's Song in the kitchen\" cannot find it. [Open its device]({device_url}) and choose an area."
     },
     "music_name_clash": {
       "title": "Two devices are called {name}",

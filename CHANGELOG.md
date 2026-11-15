@@ -7,7 +7,7 @@ The first entry below is always that version
 Entries before 0.5.0 are summaries of [MAINTENANCE_REPORT.md](MAINTENANCE_REPORT.md)
 and of the git history; details and verification are there.
 
-## 0.5.0 (unreleased)
+## 0.5.0 (tag `v0.5.0`, 2026-11-15)
 
 Structured actions and music through the Home Assistant link, and the fixes of the
 2026-11-13 recheck. See [the guide](docs/guide.md#structured-actions),

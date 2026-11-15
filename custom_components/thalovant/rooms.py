@@ -1,6 +1,6 @@
 """Look after the names and rooms of the Music Assistant players Assist may use.
 
-"Play jazz in the kitchen" finds a speaker by its room, and "play jazz on Kitchen" by its
+"Play Adam's Song in the kitchen" finds a speaker by its room, and "play Adam's Song on Kitchen" by its
 name. Two things silently break that, and Home Assistant says nothing about either: an
 exposed Music Assistant player with no area, and two exposed media players with the same
 spoken name (a Chromecast and a Music Assistant player both called "Kitchen"). This module

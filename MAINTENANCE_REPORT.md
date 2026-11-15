@@ -1,5 +1,20 @@
 # Maintenance report
 
+## 2026-11-15 - documentation fixes after a new-user validation (`fix/docs-validation`)
+
+- 0.5.0 is tagged (`v0.5.0` = `0e26db0`, 2026-11-15): `CHANGELOG.md`, `QUICK_FACTS.md` and `docs/index.md` no longer say "unreleased". Older dated entries below keep their history.
+- `docs/play-music-from-music-assistant.md`: says 0.5.0 is needed; step 6 names the real button ("Skip and finish", as in the picture); the quoted not-found line is the translation's `music_not_found` ("I couldn't find {query} in your music.").
+- `docs/connect-home-assistant.md`: explains the "Link a self-hosted Christmas hub" switch (leave it off); the quoted error is the real `reply_no_valid_targets` ("Sorry, Home Assistant couldn't find that device.").
+- The repair text `music_player_no_area` (`strings.json`, `translations/en.json`, `translations/fr.json`) and the `rooms.py` docstring used "play jazz in the kitchen" (a genre, which this route does not play); now a title.
+- Setup steps checked against the code and strings: "Link your hub", "Link account", "Waiting to be let in" (`wait_for_admission`), "A link to {hub} is already waiting to be let in" (`link_pending`), "Give {player} a room" (`music_player_no_area`), the 90-second admission (`const.py`).
+- Verification: `pytest` 1014 passed, 4 skipped (Python 3.14.10).
+
+### Transparency Report
+
+- **AI Model**: Claude Sonnet 5.5 (`claude-sonnet-5-5`) in Claude Code.
+- **Actions Taken**: Compared the guides with `strings.json`, `config_flow.py` and the tags; edited the documents, two strings and one docstring; ran the suite.
+- **Oversight**: Requested by the owner after a validation; no human has reviewed the changes.
+
 ## 2026-11-14 - require thalovant>=0.13.0
 
 `manifest.json` requirements: `thalovant==0.12.0` becomes `thalovant>=0.13.0` (0.13.0 is on PyPI). `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin` now checks that the installed SDK satisfies the manifest's specifier and is at least 0.13.0, instead of equality. Docs (`QUICK_FACTS.md`, `docs/guide.md`, `quality_scale.yaml`) updated.

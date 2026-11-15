@@ -1,5 +1,16 @@
 # Audit
 
+## 2026-11-15 - Documentation drift found by a new-user validation
+
+| # | Finding | State |
+| --- | --- | --- |
+| H1 | `CHANGELOG.md`, `QUICK_FACTS.md`, `docs/index.md` called 0.5.0 unreleased; tag `v0.5.0` exists | **Fixed** |
+| H2 | The music guide did not say 0.5.0 is required; "Finish" is "Skip and finish" in the picture; the not-found line differed from `music_not_found` | **Fixed** |
+| H3 | The "Link a self-hosted Christmas hub" switch of the Link your hub screen was unexplained in the guide | **Fixed** (`docs/connect-home-assistant.md`) |
+| H4 | The repair `music_player_no_area` example ("play jazz in the kitchen") named a genre, which `music.py` does not carry (`NOT_CARRIED_BEHAVIOURS`) | **Fixed** (strings, en, fr, docstring) |
+
+Evidence: `pytest` 1014 passed, 4 skipped; setup steps compared with `custom_components/thalovant/strings.json`.
+
 ## Intercom (0.4.0)
 
 Intercom is safety-adjacent (a text is spoken aloud in a home, an urgent one can
