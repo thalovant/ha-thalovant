@@ -276,3 +276,12 @@ async def test_an_alias_that_is_not_said_does_not_refuse(hass: HomeAssistant) ->
     async_expose_entity(hass, "conversation", entry.entity_id, True)
     registry.async_update_entity(entry.entity_id, aliases={"vault"})
     assert refused_words(hass, "turn on the kitchen light") is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["oeffne die Wohnungstuer", "zet de achterdeuren open", "open the garagedoors"],
+)
+async def test_a_compound_word_ends_in_the_noun(hass: HomeAssistant, text: str) -> None:
+    await _house(hass)
+    assert refused_words(hass, text) == "noun"
