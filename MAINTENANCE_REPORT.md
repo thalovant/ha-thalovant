@@ -1,5 +1,11 @@
 # Maintenance report
 
+## 2026-11-14 - require thalovant>=0.13.0
+
+`manifest.json` requirements: `thalovant==0.12.0` becomes `thalovant>=0.13.0` (0.13.0 is on PyPI). `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin` now checks that the installed SDK satisfies the manifest's specifier and is at least 0.13.0, instead of equality. Docs (`QUICK_FACTS.md`, `docs/guide.md`, `quality_scale.yaml`) updated.
+
+Transparency Report: AI model Claude Sonnet 5.5; edited the manifest, one test and docs; tests run locally and in CI; no human review yet.
+
 ## 2026-11-14 - music pages: what a timeout means
 
 `docs/music.md` and `docs/music.fr.md` gain "When Music Assistant is slow": a music action that runs out of time before any step finished is answered "took too long" and is not sent to Assist, and the music may still have started, so check the speaker before asking again; if an earlier step finished, the answer is "I could only do part of that" (`HomeRequestHandler._async_structured()`, `CONVERSE_TIMEOUT`). This is what is left of the first draft of this pull request: its other pages (structured actions, options, diagnostics, the music table) are already in `docs/guide.md` and `docs/music.md` on `main`, which are newer.

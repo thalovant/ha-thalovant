@@ -13,6 +13,10 @@ Structured actions and music through the Home Assistant link, and the fixes of t
 2026-11-13 recheck. See [the guide](docs/guide.md#structured-actions),
 [docs/music.md](docs/music.md) and [AUDIT.md](AUDIT.md).
 
+### Changed
+
+- The manifest requires `thalovant>=0.13.0` (was `==0.12.0`).
+
 ### Added
 
 - **Structured actions**: a hub request can carry an `action` (capability, target,
