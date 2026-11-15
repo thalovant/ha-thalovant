@@ -586,7 +586,7 @@ python3.14 -m venv .venv
 # The SDK, under Home Assistant's own package constraints, the way Home
 # Assistant installs an integration's requirements.
 constraints="$(.venv/bin/python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')"
-.venv/bin/pip install -c "$constraints" thalovant>=0.13.0
+.venv/bin/pip install -c "$constraints" "thalovant>=0.13.0"
 .venv/bin/pytest --cov
 .venv/bin/ruff check . && .venv/bin/ruff format --check . && .venv/bin/mypy
 ```
