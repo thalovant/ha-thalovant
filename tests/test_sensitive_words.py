@@ -1,6 +1,8 @@
 """Plain words never reach Assist when they would act on an exposed lock, alarm, siren, valve, garage door or gate."""
 
 # ruff: noqa: F811
+from unittest.mock import patch
+
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
@@ -224,3 +226,53 @@ async def test_a_follow_up_is_guarded_too(
         _request(utterance="the front door", conversation_id="c1"),
     )
     assert response["response_type"] == "error" and not agent.inputs
+
+
+async def test_a_sentence_of_only_punctuation_is_nothing(hass: HomeAssistant) -> None:
+    await _house(hass)
+    assert refused_words(hass, "?!...") is None
+
+
+async def test_a_registered_entity_without_aliases_is_matched_by_its_name(
+    hass: HomeAssistant,
+) -> None:
+    await _house(hass)
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "lock", "test", "2", suggested_object_id="shed"
+    )
+    hass.states.async_set(entry.entity_id, "locked", {"friendly_name": "Shed"})
+    async_expose_entity(hass, "conversation", entry.entity_id, True)
+    assert refused_words(hass, "open the shed") == "name"
+
+
+async def test_the_refusal_is_still_spoken_when_its_translation_fails(
+    hass: HomeAssistant,
+    mock_hub_connection: FakeHubConnection,
+    use_agent,
+    loaded_entry: MockConfigEntry,
+) -> None:
+    await _house(hass)
+    agent = use_agent(FakeAgent(lambda _: None))  # type: ignore[arg-type]
+    with patch(
+        "custom_components.thalovant.handler.async_action_speech",
+        side_effect=RuntimeError("no translations"),
+    ):
+        response = await _ask(
+            hass, mock_hub_connection, _request(utterance="open the front door")
+        )
+    assert response["response_type"] == "error"
+    assert "sensitive actions are turned off" in response["speech"]
+    assert not agent.inputs
+
+
+async def test_an_alias_that_is_not_said_does_not_refuse(hass: HomeAssistant) -> None:
+    await _house(hass)
+    registry = er.async_get(hass)
+    entry = registry.async_get_or_create(
+        "lock", "test", "3", suggested_object_id="cellar"
+    )
+    hass.states.async_set(entry.entity_id, "locked", {"friendly_name": "Cellar"})
+    async_expose_entity(hass, "conversation", entry.entity_id, True)
+    registry.async_update_entity(entry.entity_id, aliases={"vault"})
+    assert refused_words(hass, "turn on the kitchen light") is None
