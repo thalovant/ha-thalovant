@@ -4,7 +4,7 @@
 | --- | --- |
 | Project | `ha-thalovant` |
 | Home Assistant integration domain and version | `thalovant`, `0.5.0` (`custom_components/thalovant/manifest.json`; unreleased: the last tag is `v0.4.0`) |
-| SDK requirement | `thalovant==0.12.0` (released on PyPI; the first with Intercom; `manifest.json`, enforced by `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin`) |
+| SDK requirement | `thalovant>=0.13.0` (released on PyPI; Intercom arrived in 0.12.0; `manifest.json`, enforced by `tests/test_api_sdk.py::test_installed_sdk_is_the_manifest_pin`) |
 | Config entry points | `ThalovantConfigFlow.async_step_user()`, `async_step_self_hosted()`, `async_step_reauth()` |
 | Sign-in methods | Link account (default): `AbstractOAuth2FlowHandler` steps `auth` and `creation` with `ThalovantOAuth2Implementation`; Link with a code instead: `async_step_login()` (device login) |
 | OAuth client | `thalovant-home-assistant` (public, PKCE S256, no secret), the device login's registered app |

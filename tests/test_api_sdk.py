@@ -3,7 +3,7 @@
 Skipped unless the SDK is installed; CI always installs it. Locally:
 
     uv pip install -c "$(python -c 'import homeassistant, pathlib; print(pathlib.Path(homeassistant.__file__).parent / "package_constraints.txt")')" \
-        thalovant==0.12.0
+        "thalovant>=0.13.0"
 
 Install it under Home Assistant's own constraints, the way Home Assistant does.
 """
@@ -15,6 +15,8 @@ from typing import Any
 
 from aiohttp import ClientSession, web
 from aiohttp.test_utils import TestServer
+from packaging.requirements import Requirement
+from packaging.version import Version
 import pytest
 
 from custom_components.thalovant import api
@@ -328,7 +330,7 @@ def test_link_account_is_the_device_logins_app() -> None:
 
 
 def test_installed_sdk_is_the_manifest_pin() -> None:
-    """These tests run against the SDK the manifest pins, not a leftover.
+    """These tests run against an SDK the manifest accepts, not a leftover.
 
     CI installs the manifest's requirement under Home Assistant's constraints.
     A local environment that kept an older SDK would pass every test here
@@ -343,7 +345,10 @@ def test_installed_sdk_is_the_manifest_pin() -> None:
         ).read_text(encoding="utf-8")
     )
     [requirement] = manifest["requirements"]
-    assert requirement == f"thalovant=={thalovant.__version__}"
+    parsed = Requirement(requirement)
+    assert parsed.name == "thalovant"
+    assert parsed.specifier.contains(thalovant.__version__)
+    assert Version(thalovant.__version__) >= Version("0.13.0")
 
 
 def test_setup_link_identity_selects_wss() -> None:

@@ -19,7 +19,7 @@ rules:
     status: done
     comment: >
       The thalovant SDK is MIT-licensed, public, and released to PyPI from CI;
-      the manifest pins thalovant==0.12.0, the first release with Intercom.
+      the manifest requires thalovant>=0.13.0 (Intercom arrived in 0.12.0).
   docs-actions: done
   docs-conditions:
     status: exempt
